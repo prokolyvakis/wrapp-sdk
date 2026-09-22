@@ -9,8 +9,9 @@ arithmetic near a currency amount.
 Not affiliated with or endorsed by Wrapp. Not tax or accounting advice.
 
 **Status: pre-release.** The package is private and publication is blocked. Behavior is
-verified with synthetic tests only — no staging/production certification or fiscal
-correctness is claimed. See [open questions](docs/provider-evidence.md).
+verified with synthetic tests and against observed provider behavior under authorized
+testing — no production certification or fiscal correctness is claimed. See
+[provider evidence and open questions](docs/provider-evidence.md).
 
 ## Quick example
 

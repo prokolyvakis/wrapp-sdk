@@ -1,8 +1,8 @@
 # API reference
 
-What the SDK supports, field by field. Synthetic test evidence is not provider certification;
-see [provider-evidence.md](provider-evidence.md) for what is grounded in documentation and what
-remains an open question.
+What the SDK supports, field by field. Synthetic tests and provider observations are not
+production certification; see [provider-evidence.md](provider-evidence.md) for what is
+grounded in documentation, what is observed behavior, and what remains an open question.
 
 ## Supported operations
 

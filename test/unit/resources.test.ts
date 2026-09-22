@@ -437,7 +437,7 @@ describe('resources', () => {
     ).rejects.toMatchObject({ code: 'PROTOCOL_ERROR' });
   });
   it('should surface the provider validation family as evidence, never semantics', async () => {
-    // Live staging spells the status "myData Errors" (2026-09-22); docs say "myDATA Errors".
+    // The wire spells the status "myData Errors" (provider-observed); docs say "myDATA Errors".
     let body: unknown = { status: 'myData Errors', errors: [{ code: '313', message: 'x' }] };
     const { client } = provider(({ url }) =>
       url.pathname.endsWith('/login') ? login() : json(body),
@@ -539,8 +539,8 @@ describe('resources', () => {
       effect: 'unknown',
     });
   });
-  it('should decode the staging-observed shape variants (2026-09-22 evidence)', async () => {
-    // Real staging deviates from the documented examples: branch code as a JSON number,
+  it('should decode provider-observed wire variants', async () => {
+    // The observed wire deviates from the documented examples: branch code as a JSON number,
     // ISO "T"/colon-offset timestamps, vat: "" for VAT-less counterparts, and a line
     // quantity serialized as a JSON string beside numeric amounts.
     const listBody = JSON.stringify({
