@@ -15,14 +15,17 @@ function run(command, args, cwd = scratch) {
   return result.stdout;
 }
 try {
+  // npm 10 runs the prepare script during pack despite --ignore-scripts, so hook
+  // tooling can print to stdout ahead of the JSON payload.
+  const packOutput = run(
+    'npm',
+    ['pack', '--ignore-scripts', '--json', '--pack-destination', scratch],
+    root,
+  );
   const packed = z
     .array(z.object({ filename: z.string(), files: z.array(z.object({ path: z.string() })) }))
     .min(1)
-    .parse(
-      JSON.parse(
-        run('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', scratch], root),
-      ),
-    )[0];
+    .parse(JSON.parse(packOutput.slice(packOutput.indexOf('['))))[0];
   if (
     !packed ||
     packed.files.some((file) => !/^(dist\/|README\.md$|LICENSE$|package\.json$)/.test(file.path))
@@ -30,9 +33,12 @@ try {
     throw new Error('Unexpected tarball content');
   }
   writeFileSync(join(scratch, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
+  // prefer-offline, not offline: a fresh runner's cache lacks registry metadata
+  // for the tarball's dependencies. Versions are exact-pinned, so a network
+  // fallback cannot change what is installed.
   run('npm', [
     'install',
-    '--offline',
+    '--prefer-offline',
     '--ignore-scripts',
     '--no-audit',
     '--no-fund',
