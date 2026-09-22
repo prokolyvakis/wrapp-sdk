@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import * as sdk from '@prokolyvakis/wrapp-sdk';
+import type { CreateInvoiceInput, CreateOutcome } from '@prokolyvakis/wrapp-sdk';
+
+assert.deepEqual(Object.keys(sdk).sort(), ['WrappClient', 'WrappError', 'calendarDate', 'decimal', 'verifyWebhook'].sort());
+assert.equal(sdk.decimal('9007199254740993.12'), '9007199254740993.12');
+const client = new sdk.WrappClient({
+  environment: 'staging',
+  credentials: { apiKey: 'synthetic-consumer-key', tenant: { kind: 'userId', value: 'tenant' } },
+  advanced: { fetch: async (resource) => {
+    const url = resource instanceof Request ? resource.url : String(resource);
+    return new Response(JSON.stringify(url.endsWith('/login')
+      ? { data: { type: 'jwt', attributes: { jwt: 'fake.jwt' } } }
+      : { wrapp_user_id: 'tenant', partner_user_id: null, issue_invoice_status: true,
+          email: 'test@example.invalid', has_plan: true, plan_name: 'test',
+          next_payment_date: null, next_payment_amount: null }),
+      { headers: { 'content-type': 'application/json' } });
+  } },
+});
+assert.equal((await client.tenant.get()).wrapp_user_id, 'tenant');
+const forbiddenPath = '@prokolyvakis/wrapp-sdk/dist/client.js';
+await assert.rejects(import(forbiddenPath), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
+
+function consume(outcome: CreateOutcome): string {
+  switch (outcome.kind) {
+    case 'observed': return outcome.invoice.id;
+    case 'pending': return outcome.invoiceId;
+    case 'rejected': return outcome.referenceState;
+    default: { const unreachable: never = outcome; return unreachable; }
+  }
+}
+assert.equal(consume({ kind: 'rejected', errorCount: 1, referenceState: 'unknown' }), 'unknown');
+if (false) {
+  // @ts-expect-error Explicit environment is required.
+  new sdk.WrappClient({ credentials: { apiKey: 'fake', tenant: { kind: 'userId', value: 'test' } } });
+  // @ts-expect-error An amount is not an unchecked number.
+  const amount: CreateInvoiceInput['total_amount'] = 1.23;
+  void amount;
+  // @ts-expect-error No conflict classifier exists in this release.
+  consume({ kind: 'conflict' });
+}
