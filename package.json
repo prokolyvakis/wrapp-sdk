@@ -1,6 +1,6 @@
 {
   "name": "@prokolyvakis/wrapp-sdk",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Unofficial, server-side TypeScript client for the Wrapp invoicing API.",
   "keywords": [
     "wrapp",
