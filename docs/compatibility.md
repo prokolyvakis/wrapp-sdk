@@ -103,11 +103,10 @@ CI must compile representative previous-consumer programs against the new packed
 run regression behavior tests, compare reviewed public API reports, and exercise supported runtimes.
 A generated API diff is review input, not an automatic SemVer oracle.
 
-Publication is currently blocked by private:true and prepublishOnly. No npm credential,
-automatic release workflow or public repository setting is introduced by this bootstrap.
-When explicitly approved, use a protected release environment, narrowly scoped trusted
-publishing where available, and verified source-to-tarball provenance. Verify support for
-private-repository provenance rather than assuming it matches public repositories.
+Publication runs only through the release workflow: a reviewed release-please PR, the
+protected npm environment, trusted publishing over OIDC (no stored npm credential), and
+npm provenance from the public repository. prepublishOnly runs the full check and packaging
+gates on every publish path, including a manual bootstrap publish.
 
 ## Sources
 

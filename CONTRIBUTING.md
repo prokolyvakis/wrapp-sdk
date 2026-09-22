@@ -60,7 +60,17 @@ download links in fixtures.
 
 ## Releases
 
-The package stays private and publishing is blocked pending explicit approval. Use one
-release owner: release-please is proposed for reviewed release PRs once a usable SDK exists;
-it is not activated yet. Do not add semantic-release or Changesets alongside it.
+release-please is the sole version and changelog owner: pushes to main maintain a release
+PR from the Conventional Commit history; merging that PR creates the tag and GitHub release,
+and the publish job then runs the full gates (via prepublishOnly) and publishes to npm with
+provenance through trusted publishing — no npm token exists anywhere. The publish job runs
+in the protected `npm` environment; keep a required reviewer on it. Do not add
+semantic-release or Changesets alongside release-please.
+
+Two operational notes: CI does not start automatically on release-please's PRs (a GitHub
+token limitation) — close and reopen the PR to trigger it; and the very first publish of the
+package must be bootstrapped manually (`npm publish` from the tagged commit, with 2FA),
+because npm's trusted publishing can only be configured once the package exists. Configure
+the trusted publisher on npmjs.com immediately after.
+
 See [docs/compatibility.md](docs/compatibility.md) for what a release must preserve.

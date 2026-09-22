@@ -8,9 +8,10 @@ arithmetic near a currency amount.
 
 Not affiliated with or endorsed by Wrapp. Not tax or accounting advice.
 
-**Status: pre-release.** The package is private and publication is blocked. Behavior is
-verified with synthetic tests and against observed provider behavior under authorized
-testing — no production certification or fiscal correctness is claimed. See
+**Status: pre-release.** Not yet published to npm; releases are cut through reviewed
+release PRs and published with provenance via trusted publishing. Behavior is verified with
+synthetic tests and against observed provider behavior under authorized testing — no
+production certification or fiscal correctness is claimed. See
 [provider evidence and open questions](docs/provider-evidence.md).
 
 ## Quick example

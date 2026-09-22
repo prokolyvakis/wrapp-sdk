@@ -1,7 +1,6 @@
 {
   "name": "@prokolyvakis/wrapp-sdk",
   "version": "0.0.0",
-  "private": true,
   "description": "Unofficial, server-side TypeScript client for the Wrapp invoicing API.",
   "keywords": [
     "wrapp",
@@ -55,7 +54,7 @@
     "commitlint": "commitlint",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run build",
     "check:package": "npm run check:api && publint --strict && attw --pack --profile esm-only",
-    "prepublishOnly": "node -e \"console.error('Publishing is disabled: complete the release gates and obtain explicit approval.'); process.exit(1)\""
+    "prepublishOnly": "npm run check && npm run check:package"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",
