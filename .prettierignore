@@ -1,0 +1,9 @@
+node_modules/
+.tools/
+dist/
+coverage/
+.husky/_/
+docs/internal/
+LICENSE
+package-lock.json
+*.tgz

@@ -1,0 +1,29 @@
+# Dependencies and tooling
+node_modules/
+.tools/
+
+# Build and test output
+dist/
+coverage/
+*.tsbuildinfo
+*.tgz
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Internal working notes (agent context, planning artifacts)
+docs/internal/
+.remember/
+.claude/
+graphify-out/
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+*.log

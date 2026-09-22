@@ -1,0 +1,3 @@
+title = "Wrapp SDK secret scanning"
+[extend]
+useDefault = true

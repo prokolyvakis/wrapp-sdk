@@ -1,0 +1,1 @@
+npm run secrets:check && npm run check
