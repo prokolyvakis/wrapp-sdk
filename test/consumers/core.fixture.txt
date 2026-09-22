@@ -29,7 +29,7 @@ function consume(outcome: CreateOutcome): string {
     default: { const unreachable: never = outcome; return unreachable; }
   }
 }
-assert.equal(consume({ kind: 'rejected', errorCount: 1, referenceState: 'unknown' }), 'unknown');
+assert.equal(consume({ kind: 'rejected', errorCount: 1, rejectionSource: 'unknown', referenceState: 'unknown' }), 'unknown');
 if (false) {
   // @ts-expect-error Explicit environment is required.
   new sdk.WrappClient({ credentials: { apiKey: 'fake', tenant: { kind: 'userId', value: 'test' } } });

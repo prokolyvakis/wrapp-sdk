@@ -7,12 +7,20 @@ export type InvoiceReference = Readonly<{ kind: 'invoiceId' | 'externalId'; valu
 /**
  * How a returned invoice matched the requested reference: byte-exact, or differing only in
  * ASCII letter case. No Unicode folding is performed; case variance is surfaced, not resolved.
+ * 'ascii-case-variant' can only arise for externalId references — a case-variant provider id
+ * is a protocol error.
  */
 export type IdentityEvidence = 'exact' | 'ascii-case-variant';
+/**
+ * Which provider validation family reported a rejection: the invoice-validation envelope, the
+ * myDATA (tax authority) envelope, or an envelope carrying no recognized status. Evidence of
+ * where the rejection came from, never of terminality or reference availability.
+ */
+export type RejectionSource = 'invoice-errors' | 'mydata-errors' | 'unknown';
 /** Per-call cancellation and deadline. The deadline spans auth wait through body read. */
 export interface RequestOptions {
   readonly signal?: AbortSignal;
-  /** Overrides the client default (30 seconds) for this call only. */
+  /** Overrides the client default (30 seconds) for this call only; 1 to 120 000 ms. */
   readonly timeoutMs?: number;
 }
 /** Construction options. Credentials stay memory-only; rotation requires a new client. */
@@ -20,11 +28,11 @@ export interface ClientOptions {
   /** Selects a fixed official origin. Production requires separately authorized credentials. */
   readonly environment: 'staging' | 'production';
   readonly credentials: { readonly apiKey: string; readonly tenant: TenantIdentity };
-  /** Default per-request budget in milliseconds; defaults to 30 000. */
+  /** Default per-request budget in milliseconds; defaults to 30 000, at most 120 000. */
   readonly timeoutMs?: number;
-  /** Response byte cap; defaults to 2 MiB. Larger bodies fail with RESPONSE_TOO_LARGE. */
+  /** Response byte cap; defaults to 2 MiB, at most 8 MiB. Larger bodies fail with RESPONSE_TOO_LARGE. */
   readonly maxResponseBytes?: number;
-  /** Serialized request byte cap; defaults to 2 MiB. Exceeding it fails before dispatch. */
+  /** Serialized request byte cap; defaults to 2 MiB, at most 8 MiB. Exceeding it fails before dispatch. */
   readonly maxRequestBytes?: number;
   /** Trusted testing seams. Origin override accepts loopback HTTP only, never another provider. */
   readonly advanced?: {
@@ -75,7 +83,8 @@ export interface CreateInvoiceInput {
   /**
    * Caller-supplied durable reference, preserved byte-exact. Required by this SDK even where
    * the provider makes it optional: it is the only reconciliation handle after an ambiguous
-   * outcome. Never mint a new reference to escape ambiguity.
+   * outcome. Never mint a new reference to escape ambiguity. At most 256 characters; no
+   * whitespace, control characters, backslash, slash, percent, question mark or hash.
    */
   readonly external_id: string;
   readonly billing_book_id: string;
@@ -91,7 +100,7 @@ export interface CreateInvoiceInput {
   readonly branch?: string;
   readonly payment_details?: string;
   readonly notes?: string;
-  /** ISO 4217 code; must be provided together with exchange_rate or not at all. */
+  /** Three uppercase letters (ISO 4217 shape; membership is not validated). Must be provided together with exchange_rate or not at all. */
   readonly currency?: string;
   readonly exchange_rate?: Decimal;
   readonly correlated_invoices?: readonly string[];
@@ -104,7 +113,7 @@ export interface CreateInvoiceInput {
 export interface InvoiceObservation {
   readonly id: string;
   readonly external_id: string | null;
-  /** Greek myDATA registration mark; large identifiers are preserved as strings. */
+  /** Greek myDATA registration mark, accepted as the JSON string the provider documents. */
   readonly my_data_mark: string | null;
   readonly my_data_uid: string | null;
   readonly my_data_qr_url: string | null;
@@ -127,7 +136,12 @@ export interface InvoiceObservation {
 export type CreateOutcome =
   | Readonly<{ kind: 'observed'; invoice: InvoiceObservation; identity: IdentityEvidence }>
   | Readonly<{ kind: 'pending'; invoiceId: string; referenceState: 'unknown' }>
-  | Readonly<{ kind: 'rejected'; errorCount: number; referenceState: 'unknown' }>;
+  | Readonly<{
+      kind: 'rejected';
+      errorCount: number;
+      rejectionSource: RejectionSource;
+      referenceState: 'unknown';
+    }>;
 /**
  * Validated core projection of a full invoice lookup, not a complete fiscal archive.
  * Amounts retain the provider's exact numeric text; no rounding or float conversion occurs.
@@ -188,7 +202,7 @@ export interface ListInvoicesInput {
 export type PdfOutcome =
   | Readonly<{ kind: 'available'; downloadUrl: string }>
   | Readonly<{ kind: 'acknowledged'; status: 'unknown' }>
-  | Readonly<{ kind: 'rejected'; errorCount: number }>;
+  | Readonly<{ kind: 'rejected'; errorCount: number; rejectionSource: RejectionSource }>;
 /** Tenant account details. Payment amounts retain the provider's exact numeric text. */
 export interface TenantDetails {
   readonly wrapp_user_id: string;

@@ -42,10 +42,12 @@ subtotal, classification_category, classification_type required; code, descripti
 quantity_type, vat_exemption_code optional. VAT-zero requires an exemption; the SDK invents
 no tax codes.
 
-Decimals are nonnegative canonical decimal strings, at most 18 integer and 2 fraction digits;
-no exponents, leading zeros or rounding. These are SDK bounds, not assertions of provider
-limits. Exact JSON numeric tokens are emitted through a lossless serializer. Inbound decimals
-accept bounded nonnegative numeric tokens (including exponent notation), preserving their value.
+Decimals are nonnegative canonical decimal strings with at most 18 integer digits; no
+exponents, leading zeros or rounding. Monetary totals accept at most 2 fraction digits;
+quantities, unit prices and exchange rates accept up to 12. These are SDK bounds, not
+assertions of provider limits (V07 is open). Exact JSON numeric tokens are emitted through a
+lossless serializer. Inbound decimals accept bounded nonnegative numeric tokens (including
+exponent notation), preserving their value.
 
 Calendar formats: ISO dates for list input and the tenant charge date, DD-MM-YYYY for the
 status response, and a documented timestamp with numeric offset for full details. No
@@ -54,6 +56,9 @@ local-time coercion.
 ## Invariants and failure modes
 
 - Unknown inputs rejected; additive response fields ignored, required evidence validated.
+  Exception: the top-level keys errors, error and status are reserved envelope discriminators —
+  their appearance on a read response is treated as a provider error report, never as an
+  additive field.
 - No automatic retry or auth replay of any operation. One invoice dispatch maximum per call.
 - Login key/tenant in JSON body only, bearer token in header only; redirect:error everywhere.
 - Absolute request deadline spans auth wait and body; shared login has its own finite deadline.
@@ -64,6 +69,8 @@ local-time coercion.
   is not-sent. No raw cause, payload, URL, key or provider message in ordinary errors.
 - Create union: observed, pending, rejected. Every rejected result has referenceState:unknown;
   no conflict inference from English titles. Rejection/not-found never authorizes a new ID.
+  Rejections carry rejectionSource — the provider validation family that reported them
+  (invoice-errors, mydata-errors or unknown) — as evidence, never as terminality.
 - Returned invoice identity is compared; exact or ASCII-case-variant matches are explicitly
   represented. No Unicode folding, no automatic lowercasing, no adoption based on ID alone.
 - Full-detail reads expose a validated core projection, not a full fiscal archive. Optional

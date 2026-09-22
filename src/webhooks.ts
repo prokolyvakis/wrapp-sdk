@@ -8,13 +8,13 @@ import type { VerifiedWebhook } from './types.js';
 export interface WebhookInput {
   /** The request body exactly as received; any transformation invalidates the signature. */
   readonly body: Uint8Array;
-  /** Pass the single raw header value. Combined/duplicate header values are rejected. */
+  /** Pass the single raw header value; it must be exactly 64 hex characters, so a comma-joined multi-header value fails verification. */
   readonly signature: string;
   /** Unauthenticated routing hint, not part of the signed body. */
   readonly eventType: string;
   /** One to five verification keys, allowing bounded rotation. Order is irrelevant. */
   readonly keys: readonly string[];
-  /** Defaults to 2 MiB; hard-capped at 8 MiB. Larger bodies are rejected before hashing. */
+  /** Must be between 1 byte and 8 MiB or verification fails; defaults to 2 MiB. Bodies over the limit are rejected before hashing. */
   readonly maxBodyBytes?: number;
 }
 /**
@@ -53,13 +53,19 @@ export function verifyWebhook(input: WebhookInput): VerifiedWebhook {
       ('errors' in value || 'error' in value || 'status' in value)
     )
       throw new Error();
-    if (input.eventType === 'issued-invoice')
+    // The kind is stamped from the unauthenticated header, so a body that could satisfy the
+    // other event's schema is rejected outright: no single signed body may verify as two kinds.
+    if (input.eventType === 'issued-invoice') {
+      if (value !== null && typeof value === 'object' && 'download_url' in value) throw new Error();
       return freeze({
         kind: 'issued-invoice',
         invoice: decode(observationSchema, value, 'webhook'),
         eventTypeAuthenticated: false,
       });
+    }
     if (input.eventType === 'invoice-pdf') {
+      if (value !== null && typeof value === 'object' && ('series' in value || 'num' in value))
+        throw new Error();
       const data = decode(webhookPdfSchema, value, 'webhook');
       return freeze({
         kind: 'invoice-pdf',

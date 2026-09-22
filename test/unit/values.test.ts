@@ -22,8 +22,21 @@ describe('validated values', () => {
         throw new Error('Expected rejection');
       } catch (error) {
         expect(error).toMatchObject({ code: 'INVALID_INPUT', operation, effect: 'not-sent' });
+        expect(JSON.stringify(error)).not.toContain('private-invalid');
       }
     }
+  });
+  it('should serialize bounded diagnostics including httpStatus', () => {
+    const parsed = JSON.parse(
+      JSON.stringify(new WrappError('HTTP_ERROR', 'create', 'unknown', 503)),
+    ) as Record<string, unknown>;
+    expect(parsed).toEqual({
+      name: 'WrappError',
+      code: 'HTTP_ERROR',
+      operation: 'create',
+      effect: 'unknown',
+      httpStatus: 503,
+    });
   });
   it('should freeze nested copies as well as their containers', () => {
     const result = freeze({ list: [{ value: 'synthetic' }] });
@@ -36,13 +49,28 @@ describe('validated values', () => {
   it('should preserve exact decimal bytes including values above IEEE precision', () => {
     expect(decimal('9007199254740993.12')).toBe('9007199254740993.12');
     expect(decimal('0.00')).toBe('0.00');
+    expect(decimal('999999999999999999.99')).toBe('999999999999999999.99');
+    expect(decimal('0.001')).toBe('0.001');
+    expect(decimal('1.083412345678')).toBe('1.083412345678');
+    expect(decimal('0')).toBe('0');
+    expect(decimal('0.1')).toBe('0.1');
   });
-  it.each(['01', '-1', 'NaN', '1e2', '0.001', '1234567890123456789', ' 1'])(
-    'should reject %s',
-    (value) => {
-      expect(() => decimal(value)).toThrow(WrappError);
-    },
-  );
+  it.each([
+    '01',
+    '00',
+    '-1',
+    '+1',
+    'NaN',
+    '1e2',
+    '.1',
+    '0.',
+    '',
+    '0.0000000000001',
+    '1234567890123456789',
+    ' 1',
+  ])('should reject %s', (value) => {
+    expect(() => decimal(value)).toThrow(WrappError);
+  });
   it('should validate leap days without local timezone conversion', () => {
     expect(calendarDate('2024-02-29')).toBe('2024-02-29');
     expect(calendarDate('2000-02-29')).toBe('2000-02-29');

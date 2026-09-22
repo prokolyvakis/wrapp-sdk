@@ -1,9 +1,8 @@
 import { z } from 'zod';
 import { LosslessNumber, parse, stringify } from 'lossless-json';
 import { WrappError } from './errors.js';
-import type { EffectCertainty } from './errors.js';
 import { calendarDate, decimal, freeze, isCalendarDate } from './values.js';
-import type { IdentityEvidence, InvoiceReference } from './types.js';
+import type { IdentityEvidence, InvoiceReference, RejectionSource } from './types.js';
 
 const text = z.string().max(4096);
 const nonempty = text.min(1);
@@ -51,6 +50,8 @@ const inputDecimal = z
     }
   })
   .transform((v) => new LosslessNumber(v));
+// Monetary totals stay at 2 fraction digits; rates and quantities may need more (V07 is open).
+const inputAmount = inputDecimal.refine((v) => /^\d+(\.\d{1,2})?$/.test(v.value));
 const isoDate = z.string().refine(isCalendarDate).transform(calendarDate);
 const providerDate = z
   .string()
@@ -85,10 +86,10 @@ const lineFields = {
   quantity: inputDecimal,
   quantity_type: z.number().int().min(1).max(100).optional(),
   unit_price: inputDecimal,
-  net_total_price: inputDecimal,
+  net_total_price: inputAmount,
   vat_rate: z.number().int().min(0).max(100),
-  vat_total: inputDecimal,
-  subtotal: inputDecimal,
+  vat_total: inputAmount,
+  subtotal: inputAmount,
   vat_exemption_code: z.number().int().min(1).max(1000).optional(),
   classification_category: nonempty,
   classification_type: nonempty,
@@ -100,10 +101,10 @@ export const createSchema = z
     invoice_type_code: z.enum(['2.1', '2.2', '2.3', '11.2']),
     payment_method_type: z.number().int().min(0).max(7),
     counterpart: z.strictObject(counterpartFields),
-    net_total_amount: inputDecimal,
-    vat_total_amount: inputDecimal,
-    total_amount: inputDecimal,
-    payable_total_amount: inputDecimal,
+    net_total_amount: inputAmount,
+    vat_total_amount: inputAmount,
+    total_amount: inputAmount,
+    payable_total_amount: inputAmount,
     invoice_lines: z
       .array(
         z
@@ -237,8 +238,16 @@ export const vatInputSchema = z.strictObject({
   vat: nonempty,
   country_code: z.string().regex(/^[A-Z]{2}$/),
 });
+// Non-numeric keys are additive provider fields and are dropped, not rejected.
 export const exemptionsSchema = z
-  .array(z.record(z.string().regex(/^\d{1,4}$/), nonempty))
+  .array(
+    z
+      .record(z.string(), z.unknown())
+      .transform((entry) =>
+        Object.fromEntries(Object.entries(entry).filter(([key]) => /^\d{1,4}$/.test(key))),
+      )
+      .pipe(z.record(z.string(), nonempty)),
+  )
   .max(1000);
 export const loginSchema = z.object({
   data: z.object({
@@ -265,38 +274,38 @@ const errorsSchema = z
   .min(1)
   .max(100);
 const errorEnvelope = z.object({ errors: errorsSchema, status: text.optional() });
-export function rejectedCount(value: unknown): number | undefined {
+function sourceOf(status: string | undefined): RejectionSource {
+  if (status === undefined) return 'unknown';
+  if (status === 'Invoice Errors') return 'invoice-errors';
+  if (status === 'myDATA Errors') return 'mydata-errors';
+  throw new WrappError('PROTOCOL_ERROR', 'decode');
+}
+export function rejection(
+  value: unknown,
+): Readonly<{ errorCount: number; source: RejectionSource }> | undefined {
   if (value === null || typeof value !== 'object') return undefined;
+  const contradicted = 'id' in value || 'invoice_id' in value || 'download_url' in value;
   if ('errors' in value) {
     const result = errorEnvelope.safeParse(value);
-    if (
-      !result.success ||
-      'id' in value ||
-      'invoice_id' in value ||
-      'download_url' in value ||
-      (result.data.status !== undefined &&
-        !['Invoice Errors', 'myDATA Errors'].includes(result.data.status))
-    ) {
-      throw new WrappError('PROTOCOL_ERROR', 'decode');
-    }
-    return result.data.errors.length;
+    if (!result.success || contradicted) throw new WrappError('PROTOCOL_ERROR', 'decode');
+    return freeze({ errorCount: result.data.errors.length, source: sourceOf(result.data.status) });
   }
   if ('error' in value) {
-    if (typeof value.error !== 'string' || value.error.length > 4096 || 'id' in value) {
+    if (typeof value.error !== 'string' || value.error.length > 4096 || contradicted) {
       throw new WrappError('PROTOCOL_ERROR', 'decode');
     }
-    return 1;
+    let status: string | undefined;
+    if ('status' in value) {
+      if (typeof value.status !== 'string') throw new WrappError('PROTOCOL_ERROR', 'decode');
+      status = value.status;
+    }
+    return freeze({ errorCount: 1, source: sourceOf(status) });
   }
   return undefined;
 }
-export function decode<T>(
-  schema: z.ZodType<T>,
-  value: unknown,
-  operation: string,
-  effect: EffectCertainty = 'not-sent',
-): T {
+export function decode<T>(schema: z.ZodType<T>, value: unknown, operation: string): T {
   const result = schema.safeParse(value);
-  if (!result.success) throw new WrappError('PROTOCOL_ERROR', operation, effect);
+  if (!result.success) throw new WrappError('PROTOCOL_ERROR', operation);
   return freeze(result.data);
 }
 export function input<T>(schema: z.ZodType<T>, value: unknown, operation: string): T {
@@ -304,12 +313,25 @@ export function input<T>(schema: z.ZodType<T>, value: unknown, operation: string
   if (!result.success) throw new WrappError('INVALID_INPUT', operation);
   return result.data;
 }
+// The parser assigns keys by plain assignment, so a "__proto__" key replaces an object's
+// prototype and its fields pass 'in' checks as inherited properties. The key never appears
+// as an own property, so it is detected by the prototype it leaves behind.
+function assertOwnPrototypes(value: unknown): void {
+  if (value === null || typeof value !== 'object' || value instanceof LosslessNumber) return;
+  const proto = Object.getPrototypeOf(value) as unknown;
+  if (proto !== Object.prototype && proto !== Array.prototype) {
+    throw new Error('Forbidden JSON key');
+  }
+  for (const child of Object.values(value)) assertOwnPrototypes(child);
+}
 export function parseJson(textValue: string): unknown {
-  return parse(textValue, undefined, {
+  const value = parse(textValue, undefined, {
     onDuplicateKey: () => {
       throw new Error('Duplicate JSON key');
     },
   });
+  assertOwnPrototypes(value);
+  return value;
 }
 export function encodeJson(value: unknown): string {
   const encoded = stringify(value);

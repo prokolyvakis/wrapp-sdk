@@ -18,7 +18,7 @@ import {
   pdfStatusSchema,
   pendingSchema,
   referenceSchema,
-  rejectedCount,
+  rejection,
   tenantSchema,
   vatInputSchema,
   vatSchema,
@@ -71,12 +71,12 @@ const requestSchema = z.strictObject({
   signal: z.instanceof(AbortSignal).optional(),
 });
 function readValue(value: unknown): unknown {
-  if (rejectedCount(value) !== undefined) throw new WrappError('PROVIDER_REJECTED', 'decode');
+  if (rejection(value) !== undefined) throw new WrappError('PROVIDER_REJECTED', 'decode');
   if (value !== null && typeof value === 'object' && 'status' in value)
     throw new WrappError('PROTOCOL_ERROR', 'decode');
   return value;
 }
-/** Invoice operations. Reads report identity evidence; writes preserve ambiguity. */
+/** Invoice operations. Reference-addressed reads report identity evidence; writes preserve ambiguity. */
 export interface InvoiceResource {
   /** Status lookup with identity evidence; a not-found never proves a reference is free. */
   getStatus(
@@ -101,6 +101,7 @@ export interface InvoiceResource {
   list(filters?: ListInvoicesInput, options?: RequestOptions): Promise<InvoicePage>;
   /**
    * Lazy, cancellable page walk with no prefetch and no silent deduplication.
+   * maxPages accepts 1 to 10 000.
    * @throws WrappError PAGINATION_LIMIT when maxPages is exhausted, instead of truncating.
    */
   iterate(
@@ -148,14 +149,13 @@ export class WrappClient {
     if (config.advanced?.testBaseUrl !== undefined) {
       try {
         const url = new URL(config.advanced.testBaseUrl);
+        // The canonical comparison also rejects bare '?'/'#' separators, which leave
+        // url.search/url.hash empty yet survive serialization and misroute every path.
         if (
           url.protocol !== 'http:' ||
           !['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname) ||
           url.pathname !== '/api/v1' ||
-          url.search ||
-          url.hash ||
-          url.username ||
-          url.password
+          url.toString() !== url.origin + '/api/v1'
         )
           throw new Error();
         origin = url.toString();
@@ -205,7 +205,10 @@ export class WrappClient {
         ),
     });
     this.vat = Object.freeze({
-      search: (query: Readonly<{ vat: string; country_code: string }>, opts?: RequestOptions) => {
+      search: async (
+        query: Readonly<{ vat: string; country_code: string }>,
+        opts?: RequestOptions,
+      ) => {
         const data = input(vatInputSchema, query, 'vat');
         return this.#run(
           'vat',
@@ -222,8 +225,10 @@ export class WrappClient {
           opts,
         ),
     });
+    // Resource methods are async so validation failures reject rather than throw
+    // synchronously out of a Promise-returning call.
     this.invoices = Object.freeze({
-      getStatus: (ref: InvoiceReference, opts?: RequestOptions) => {
+      getStatus: async (ref: InvoiceReference, opts?: RequestOptions) => {
         const valid = input(referenceSchema, ref, 'status');
         return this.#run(
           'status',
@@ -235,7 +240,7 @@ export class WrappClient {
           opts,
         );
       },
-      get: (ref: InvoiceReference, opts?: RequestOptions) => {
+      get: async (ref: InvoiceReference, opts?: RequestOptions) => {
         const valid = input(referenceSchema, ref, 'details');
         return this.#run(
           'details',
@@ -250,7 +255,7 @@ export class WrappClient {
       list: (filters: ListInvoicesInput = {}, opts?: RequestOptions) => this.#list(filters, opts),
       iterate: (filters: ListInvoicesInput, opts: RequestOptions & { readonly maxPages: number }) =>
         this.#iterate(filters, opts),
-      create: (invoice: CreateInvoiceInput, opts?: RequestOptions) => {
+      create: async (invoice: CreateInvoiceInput, opts?: RequestOptions) => {
         const data = input(createSchema, invoice, 'create');
         const body = encodeJson(data);
         if (Buffer.byteLength(body) > this.#maxRequestBytes)
@@ -259,9 +264,14 @@ export class WrappClient {
           'create',
           '/invoices',
           (value): CreateOutcome => {
-            const count = rejectedCount(value);
-            if (count !== undefined)
-              return freeze({ kind: 'rejected', errorCount: count, referenceState: 'unknown' });
+            const rejected = rejection(value);
+            if (rejected !== undefined)
+              return freeze({
+                kind: 'rejected',
+                errorCount: rejected.errorCount,
+                rejectionSource: rejected.source,
+                referenceState: 'unknown',
+              });
             if (value !== null && typeof value === 'object' && 'status' in value) {
               if ('id' in value) throw new WrappError('PROTOCOL_ERROR', 'create');
               const pending = decode(pendingSchema, value, 'create');
@@ -282,14 +292,19 @@ export class WrappClient {
           body,
         );
       },
-      requestPdf: (invoiceId: string, opts?: RequestOptions) => {
+      requestPdf: async (invoiceId: string, opts?: RequestOptions) => {
         const valid = input(identifier, invoiceId, 'pdf');
         return this.#run(
           'pdf',
           '/invoices/' + encodeURIComponent(valid) + '/generate_pdf',
           (value): PdfOutcome => {
-            const count = rejectedCount(value);
-            if (count !== undefined) return freeze({ kind: 'rejected', errorCount: count });
+            const rejected = rejection(value);
+            if (rejected !== undefined)
+              return freeze({
+                kind: 'rejected',
+                errorCount: rejected.errorCount,
+                rejectionSource: rejected.source,
+              });
             if (value !== null && typeof value === 'object' && 'download_url' in value) {
               if ('status' in value) throw new WrappError('PROTOCOL_ERROR', 'pdf');
               return freeze({
@@ -342,7 +357,7 @@ export class WrappClient {
       deadline.dispose();
     }
   }
-  #list(filters: ListInvoicesInput, options?: RequestOptions): Promise<InvoicePage> {
+  async #list(filters: ListInvoicesInput, options?: RequestOptions): Promise<InvoicePage> {
     const data = input(listSchema, filters, 'list');
     const page = data.page ?? 1;
     const query = new URLSearchParams({
@@ -355,12 +370,14 @@ export class WrappClient {
       '/invoices/find_all_invoices?' + query.toString(),
       (v) => {
         const result = decode(pageSchema, readValue(v), 'list');
+        // Providers report empty collections either as total_pages 0 or as one empty page.
         if (
           result.current_page !== page ||
           result.invoices.length > result.total_count ||
           (result.total_pages === 0 &&
             (result.total_count !== 0 || result.invoices.length !== 0)) ||
-          (result.total_pages > 0 && (page > result.total_pages || result.invoices.length === 0))
+          (result.total_pages > 0 && page > result.total_pages) ||
+          (result.total_pages > 0 && result.total_count > 0 && result.invoices.length === 0)
         ) {
           throw new WrappError('PROTOCOL_ERROR', 'list');
         }

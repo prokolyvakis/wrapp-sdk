@@ -126,6 +126,7 @@ export type CreateOutcome = Readonly<{
 }> | Readonly<{
     kind: 'rejected';
     errorCount: number;
+    rejectionSource: RejectionSource;
     referenceState: 'unknown';
 }>;
 
@@ -138,7 +139,7 @@ export type Decimal = string & {
 export function decimal(value: string): Decimal;
 
 // @public
-export type EffectCertainty = 'not-sent' | 'unknown' | 'provider-observed';
+export type EffectCertainty = 'not-sent' | 'unknown';
 
 // @public
 export type ErrorCode = 'INVALID_INPUT' | 'PROTOCOL_ERROR' | 'HTTP_ERROR' | 'AUTH_ERROR' | 'PROVIDER_REJECTED' | 'NETWORK_ERROR' | 'TIMEOUT' | 'ABORTED' | 'RESPONSE_TOO_LARGE' | 'PAGINATION_LIMIT' | 'WEBHOOK_INVALID';
@@ -309,7 +310,11 @@ export type PdfOutcome = Readonly<{
 }> | Readonly<{
     kind: 'rejected';
     errorCount: number;
+    rejectionSource: RejectionSource;
 }>;
+
+// @public
+export type RejectionSource = 'invoice-errors' | 'mydata-errors' | 'unknown';
 
 // @public
 export interface RequestOptions {

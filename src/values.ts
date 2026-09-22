@@ -2,17 +2,22 @@ import { WrappError } from './errors.js';
 
 declare const decimalBrand: unique symbol;
 declare const dateBrand: unique symbol;
-/** Nonnegative exact decimal; maximum 18 integer / 2 fractional digits. */
+/**
+ * Nonnegative exact decimal; maximum 18 integer / 12 fractional digits. Monetary totals are
+ * further limited to 2 fractional digits at the create() boundary; rates and quantities may
+ * use the full precision.
+ */
 export type Decimal = string & { readonly [decimalBrand]: true };
 /** Validated ISO YYYY-MM-DD calendar date; no timezone interpretation is ever applied. */
 export type CalendarDate = string & { readonly [dateBrand]: true };
 
 /**
  * Brands a canonical decimal string for exact serialization; no float ever holds the value.
- * @throws WrappError INVALID_INPUT on exponents, signs, leading zeros or excess digits.
+ * @throws WrappError INVALID_INPUT on exponents, signs, leading zeros, excess digits or any
+ * other non-canonical shape.
  */
 export function decimal(value: string): Decimal {
-  if (typeof value !== 'string' || !/^(0|[1-9]\d{0,17})(\.\d{1,2})?$/.test(value)) {
+  if (typeof value !== 'string' || !/^(0|[1-9]\d{0,17})(\.\d{1,12})?$/.test(value)) {
     throw new WrappError('INVALID_INPUT', 'decimal');
   }
   return value as Decimal;

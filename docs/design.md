@@ -27,8 +27,10 @@ HTML, missing required fields, mismatched identity and unknown response variants
 failures.
 
 Request schemas reject unrecognized fields. Response schemas tolerate additive properties
-while preserving required evidence and explicit unknown-code handling. Parser-specific errors
-stay internal, and validation errors never echo raw values, URLs or payloads.
+while preserving required evidence and explicit unknown-code handling — with one deliberate
+exception: the top-level keys errors, error and status are reserved envelope discriminators,
+so their appearance on a read response fails closed instead of being ignored. Parser-specific
+errors stay internal, and validation errors never echo raw values, URLs or payloads.
 
 Amounts are never computed with binary floating-point arithmetic. Public exact decimal values
 use canonical decimal strings; codecs emit the provider's required JSON numeric tokens through
@@ -44,7 +46,9 @@ a DD-MM-YYYY provider date is never fed into Date.parse.
 
 Expected create outcomes are a closed, deliberately stable union: an observed invoice, pending,
 or a provider-reported rejection. There is no conflict variant: all rejections carry
-referenceState unknown, regardless of the rejection title or its language. Read-back is
+referenceState unknown, regardless of the rejection title or its language. Rejections do carry
+the provider's validation family verbatim as rejectionSource (invoice-errors vs mydata-errors)
+— evidence of where the rejection came from, never of what it means. Read-back is
 evidence, never permission to mint a replacement reference after ambiguity; even a subsequent
 not-found result does not establish that a previous write cannot issue. A provider-reported
 rejection is not a durable guarantee that later repair cannot issue, and an observed invoice

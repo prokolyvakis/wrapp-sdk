@@ -161,12 +161,30 @@ describe('webhooks', () => {
   it.each([
     Buffer.from('{'),
     Buffer.from([0xff]),
-    Buffer.from('{"a":1,"a":1}'),
+    Buffer.from('{"a":1,"a":2}'),
+    Buffer.from(
+      '{"invoice_id":"invoice-one","invoice_id":"invoice-two","download_url":"https://example.invalid/pdf"}',
+    ),
     Buffer.from('{"errors":[]}'),
+    Buffer.from('{"__proto__":{"invoice_id":"forged","download_url":"https://example.invalid/x"}}'),
   ])('should reject correctly signed malformed evidence', (body) => {
     expect(() =>
       verifyWebhook({ body, signature: sign(body), keys: [key], eventType: 'invoice-pdf' }),
     ).toThrow(WrappError);
+  });
+  it('should refuse to relabel one signed body across event kinds via the unsigned header', () => {
+    const dual = Buffer.from(
+      JSON.stringify({
+        ...observation(),
+        invoice_id: 'invoice-one',
+        download_url: 'https://example.invalid/pdf',
+      }),
+    );
+    for (const eventType of ['issued-invoice', 'invoice-pdf']) {
+      expect(() =>
+        verifyWebhook({ body: dual, signature: sign(dual), keys: [key], eventType }),
+      ).toThrow(WrappError);
+    }
   });
   it.each(['issued-invoice', 'unknown', 'thermal-print-pdf'])(
     'should reject mismatched or unsupported hints',

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { WrappClient, WrappError, calendarDate, decimal } from '../../src/index.js';
 import {
   credentials,
+  deferred,
   details,
   invoice,
   json,
@@ -9,6 +10,7 @@ import {
   observation,
   provider,
   tenant,
+  ticks,
 } from '../fixtures/provider.js';
 
 const ref = { kind: 'externalId', value: 'reference-one' } as const;
@@ -36,7 +38,7 @@ describe('resources', () => {
             street_number: '1',
           });
         case '/api/v1/vat_exemptions':
-          return json([{ '1': 'Synthetic exemption' }]);
+          return json([{ '1': 'Synthetic exemption', category: 'additive metadata' }]);
         default:
           return json({ errors: [{ title: 'wrong route' }] });
       }
@@ -89,9 +91,11 @@ describe('resources', () => {
   });
   it.each(['../x', '..', '%2e%2e', 'a/b', 'a?b', 'a#b', 'a\u0000b', '\ud800'])(
     'should reject unsafe references before I/O: %s',
-    (value) => {
+    async (value) => {
       const { client, calls } = provider(() => login());
-      expect(() => client.invoices.getStatus({ kind: 'externalId', value })).toThrow(WrappError);
+      await expect(client.invoices.getStatus({ kind: 'externalId', value })).rejects.toThrow(
+        WrappError,
+      );
       expect(calls).toHaveLength(0);
     },
   );
@@ -168,6 +172,7 @@ describe('resources', () => {
     expect(await client.invoices.create(invoice())).toEqual({
       kind: 'rejected',
       errorCount: 1,
+      rejectionSource: 'invoice-errors',
       referenceState: 'unknown',
     });
   });
@@ -199,37 +204,39 @@ describe('resources', () => {
     });
     expect(calls).toHaveLength(2);
   });
-  it('should reject unknown create fields, currency gaps and decimal excess before auth', () => {
+  it('should reject unknown create fields, currency gaps and decimal excess before auth', async () => {
     const { client, calls } = provider(() => login());
     // @ts-expect-error Unsupported fields must also fail at runtime.
-    expect(() => client.invoices.create({ ...invoice(), draft: true })).toThrow(WrappError);
-    expect(() => client.invoices.create({ ...invoice(), currency: 'EUR' })).toThrow(WrappError);
+    await expect(client.invoices.create({ ...invoice(), draft: true })).rejects.toThrow(WrappError);
+    await expect(client.invoices.create({ ...invoice(), currency: 'EUR' })).rejects.toThrow(
+      WrappError,
+    );
     // @ts-expect-error Unvalidated amounts are not part of the public API.
-    expect(() => client.invoices.create({ ...invoice(), total_amount: '1.234' })).toThrow(
+    await expect(client.invoices.create({ ...invoice(), total_amount: '1.234' })).rejects.toThrow(
       WrappError,
     );
     const line = invoice().invoice_lines[0];
     if (!line) throw new Error('fixture');
-    expect(() =>
+    await expect(
       client.invoices.create({ ...invoice(), invoice_lines: [{ ...line, vat_rate: 0 }] }),
-    ).toThrow(WrappError);
-    expect(() => client.invoices.create({ ...invoice(), invoice_lines: [line, line] })).toThrow(
-      WrappError,
-    );
+    ).rejects.toThrow(WrappError);
+    await expect(
+      client.invoices.create({ ...invoice(), invoice_lines: [line, line] }),
+    ).rejects.toThrow(WrappError);
     expect(calls).toHaveLength(0);
   });
-  it('should reject an oversized outbound body before auth', () => {
+  it('should reject an oversized outbound body before auth', async () => {
     const { client, calls } = provider(() => login(), { maxRequestBytes: 10 });
-    expect(() => client.invoices.create(invoice())).toThrow(WrappError);
+    await expect(client.invoices.create(invoice())).rejects.toThrow(WrappError);
     expect(calls).toHaveLength(0);
   });
   it('should require documented B2B identity fields and allow minimal retail service counterparts', async () => {
     const { client } = provider(({ url }) =>
       url.pathname.endsWith('/login') ? login() : json(observation()),
     );
-    expect(() =>
+    await expect(
       client.invoices.create({ ...invoice(), counterpart: { name: 'Only name' } }),
-    ).toThrow(WrappError);
+    ).rejects.toThrow(WrappError);
     expect(
       (
         await client.invoices.create({
@@ -258,6 +265,7 @@ describe('resources', () => {
     expect(await client.invoices.requestPdf('invoice-one')).toEqual({
       kind: 'rejected',
       errorCount: 1,
+      rejectionSource: 'unknown',
     });
     expect(calls).toHaveLength(4);
     expect(calls[1]?.init.method).toBe('GET');
@@ -290,12 +298,12 @@ describe('resources', () => {
       ).total_count,
     ).toBe(1);
     expect(calls[1]?.url.searchParams.get('start_date')).toBe('2026-01-01');
-    expect(() =>
+    await expect(
       client.invoices.list({
         start_date: calendarDate('2026-12-31'),
         end_date: calendarDate('2026-01-01'),
       }),
-    ).toThrow(WrappError);
+    ).rejects.toThrow(WrappError);
   });
   it('should iterate lazily with no prefetch and stop explicitly at maxPages', async () => {
     const { client, calls } = provider(({ url }) =>
@@ -387,5 +395,168 @@ describe('resources', () => {
     const client = new WrappClient({ environment: 'production', credentials });
     await expect(client.tenant.get()).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
     expect(JSON.stringify(client)).not.toContain(credentials.apiKey);
+  });
+  it.each([
+    'http://evil.invalid/api/v1',
+    'https://127.0.0.1/api/v1',
+    'http://127.0.0.1/other',
+    'http://127.0.0.1/api/v1?',
+    'http://127.0.0.1/api/v1#',
+    'http://127.0.0.1/api/v1#x',
+    'http://:pw@127.0.0.1/api/v1',
+  ])('should reject a test origin violating exactly one loopback rule: %s', (url) => {
+    expect(
+      () =>
+        new WrappClient({ environment: 'staging', credentials, advanced: { testBaseUrl: url } }),
+    ).toThrow(WrappError);
+  });
+  it('should accept the IPv6 loopback origin', async () => {
+    const client = new WrappClient({
+      environment: 'staging',
+      credentials,
+      advanced: { testBaseUrl: 'http://[::1]:9/api/v1' },
+    });
+    await expect(client.tenant.get()).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
+  });
+  it('should accept an empty collection reported as one empty page', async () => {
+    const { client } = provider(({ url }) =>
+      url.pathname.endsWith('/login')
+        ? login()
+        : json({ invoices: [], total_count: 0, total_pages: 1, current_page: 1 }),
+    );
+    expect((await client.invoices.list()).total_count).toBe(0);
+  });
+  it('should treat a case-variant provider id as protocol error, not identity evidence', async () => {
+    const { client } = provider(({ url }) =>
+      url.pathname.endsWith('/login')
+        ? login()
+        : json(observation({ id: 'INVOICE-ONE', external_id: null })),
+    );
+    await expect(
+      client.invoices.getStatus({ kind: 'invoiceId', value: 'invoice-one' }),
+    ).rejects.toMatchObject({ code: 'PROTOCOL_ERROR' });
+  });
+  it('should surface the provider validation family as evidence, never semantics', async () => {
+    let body: unknown = { status: 'myDATA Errors', errors: [{ title: 'x' }] };
+    const { client } = provider(({ url }) =>
+      url.pathname.endsWith('/login') ? login() : json(body),
+    );
+    expect(await client.invoices.create(invoice())).toMatchObject({
+      kind: 'rejected',
+      rejectionSource: 'mydata-errors',
+    });
+    body = { error: 'prose failure' };
+    expect(await client.invoices.create(invoice())).toMatchObject({
+      kind: 'rejected',
+      errorCount: 1,
+      rejectionSource: 'unknown',
+    });
+  });
+  it.each([
+    { error: 'x', download_url: 'https://example.invalid/pdf' },
+    { error: 'x', invoice_id: 'pending-one' },
+    { error: 'x', status: 'surprise' },
+  ])('should fail closed on contradictory singular error evidence %j', async (body) => {
+    const { client } = provider(({ url }) =>
+      url.pathname.endsWith('/login') ? login() : json(body),
+    );
+    await expect(client.invoices.requestPdf('invoice-one')).rejects.toMatchObject({
+      code: 'PROTOCOL_ERROR',
+      effect: 'unknown',
+    });
+  });
+  it('should dispatch each concurrent create exactly once over one shared login', async () => {
+    const gate = deferred<Response>();
+    const body = (init: RequestInit) => (typeof init.body === 'string' ? init.body : '');
+    const { client, calls } = provider(({ url, init }) =>
+      url.pathname.endsWith('/login')
+        ? gate.promise
+        : json(
+            observation({
+              external_id: (JSON.parse(body(init)) as { external_id: string }).external_id,
+            }),
+          ),
+    );
+    const first = client.invoices.create(invoice());
+    const second = client.invoices.create({ ...invoice(), external_id: 'reference-two' });
+    await ticks();
+    gate.resolve(login());
+    expect((await first).kind).toBe('observed');
+    expect((await second).kind).toBe('observed');
+    expect(calls.filter((c) => c.url.pathname.endsWith('/login'))).toHaveLength(1);
+    const bodies = calls
+      .filter((c) => c.url.pathname.endsWith('/invoices'))
+      .map((c) => body(c.init));
+    expect(bodies).toHaveLength(2);
+    expect(bodies.join()).toContain('reference-two');
+  });
+  it('should accept high-precision rates and quantities while keeping totals at two decimals', async () => {
+    const { client, calls } = provider(({ url }) =>
+      url.pathname.endsWith('/login') ? login() : json(observation()),
+    );
+    const line = invoice().invoice_lines[0];
+    if (!line) throw new Error('fixture');
+    const outcome = await client.invoices.create({
+      ...invoice(),
+      currency: 'USD',
+      exchange_rate: decimal('1.0834'),
+      invoice_lines: [{ ...line, quantity: decimal('2.505'), unit_price: decimal('3.9920') }],
+    });
+    expect(outcome.kind).toBe('observed');
+    expect(calls[1]?.init.body).toContain('"exchange_rate":1.0834');
+    await expect(
+      client.invoices.create({ ...invoice(), total_amount: decimal('1.234') }),
+    ).rejects.toThrow(WrappError);
+    expect(calls).toHaveLength(2);
+  });
+  it('should bound diagnostics when trusted seams throw raw errors', async () => {
+    const { client, calls } = provider(() => login(), {
+      advanced: {
+        now: () => {
+          throw new Error('secret-clock');
+        },
+      },
+    });
+    const failure = await client.tenant.get().catch((error: unknown) => error);
+    expect(failure).toMatchObject({
+      name: 'WrappError',
+      code: 'PROTOCOL_ERROR',
+      effect: 'not-sent',
+    });
+    expect(JSON.stringify(failure)).not.toContain('secret-clock');
+    expect(calls).toHaveLength(0);
+  });
+  it('should reject prototype-injecting JSON rather than honor inherited evidence', async () => {
+    const raw = '{"__proto__":{"download_url":"https://example.invalid/forged"}}';
+    const { client } = provider(({ url }) =>
+      url.pathname.endsWith('/login')
+        ? login()
+        : new Response(raw, { headers: { 'content-type': 'application/json' } }),
+    );
+    await expect(client.invoices.requestPdf('invoice-one')).rejects.toMatchObject({
+      code: 'PROTOCOL_ERROR',
+      effect: 'unknown',
+    });
+  });
+  it('should carry date filters onto every iterated page', async () => {
+    const { client, calls } = provider(({ url }) =>
+      url.pathname.endsWith('/login')
+        ? login()
+        : json({
+            invoices: [details({ id: 'invoice-' + (url.searchParams.get('page') ?? '') })],
+            total_count: 100,
+            total_pages: 2,
+            current_page: Number(url.searchParams.get('page')),
+          }),
+    );
+    for await (const record of client.invoices.iterate(
+      { start_date: calendarDate('2026-01-01') },
+      { maxPages: 2 },
+    )) {
+      expect(record.id).toContain('invoice-');
+    }
+    const pages = calls.filter((c) => c.url.pathname.endsWith('/find_all_invoices'));
+    expect(pages).toHaveLength(2);
+    for (const page of pages) expect(page.url.searchParams.get('start_date')).toBe('2026-01-01');
   });
 });

@@ -18,7 +18,9 @@ export class Session {
   }
   get(signal: AbortSignal): Promise<string> {
     const now = this.now();
-    if (this.#cached && now >= this.#cached.acquired && now - this.#cached.acquired < 86_340_000) {
+    // 24h documented JWT lifetime minus a margin exceeding the 120s maximum request timeout,
+    // so a token admitted at the window's edge cannot expire mid-flight.
+    if (this.#cached && now >= this.#cached.acquired && now - this.#cached.acquired < 86_220_000) {
       return Promise.resolve(this.#cached.token);
     }
     this.#pending ??= this.login().finally(() => {

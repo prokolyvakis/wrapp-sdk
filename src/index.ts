@@ -15,6 +15,7 @@ export { verifyWebhook } from './webhooks.js';
 export type { WebhookInput } from './webhooks.js';
 export type {
   ClientOptions,
+  RejectionSource,
   RequestOptions,
   TenantIdentity,
   InvoiceReference,

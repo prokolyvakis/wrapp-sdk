@@ -1,4 +1,4 @@
-/** Stable failure classification; the only machine-readable dimension besides effect. */
+/** Stable failure classification, independent of provider wording. */
 export type ErrorCode =
   | 'INVALID_INPUT'
   | 'PROTOCOL_ERROR'
@@ -12,11 +12,12 @@ export type ErrorCode =
   | 'PAGINATION_LIMIT'
   | 'WEBHOOK_INVALID';
 /**
- * Whether the failed operation can have taken effect: 'not-sent' means nothing was
- * dispatched; 'unknown' means the request may have been applied and the caller must
- * reconcile through its durable record before considering any repeat.
+ * Whether the failed operation can have changed provider state. 'not-sent' means no
+ * state-changing request can have taken effect — reads report 'not-sent' even when a
+ * dispatched request fails. 'unknown' means a state-changing request was dispatched and may
+ * have been applied; the caller must reconcile through its durable record before any repeat.
  */
-export type EffectCertainty = 'not-sent' | 'unknown' | 'provider-observed';
+export type EffectCertainty = 'not-sent' | 'unknown';
 
 /**
  * Safe diagnostics: never retains provider payloads, credentials, URLs or raw causes.

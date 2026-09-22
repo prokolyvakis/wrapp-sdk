@@ -192,7 +192,7 @@ describe('HTTP transport', () => {
   it.each([
     () => new Response('<html>error</html>', { headers: { 'content-type': 'text/html' } }),
     () => new Response('{', { headers: { 'content-type': 'application/json' } }),
-    () => new Response('{"a":1,"a":1}', { headers: { 'content-type': 'application/json' } }),
+    () => new Response('{"a":1,"a":2}', { headers: { 'content-type': 'application/json' } }),
     () => new Response(new Uint8Array([0xff]), { headers: { 'content-type': 'application/json' } }),
     () => new Response(null, { status: 204, headers: { 'content-type': 'application/json' } }),
   ])('should reject malformed or missing bodies without exposing them', async (response) => {
@@ -271,6 +271,7 @@ describe('HTTP transport', () => {
     expect(await client.invoices.create(invoice())).toEqual({
       kind: 'rejected',
       errorCount: 1,
+      rejectionSource: 'mydata-errors',
       referenceState: 'unknown',
     });
   });
