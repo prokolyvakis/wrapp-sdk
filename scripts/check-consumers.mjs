@@ -10,13 +10,30 @@ const scratch = mkdtempSync(join(tmpdir(), 'wrapp-consumer-'));
 function run(command, args, cwd = scratch) {
   const result = spawnSync(command, args, { cwd, encoding: 'utf8', timeout: 120_000 });
   if (result.error || result.status !== 0) {
-    throw new Error('Consumer check failed: ' + command + '\n' + result.stdout + result.stderr);
+    throw new Error(
+      'Consumer check failed: ' +
+        command +
+        '\n' +
+        (result.error?.message ?? '') +
+        (result.stdout ?? '') +
+        (result.stderr ?? ''),
+    );
   }
   return result.stdout;
 }
+// npm 10 runs the prepare script during pack despite --ignore-scripts, so hook tooling can
+// print to stdout ahead of the JSON payload — including bracketed noise like "[husky] ...".
+function extractJson(output) {
+  for (let index = output.indexOf('['); index !== -1; index = output.indexOf('[', index + 1)) {
+    try {
+      return JSON.parse(output.slice(index));
+    } catch {
+      // Not the payload; keep scanning for the next bracket.
+    }
+  }
+  throw new Error('npm pack emitted no JSON payload');
+}
 try {
-  // npm 10 runs the prepare script during pack despite --ignore-scripts, so hook
-  // tooling can print to stdout ahead of the JSON payload.
   const packOutput = run(
     'npm',
     ['pack', '--ignore-scripts', '--json', '--pack-destination', scratch],
@@ -25,7 +42,7 @@ try {
   const packed = z
     .array(z.object({ filename: z.string(), files: z.array(z.object({ path: z.string() })) }))
     .min(1)
-    .parse(JSON.parse(packOutput.slice(packOutput.indexOf('['))))[0];
+    .parse(extractJson(packOutput))[0];
   if (
     !packed ||
     packed.files.some((file) => !/^(dist\/|README\.md$|LICENSE$|package\.json$)/.test(file.path))
@@ -34,8 +51,9 @@ try {
   }
   writeFileSync(join(scratch, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
   // prefer-offline, not offline: a fresh runner's cache lacks registry metadata
-  // for the tarball's dependencies. Versions are exact-pinned, so a network
-  // fallback cannot change what is installed.
+  // for the tarball's dependencies. Versions are exact-pinned and both runtime
+  // deps carry no transitive dependencies, so a network fallback cannot change
+  // what is installed; a future dep with semver ranges would weaken this.
   run('npm', [
     'install',
     '--prefer-offline',

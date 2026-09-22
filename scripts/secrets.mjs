@@ -89,7 +89,7 @@ function scan() {
         `
 [[allowlists]]
 description = "Local dependencies and generated artifacts only; not applied to Git scans."
-paths = ['(^|/)(node_modules|[.]git|[.]tools|[.]remember|[.]claude|coverage|docs/internal)/']
+paths = ['(^|/)(node_modules|[.]git|[.]tools|coverage)/']
 `,
     );
     const scopes =
