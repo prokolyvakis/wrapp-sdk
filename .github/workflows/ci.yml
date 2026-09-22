@@ -1,0 +1,54 @@
+name: SDK checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.13.0', '24.21.0']
+    env:
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run secrets:install
+      - run: npm run secrets:check
+      - run: npm run check
+      - run: npm run check:package
+      - run: npm run check:consumers
+      - name: Validate PR title for a Conventional Commit squash message
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$PR_TITLE" | npm run --silent commitlint
+      - name: Validate every commit introduced by the PR
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: npm run commitlint -- --from "$BASE_SHA" --to "$HEAD_SHA"
+      - name: Validate post-bootstrap main history
+        if: github.event_name == 'push'
+        run: npm run commitlint -- --from "$(git rev-list --max-parents=0 HEAD)" --to HEAD
