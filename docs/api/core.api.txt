@@ -1,0 +1,306 @@
+// dist/index.d.ts
+export { WrappClient } from './client.js';
+export type { InvoiceResource } from './client.js';
+export { WrappError } from './errors.js';
+export type { ErrorCode, EffectCertainty } from './errors.js';
+export { decimal, calendarDate } from './values.js';
+export type { Decimal, CalendarDate } from './values.js';
+export { verifyWebhook } from './webhooks.js';
+export type { WebhookInput } from './webhooks.js';
+export type { ClientOptions, RequestOptions, TenantIdentity, InvoiceReference, IdentityEvidence, CreateInvoiceInput, CreateOutcome, InvoiceObservation, InvoiceDetails, InvoiceLine, Counterpart, InvoicePage, ListInvoicesInput, PdfOutcome, TenantDetails, Branch, BillingBook, VatDetails, VerifiedWebhook, } from './types.js';
+
+// dist/client.d.ts
+import type { BillingBook, Branch, ClientOptions, CreateInvoiceInput, CreateOutcome, IdentityEvidence, InvoiceDetails, InvoiceObservation, InvoicePage, InvoiceReference, ListInvoicesInput, PdfOutcome, RequestOptions, TenantDetails, VatDetails } from './types.js';
+export interface InvoiceResource {
+    getStatus(reference: InvoiceReference, options?: RequestOptions): Promise<Readonly<{
+        invoice: InvoiceObservation;
+        identity: IdentityEvidence;
+    }>>;
+    /** Validated core projection, not a complete fiscal archive. */
+    get(reference: InvoiceReference, options?: RequestOptions): Promise<Readonly<{
+        invoice: InvoiceDetails;
+        identity: IdentityEvidence;
+    }>>;
+    list(filters?: ListInvoicesInput, options?: RequestOptions): Promise<InvoicePage>;
+    iterate(filters: ListInvoicesInput, options: RequestOptions & {
+        readonly maxPages: number;
+    }): AsyncIterable<InvoiceDetails>;
+    create(invoice: CreateInvoiceInput, options?: RequestOptions): Promise<CreateOutcome>;
+    requestPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
+}
+/** Tenant/environment-isolated client. No requests occur during construction. */
+export declare class WrappClient {
+    #private;
+    readonly tenant: Readonly<{
+        get(options?: RequestOptions): Promise<TenantDetails>;
+    }>;
+    readonly branches: Readonly<{
+        list(options?: RequestOptions): Promise<readonly Branch[]>;
+    }>;
+    readonly billingBooks: Readonly<{
+        list(options?: RequestOptions): Promise<readonly BillingBook[]>;
+    }>;
+    readonly vat: Readonly<{
+        search(query: Readonly<{
+            vat: string;
+            country_code: string;
+        }>, options?: RequestOptions): Promise<VatDetails>;
+        exemptions(options?: RequestOptions): Promise<readonly Readonly<Record<string, string>>[]>;
+    }>;
+    readonly invoices: Readonly<InvoiceResource>;
+    constructor(options: ClientOptions);
+}
+
+// dist/types.d.ts
+import type { CalendarDate, Decimal } from './values.js';
+export type TenantIdentity = Readonly<{
+    kind: 'email' | 'userId';
+    value: string;
+}>;
+export type InvoiceReference = Readonly<{
+    kind: 'invoiceId' | 'externalId';
+    value: string;
+}>;
+export type IdentityEvidence = 'exact' | 'ascii-case-variant';
+export interface RequestOptions {
+    readonly signal?: AbortSignal;
+    readonly timeoutMs?: number;
+}
+export interface ClientOptions {
+    readonly environment: 'staging' | 'production';
+    readonly credentials: {
+        readonly apiKey: string;
+        readonly tenant: TenantIdentity;
+    };
+    readonly timeoutMs?: number;
+    readonly maxResponseBytes?: number;
+    readonly maxRequestBytes?: number;
+    /** Trusted testing seams. Origin override accepts loopback HTTP only, never another provider. */
+    readonly advanced?: {
+        readonly testBaseUrl?: string;
+        readonly fetch?: typeof globalThis.fetch;
+        readonly now?: () => number;
+    };
+}
+export interface Counterpart {
+    readonly name: string;
+    readonly country_code?: string;
+    readonly vat?: string;
+    readonly city?: string;
+    readonly street?: string;
+    readonly number?: string;
+    readonly postal_code?: string;
+    readonly email?: string;
+}
+export interface InvoiceLine {
+    readonly line_number: number;
+    readonly name: string;
+    readonly code?: string;
+    readonly description?: string;
+    readonly quantity: Decimal;
+    readonly quantity_type?: number;
+    readonly unit_price: Decimal;
+    readonly net_total_price: Decimal;
+    readonly vat_rate: number;
+    readonly vat_total: Decimal;
+    readonly subtotal: Decimal;
+    readonly vat_exemption_code?: number;
+    readonly classification_category: string;
+    readonly classification_type: string;
+}
+export interface CreateInvoiceInput {
+    readonly external_id: string;
+    readonly billing_book_id: string;
+    readonly invoice_type_code: '2.1' | '2.2' | '2.3' | '11.2';
+    readonly payment_method_type: number;
+    readonly counterpart: Counterpart;
+    readonly net_total_amount: Decimal;
+    readonly vat_total_amount: Decimal;
+    readonly total_amount: Decimal;
+    readonly payable_total_amount: Decimal;
+    readonly invoice_lines: readonly InvoiceLine[];
+    readonly branch?: string;
+    readonly payment_details?: string;
+    readonly notes?: string;
+    readonly currency?: string;
+    readonly exchange_rate?: Decimal;
+    readonly correlated_invoices?: readonly string[];
+    readonly customer_emails?: readonly string[];
+    readonly email_locale?: 'el' | 'en';
+    readonly generate_pdf?: boolean;
+    readonly mark_as_paid?: boolean;
+}
+export interface InvoiceObservation {
+    readonly id: string;
+    readonly external_id: string | null;
+    readonly my_data_mark: string | null;
+    readonly my_data_uid: string | null;
+    readonly my_data_qr_url: string | null;
+    readonly series: string;
+    readonly num: string;
+    readonly issued_at: CalendarDate;
+    readonly cancelled_by_mark: string | null;
+    readonly transmission_failure: string | null;
+    readonly wrapp_invoice_url: string;
+    readonly wrapp_invoice_url_en: string;
+}
+/** No outcome establishes compliance, reference freedom, or equality to an earlier request. */
+export type CreateOutcome = Readonly<{
+    kind: 'observed';
+    invoice: InvoiceObservation;
+    identity: IdentityEvidence;
+}> | Readonly<{
+    kind: 'pending';
+    invoiceId: string;
+    referenceState: 'unknown';
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    referenceState: 'unknown';
+}>;
+export interface InvoiceDetails {
+    readonly id: string;
+    readonly external_id: string | null;
+    readonly invoice_type_code: string;
+    readonly billing_book_id: string;
+    readonly issued_at: string;
+    readonly code: string;
+    readonly currency: string;
+    readonly net_total_amount: string;
+    readonly vat_total_amount: string;
+    readonly total_amount: string;
+    readonly payable_total_amount: string;
+    readonly counterpart: Readonly<{
+        name: string;
+        country_code?: string | undefined;
+        vat?: string | undefined;
+        city?: string | undefined;
+        street?: string | undefined;
+        number?: string | undefined;
+        postal_code?: string | undefined;
+        email?: string | undefined;
+    }>;
+    readonly invoice_lines: readonly Readonly<{
+        line_number: number;
+        name: string;
+        quantity: string;
+        unit_price: string;
+        net_total_price: string;
+        vat_rate: number;
+        vat_total: string;
+        subtotal: string;
+        classification_category: string;
+        classification_type: string;
+    }>[];
+}
+export interface InvoicePage {
+    readonly invoices: readonly InvoiceDetails[];
+    readonly total_count: number;
+    readonly total_pages: number;
+    readonly current_page: number;
+}
+export interface ListInvoicesInput {
+    readonly start_date?: CalendarDate;
+    readonly end_date?: CalendarDate;
+    readonly page?: number;
+}
+export type PdfOutcome = Readonly<{
+    kind: 'available';
+    downloadUrl: string;
+}> | Readonly<{
+    kind: 'acknowledged';
+    status: 'unknown';
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+}>;
+export interface TenantDetails {
+    readonly wrapp_user_id: string;
+    readonly partner_user_id: string | null;
+    readonly issue_invoice_status: boolean;
+    readonly email: string;
+    readonly has_plan: boolean;
+    readonly plan_name: string;
+    readonly next_payment_date: CalendarDate | null;
+    readonly next_payment_amount: string | null;
+}
+export interface Branch {
+    readonly id: string;
+    readonly name: string;
+    readonly code: string;
+}
+export interface BillingBook {
+    readonly id: string;
+    readonly name: string;
+    readonly series: string;
+    readonly invoice_type_code: string;
+    readonly number: string;
+}
+export interface VatDetails {
+    readonly vat_no: string;
+    readonly name: string;
+    readonly city: string;
+    readonly address: string;
+    readonly postal_code: string;
+    readonly street_number: string;
+}
+export type VerifiedWebhook = Readonly<{
+    kind: 'issued-invoice';
+    invoice: InvoiceObservation;
+    eventTypeAuthenticated: false;
+}> | Readonly<{
+    kind: 'invoice-pdf';
+    invoiceId: string;
+    downloadUrl: string;
+    eventTypeAuthenticated: false;
+}>;
+
+// dist/values.d.ts
+declare const decimalBrand: unique symbol;
+declare const dateBrand: unique symbol;
+/** Nonnegative exact decimal; maximum 18 integer / 2 fractional digits. */
+export type Decimal = string & {
+    readonly [decimalBrand]: true;
+};
+export type CalendarDate = string & {
+    readonly [dateBrand]: true;
+};
+export declare function decimal(value: string): Decimal;
+export declare function isCalendarDate(value: string): boolean;
+export declare function calendarDate(value: string): CalendarDate;
+export declare function freeze<T>(value: T): T;
+export {};
+
+// dist/errors.d.ts
+/** Safe diagnostics: never retain provider payloads, credentials, URLs or raw causes. */
+export type ErrorCode = 'INVALID_INPUT' | 'PROTOCOL_ERROR' | 'HTTP_ERROR' | 'AUTH_ERROR' | 'PROVIDER_REJECTED' | 'NETWORK_ERROR' | 'TIMEOUT' | 'ABORTED' | 'RESPONSE_TOO_LARGE' | 'PAGINATION_LIMIT' | 'WEBHOOK_INVALID';
+export type EffectCertainty = 'not-sent' | 'unknown' | 'provider-observed';
+export declare class WrappError extends Error {
+    readonly code: ErrorCode;
+    readonly operation: string;
+    readonly effect: EffectCertainty;
+    readonly httpStatus?: number | undefined;
+    readonly name = "WrappError";
+    constructor(code: ErrorCode, operation: string, effect?: EffectCertainty, httpStatus?: number | undefined);
+    toJSON(): {
+        httpStatus?: number;
+        name: string;
+        code: ErrorCode;
+        operation: string;
+        effect: EffectCertainty;
+    };
+}
+
+// dist/webhooks.d.ts
+import type { VerifiedWebhook } from './types.js';
+export interface WebhookInput {
+    readonly body: Uint8Array;
+    /** Pass the single raw header value. Combined/duplicate header values are rejected. */
+    readonly signature: string;
+    /** Unauthenticated routing hint, not part of the signed body. */
+    readonly eventType: string;
+    readonly keys: readonly string[];
+    readonly maxBodyBytes?: number;
+}
+/** Authenticates bytes, not freshness, event type or tenant identity. Performs no I/O. */
+export declare function verifyWebhook(input: WebhookInput): VerifiedWebhook;
