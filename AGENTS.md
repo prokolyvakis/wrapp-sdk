@@ -4,7 +4,8 @@ This repository is an independent, unofficial Wrapp SDK, not a component of any 
 Read docs/design.md, docs/api-reference.md and docs/compatibility.md before changing behavior;
 CONTRIBUTING.md covers workflow and quality gates.
 
-- Keep the package private and publication disabled until explicit release approval.
+- Never publish or release except through the reviewed release-please flow; never bypass
+  the release gates or the protected npm environment.
 - Never call production or create provider documents/accounts without explicit authority.
 - Do not add application tax policy, databases, queues, invoice numbering or business workflows.
 - No automatic retries of effectful operations, including effectful GETs. Preserve ambiguous

@@ -76,10 +76,9 @@ provenance through trusted publishing — no npm token exists anywhere. The publ
 in the protected `npm` environment; keep a required reviewer on it. Do not add
 semantic-release or Changesets alongside release-please.
 
-Two operational notes: CI does not start automatically on release-please's PRs (a GitHub
-token limitation) — close and reopen the PR to trigger it; and the very first publish of the
-package must be bootstrapped manually (`npm publish` from the tagged commit, with 2FA),
-because npm's trusted publishing can only be configured once the package exists. Configure
-the trusted publisher on npmjs.com immediately after.
+One operational note: CI does not start automatically on release-please's PRs (a GitHub
+token limitation) — approve the queued workflow run, or close and reopen the PR to trigger
+it. (Historical: 0.1.0 was bootstrapped with a manual `npm publish`, as npm's trusted
+publishing cannot create a package's first version.)
 
 See [docs/compatibility.md](docs/compatibility.md) for what a release must preserve.

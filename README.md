@@ -8,11 +8,19 @@ arithmetic near a currency amount.
 
 Not affiliated with or endorsed by Wrapp. Not tax or accounting advice.
 
-**Status: pre-release.** Not yet published to npm; releases are cut through reviewed
-release PRs and published with provenance via trusted publishing. Behavior is verified with
-synthetic tests and against observed provider behavior under authorized testing — no
-production certification or fiscal correctness is claimed. See
-[provider evidence and open questions](docs/provider-evidence.md).
+**Status: pre-release (0.x).** Behavior is verified with synthetic tests and against
+observed provider behavior under authorized testing — no production certification or fiscal
+correctness is claimed, and 0.x minor releases may carry breaking changes with migration
+notes. See [provider evidence and open questions](docs/provider-evidence.md).
+
+## Install
+
+```sh
+npm install @prokolyvakis/wrapp-sdk
+```
+
+ESM-only, Node `^22.13.0 || ^24.0.0`. Releases are cut through reviewed release PRs and
+published from CI via trusted publishing.
 
 ## Quick example
 

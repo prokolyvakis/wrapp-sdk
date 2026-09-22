@@ -1,7 +1,7 @@
 # Compatibility and API evolution policy
 
-Status: binding pre-release SDK contract, enforced locally by the packed-consumer and
-declaration-baseline checks; no public release or provider certification exists yet.
+Status: binding SDK contract on the pre-1.0 line, enforced by the packed-consumer and
+declaration-baseline checks; released as 0.x with no provider certification.
 
 ## Separate four version axes
 
