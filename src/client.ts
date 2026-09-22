@@ -76,7 +76,9 @@ function readValue(value: unknown): unknown {
     throw new WrappError('PROTOCOL_ERROR', 'decode');
   return value;
 }
+/** Invoice operations. Reads report identity evidence; writes preserve ambiguity. */
 export interface InvoiceResource {
+  /** Status lookup with identity evidence; a not-found never proves a reference is free. */
   getStatus(
     reference: InvoiceReference,
     options?: RequestOptions,
@@ -97,15 +99,27 @@ export interface InvoiceResource {
     }>
   >;
   list(filters?: ListInvoicesInput, options?: RequestOptions): Promise<InvoicePage>;
+  /**
+   * Lazy, cancellable page walk with no prefetch and no silent deduplication.
+   * @throws WrappError PAGINATION_LIMIT when maxPages is exhausted, instead of truncating.
+   */
   iterate(
     filters: ListInvoicesInput,
     options: RequestOptions & { readonly maxPages: number },
   ): AsyncIterable<InvoiceDetails>;
+  /**
+   * Dispatches the invoice at most once and reports what was observed; see CreateOutcome.
+   * Failures after dispatch carry effect 'unknown' and are never retried or replayed.
+   */
   create(invoice: CreateInvoiceInput, options?: RequestOptions): Promise<CreateOutcome>;
+  /** Effectful GET, dispatched at most once. The returned URL is data, never fetched. */
   requestPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
 }
 
-/** Tenant/environment-isolated client. No requests occur during construction. */
+/**
+ * Tenant/environment-isolated client. No requests occur during construction; login happens
+ * lazily, coalesced across concurrent calls. The instance and its resources are frozen.
+ */
 export class WrappClient {
   readonly tenant: Readonly<{ get(options?: RequestOptions): Promise<TenantDetails> }>;
   readonly branches: Readonly<{ list(options?: RequestOptions): Promise<readonly Branch[]> }>;

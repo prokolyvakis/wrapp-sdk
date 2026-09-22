@@ -1,3 +1,10 @@
+/**
+ * Unofficial, server-side TypeScript client for the Wrapp invoicing API. Nothing is retried
+ * automatically, ambiguous outcomes are preserved rather than resolved, and no currency
+ * amount ever passes through binary floating point.
+ *
+ * @packageDocumentation
+ */
 export { WrappClient } from './client.js';
 export type { InvoiceResource } from './client.js';
 export { WrappError } from './errors.js';

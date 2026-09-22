@@ -4,16 +4,24 @@ import { WrappError } from './errors.js';
 import { freeze } from './values.js';
 import type { VerifiedWebhook } from './types.js';
 
+/** Raw webhook material. Verification consumes the untouched bytes; never re-serialize. */
 export interface WebhookInput {
+  /** The request body exactly as received; any transformation invalidates the signature. */
   readonly body: Uint8Array;
   /** Pass the single raw header value. Combined/duplicate header values are rejected. */
   readonly signature: string;
   /** Unauthenticated routing hint, not part of the signed body. */
   readonly eventType: string;
+  /** One to five verification keys, allowing bounded rotation. Order is irrelevant. */
   readonly keys: readonly string[];
+  /** Defaults to 2 MiB; hard-capped at 8 MiB. Larger bodies are rejected before hashing. */
   readonly maxBodyBytes?: number;
 }
-/** Authenticates bytes, not freshness, event type or tenant identity. Performs no I/O. */
+/**
+ * Authenticates bytes, not freshness, event type or tenant identity. Performs no I/O.
+ * Verifies a hex HMAC-SHA256 signature in constant time before any parsing.
+ * @throws WrappError WEBHOOK_INVALID on any failure, without distinguishing the cause.
+ */
 export function verifyWebhook(input: WebhookInput): VerifiedWebhook {
   try {
     const limit = input.maxBodyBytes ?? 2_097_152;

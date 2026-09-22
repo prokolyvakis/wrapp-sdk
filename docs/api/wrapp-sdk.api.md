@@ -4,7 +4,7 @@
 
 ```ts
 
-// @public (undocumented)
+// @public
 export interface BillingBook {
     // (undocumented)
     readonly id: string;
@@ -12,13 +12,12 @@ export interface BillingBook {
     readonly invoice_type_code: string;
     // (undocumented)
     readonly name: string;
-    // (undocumented)
     readonly number: string;
     // (undocumented)
     readonly series: string;
 }
 
-// @public (undocumented)
+// @public
 export interface Branch {
     // (undocumented)
     readonly code: string;
@@ -28,15 +27,15 @@ export interface Branch {
     readonly name: string;
 }
 
-// @public (undocumented)
+// @public
 export type CalendarDate = string & {
     readonly [dateBrand]: true;
 };
 
-// @public (undocumented)
+// @public
 export function calendarDate(value: string): CalendarDate;
 
-// @public (undocumented)
+// @public
 export interface ClientOptions {
     readonly advanced?: {
         readonly testBaseUrl?: string;
@@ -48,17 +47,13 @@ export interface ClientOptions {
         readonly apiKey: string;
         readonly tenant: TenantIdentity;
     };
-    // (undocumented)
     readonly environment: 'staging' | 'production';
-    // (undocumented)
     readonly maxRequestBytes?: number;
-    // (undocumented)
     readonly maxResponseBytes?: number;
-    // (undocumented)
     readonly timeoutMs?: number;
 }
 
-// @public (undocumented)
+// @public
 export interface Counterpart {
     // (undocumented)
     readonly city?: string;
@@ -78,7 +73,7 @@ export interface Counterpart {
     readonly vat?: string;
 }
 
-// @public (undocumented)
+// @public
 export interface CreateInvoiceInput {
     // (undocumented)
     readonly billing_book_id: string;
@@ -88,7 +83,6 @@ export interface CreateInvoiceInput {
     readonly correlated_invoices?: readonly string[];
     // (undocumented)
     readonly counterpart: Counterpart;
-    // (undocumented)
     readonly currency?: string;
     // (undocumented)
     readonly customer_emails?: readonly string[];
@@ -96,13 +90,11 @@ export interface CreateInvoiceInput {
     readonly email_locale?: 'el' | 'en';
     // (undocumented)
     readonly exchange_rate?: Decimal;
-    // (undocumented)
     readonly external_id: string;
     // (undocumented)
     readonly generate_pdf?: boolean;
     // (undocumented)
     readonly invoice_lines: readonly InvoiceLine[];
-    // (undocumented)
     readonly invoice_type_code: '2.1' | '2.2' | '2.3' | '11.2';
     // (undocumented)
     readonly mark_as_paid?: boolean;
@@ -142,19 +134,19 @@ export type Decimal = string & {
     readonly [decimalBrand]: true;
 };
 
-// @public (undocumented)
+// @public
 export function decimal(value: string): Decimal;
 
-// @public (undocumented)
+// @public
 export type EffectCertainty = 'not-sent' | 'unknown' | 'provider-observed';
 
 // @public
 export type ErrorCode = 'INVALID_INPUT' | 'PROTOCOL_ERROR' | 'HTTP_ERROR' | 'AUTH_ERROR' | 'PROVIDER_REJECTED' | 'NETWORK_ERROR' | 'TIMEOUT' | 'ABORTED' | 'RESPONSE_TOO_LARGE' | 'PAGINATION_LIMIT' | 'WEBHOOK_INVALID';
 
-// @public (undocumented)
+// @public
 export type IdentityEvidence = 'exact' | 'ascii-case-variant';
 
-// @public (undocumented)
+// @public
 export interface InvoiceDetails {
     // (undocumented)
     readonly billing_book_id: string;
@@ -192,7 +184,6 @@ export interface InvoiceDetails {
     }>[];
     // (undocumented)
     readonly invoice_type_code: string;
-    // (undocumented)
     readonly issued_at: string;
     // (undocumented)
     readonly net_total_amount: string;
@@ -204,7 +195,7 @@ export interface InvoiceDetails {
     readonly vat_total_amount: string;
 }
 
-// @public (undocumented)
+// @public
 export interface InvoiceLine {
     // (undocumented)
     readonly classification_category: string;
@@ -236,7 +227,7 @@ export interface InvoiceLine {
     readonly vat_total: Decimal;
 }
 
-// @public (undocumented)
+// @public
 export interface InvoiceObservation {
     // (undocumented)
     readonly cancelled_by_mark: string | null;
@@ -246,7 +237,6 @@ export interface InvoiceObservation {
     readonly id: string;
     // (undocumented)
     readonly issued_at: CalendarDate;
-    // (undocumented)
     readonly my_data_mark: string | null;
     // (undocumented)
     readonly my_data_qr_url: string | null;
@@ -256,15 +246,13 @@ export interface InvoiceObservation {
     readonly num: string;
     // (undocumented)
     readonly series: string;
-    // (undocumented)
     readonly transmission_failure: string | null;
-    // (undocumented)
     readonly wrapp_invoice_url: string;
     // (undocumented)
     readonly wrapp_invoice_url_en: string;
 }
 
-// @public (undocumented)
+// @public
 export interface InvoicePage {
     // (undocumented)
     readonly current_page: number;
@@ -276,36 +264,32 @@ export interface InvoicePage {
     readonly total_pages: number;
 }
 
-// @public (undocumented)
+// @public
 export type InvoiceReference = Readonly<{
     kind: 'invoiceId' | 'externalId';
     value: string;
 }>;
 
-// @public (undocumented)
+// @public
 export interface InvoiceResource {
-    // (undocumented)
     create(invoice: CreateInvoiceInput, options?: RequestOptions): Promise<CreateOutcome>;
     get(reference: InvoiceReference, options?: RequestOptions): Promise<Readonly<{
         invoice: InvoiceDetails;
         identity: IdentityEvidence;
     }>>;
-    // (undocumented)
     getStatus(reference: InvoiceReference, options?: RequestOptions): Promise<Readonly<{
         invoice: InvoiceObservation;
         identity: IdentityEvidence;
     }>>;
-    // (undocumented)
     iterate(filters: ListInvoicesInput, options: RequestOptions & {
         readonly maxPages: number;
     }): AsyncIterable<InvoiceDetails>;
     // (undocumented)
     list(filters?: ListInvoicesInput, options?: RequestOptions): Promise<InvoicePage>;
-    // (undocumented)
     requestPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
 }
 
-// @public (undocumented)
+// @public
 export interface ListInvoicesInput {
     // (undocumented)
     readonly end_date?: CalendarDate;
@@ -315,7 +299,7 @@ export interface ListInvoicesInput {
     readonly start_date?: CalendarDate;
 }
 
-// @public (undocumented)
+// @public
 export type PdfOutcome = Readonly<{
     kind: 'available';
     downloadUrl: string;
@@ -327,15 +311,14 @@ export type PdfOutcome = Readonly<{
     errorCount: number;
 }>;
 
-// @public (undocumented)
+// @public
 export interface RequestOptions {
     // (undocumented)
     readonly signal?: AbortSignal;
-    // (undocumented)
     readonly timeoutMs?: number;
 }
 
-// @public (undocumented)
+// @public
 export interface TenantDetails {
     // (undocumented)
     readonly email: string;
@@ -355,13 +338,13 @@ export interface TenantDetails {
     readonly wrapp_user_id: string;
 }
 
-// @public (undocumented)
+// @public
 export type TenantIdentity = Readonly<{
     kind: 'email' | 'userId';
     value: string;
 }>;
 
-// @public (undocumented)
+// @public
 export interface VatDetails {
     // (undocumented)
     readonly address: string;
@@ -377,7 +360,7 @@ export interface VatDetails {
     readonly vat_no: string;
 }
 
-// @public (undocumented)
+// @public
 export type VerifiedWebhook = Readonly<{
     kind: 'issued-invoice';
     invoice: InvoiceObservation;
@@ -392,14 +375,11 @@ export type VerifiedWebhook = Readonly<{
 // @public
 export function verifyWebhook(input: WebhookInput): VerifiedWebhook;
 
-// @public (undocumented)
+// @public
 export interface WebhookInput {
-    // (undocumented)
     readonly body: Uint8Array;
     readonly eventType: string;
-    // (undocumented)
     readonly keys: readonly string[];
-    // (undocumented)
     readonly maxBodyBytes?: number;
     readonly signature: string;
 }
@@ -431,7 +411,7 @@ export class WrappClient {
     }>;
 }
 
-// @public (undocumented)
+// @public
 export class WrappError extends Error {
     constructor(code: ErrorCode, operation: string, effect?: EffectCertainty, httpStatus?: number | undefined);
     // (undocumented)
@@ -453,7 +433,5 @@ export class WrappError extends Error {
         effect: EffectCertainty;
     };
 }
-
-// (No @packageDocumentation comment for this package)
 
 ```

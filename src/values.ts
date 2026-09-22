@@ -4,8 +4,13 @@ declare const decimalBrand: unique symbol;
 declare const dateBrand: unique symbol;
 /** Nonnegative exact decimal; maximum 18 integer / 2 fractional digits. */
 export type Decimal = string & { readonly [decimalBrand]: true };
+/** Validated ISO YYYY-MM-DD calendar date; no timezone interpretation is ever applied. */
 export type CalendarDate = string & { readonly [dateBrand]: true };
 
+/**
+ * Brands a canonical decimal string for exact serialization; no float ever holds the value.
+ * @throws WrappError INVALID_INPUT on exponents, signs, leading zeros or excess digits.
+ */
 export function decimal(value: string): Decimal {
   if (typeof value !== 'string' || !/^(0|[1-9]\d{0,17})(\.\d{1,2})?$/.test(value)) {
     throw new WrappError('INVALID_INPUT', 'decimal');
@@ -22,6 +27,10 @@ export function isCalendarDate(value: string): boolean {
   const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
   return days !== undefined && day <= days;
 }
+/**
+ * Brands a validated calendar date, including real month-length and leap-year checks.
+ * @throws WrappError INVALID_INPUT on any other shape; nothing is coerced via Date.parse.
+ */
 export function calendarDate(value: string): CalendarDate {
   if (!isCalendarDate(value)) throw new WrappError('INVALID_INPUT', 'calendarDate');
   return value as CalendarDate;

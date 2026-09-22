@@ -1,4 +1,4 @@
-/** Safe diagnostics: never retain provider payloads, credentials, URLs or raw causes. */
+/** Stable failure classification; the only machine-readable dimension besides effect. */
 export type ErrorCode =
   | 'INVALID_INPUT'
   | 'PROTOCOL_ERROR'
@@ -11,8 +11,17 @@ export type ErrorCode =
   | 'RESPONSE_TOO_LARGE'
   | 'PAGINATION_LIMIT'
   | 'WEBHOOK_INVALID';
+/**
+ * Whether the failed operation can have taken effect: 'not-sent' means nothing was
+ * dispatched; 'unknown' means the request may have been applied and the caller must
+ * reconcile through its durable record before considering any repeat.
+ */
 export type EffectCertainty = 'not-sent' | 'unknown' | 'provider-observed';
 
+/**
+ * Safe diagnostics: never retains provider payloads, credentials, URLs or raw causes.
+ * All fields, including the JSON serialization, are bounded and loggable.
+ */
 export class WrappError extends Error {
   override readonly name = 'WrappError';
   constructor(
