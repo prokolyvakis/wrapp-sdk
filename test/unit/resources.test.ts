@@ -437,7 +437,8 @@ describe('resources', () => {
     ).rejects.toMatchObject({ code: 'PROTOCOL_ERROR' });
   });
   it('should surface the provider validation family as evidence, never semantics', async () => {
-    let body: unknown = { status: 'myDATA Errors', errors: [{ title: 'x' }] };
+    // Live staging spells the status "myData Errors" (2026-09-22); docs say "myDATA Errors".
+    let body: unknown = { status: 'myData Errors', errors: [{ code: '313', message: 'x' }] };
     const { client } = provider(({ url }) =>
       url.pathname.endsWith('/login') ? login() : json(body),
     );

@@ -283,10 +283,13 @@ const errorsSchema = z
   .min(1)
   .max(100);
 const errorEnvelope = z.object({ errors: errorsSchema, status: text.optional() });
+// Docs show "myDATA Errors"; live staging emits "myData Errors" (observed 2026-09-22),
+// so the two known statuses match case-insensitively.
 function sourceOf(status: string | undefined): RejectionSource {
   if (status === undefined) return 'unknown';
-  if (status === 'Invoice Errors') return 'invoice-errors';
-  if (status === 'myDATA Errors') return 'mydata-errors';
+  const normalized = status.toLowerCase();
+  if (normalized === 'invoice errors') return 'invoice-errors';
+  if (normalized === 'mydata errors') return 'mydata-errors';
   throw new WrappError('PROTOCOL_ERROR', 'decode');
 }
 export function rejection(

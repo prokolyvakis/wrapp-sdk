@@ -95,3 +95,21 @@ total_pages: 0, current_page: 1 }` — the total_pages-0 convention. Behavior un
 - Additive fields observed and ignored as designed: authentication_code, payment_method,
   branch, is_delivery_note, fuel_invoice, other_taxes_amount, withholding fields,
   stamp-duty fields, deductions.
+
+Write-probe observations (same date, authorized staging writes; synthetic documents only):
+
+- V02 (answered): a duplicate external_id create and an ASCII-case-variant create are both
+  refused with HTTP 422 — case-insensitive uniqueness confirmed. Reference conflicts arrive
+  as HTTP 422, not as a 2xx error envelope; through the SDK that is HTTP_ERROR with
+  httpStatus 422 and effect unknown, and reconciliation still runs through read-back.
+- V03 (answered for observed creates): a synchronously observed invoice is immediately
+  visible through status and full lookup by external reference with exact identity evidence.
+- V05 (partial): validation/myDATA rejections arrive as 2xx envelopes. Live staging spells
+  the envelope status "myData Errors" (docs: "myDATA Errors"); the known statuses now match
+  case-insensitively. Terminality remains unestablished.
+- V07 (answered for unit_price): a 3-fraction-digit unit_price (10.005) was accepted and
+  preserved verbatim through issuance and read-back — no rejection, no rounding. The
+  documented 2-decimal bound is not enforced for unit prices; staging also reformats a
+  quantity of 2 as "2.0" (value-preserving).
+- generate_pdf behaves as documented: acknowledged first, a presigned time-limited URL on a
+  later call once generation completes.
