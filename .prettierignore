@@ -5,6 +5,7 @@ coverage/
 .husky/_/
 docs/internal/
 docs/api/wrapp-sdk.api.md
+CHANGELOG.md
 LICENSE
 package-lock.json
 *.tgz
