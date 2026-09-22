@@ -58,6 +58,15 @@ documentation-derived or staging-observed — synthetic fixtures and loopback te
 observed Wrapp behavior. Never include real identities, API keys, taxpayer data or signed
 download links in fixtures.
 
+## Versioning
+
+Semantic versioning, computed from Conventional Commits by release-please: fix -> patch,
+feat -> minor, a `!` or BREAKING CHANGE footer -> major. On the 0.x line, breaking changes
+land as a minor with a migration note (bump-minor-pre-major), so no commit can accidentally
+cut a major. Crossing to 1.0.0 is a deliberate maintainer decision — edit
+release-please-config.json explicitly; never rely on a tool default for it. What counts as
+breaking is behavioral, not just structural: see [docs/compatibility.md](docs/compatibility.md).
+
 ## Releases
 
 release-please is the sole version and changelog owner: pushes to main maintain a release
