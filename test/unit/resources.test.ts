@@ -538,6 +538,35 @@ describe('resources', () => {
       effect: 'unknown',
     });
   });
+  it('should decode the staging-observed shape variants (2026-09-22 evidence)', async () => {
+    // Real staging deviates from the documented examples: branch code as a JSON number,
+    // ISO "T"/colon-offset timestamps, vat: "" for VAT-less counterparts, and a line
+    // quantity serialized as a JSON string beside numeric amounts.
+    const listBody = JSON.stringify({
+      invoices: [
+        {
+          ...details({ issued_at: '2026-09-18T14:28:41+03:00', external_id: null }),
+          counterpart: { name: 'Ιδιώτης πελάτης', vat: '', city: 'ΘΕΣΣΑΛΟΝΙΚΗ' },
+        },
+      ],
+      total_count: 1,
+      total_pages: 1,
+      current_page: 1,
+    }).replace('"quantity":1', '"quantity":"1.0"');
+    const { client } = provider(({ url }) => {
+      if (url.pathname.endsWith('/login')) return login();
+      if (url.pathname.endsWith('/branches'))
+        return json([{ id: '4ddce104-7b53-4aed-a08c-5bf15229cfee', name: 'Έδρα', code: 0 }]);
+      return new Response(listBody, { headers: { 'content-type': 'application/json' } });
+    });
+    expect(await client.branches.list()).toEqual([
+      { id: '4ddce104-7b53-4aed-a08c-5bf15229cfee', name: 'Έδρα', code: '0' },
+    ]);
+    const page = await client.invoices.list();
+    expect(page.invoices[0]?.issued_at).toBe('2026-09-18T14:28:41+03:00');
+    expect(page.invoices[0]?.invoice_lines[0]?.quantity).toBe('1.0');
+    expect(page.invoices[0]?.counterpart.vat).toBe('');
+  });
   it('should carry date filters onto every iterated page', async () => {
     const { client, calls } = provider(({ url }) =>
       url.pathname.endsWith('/login')

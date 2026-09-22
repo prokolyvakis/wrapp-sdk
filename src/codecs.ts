@@ -36,9 +36,13 @@ export const integer = token
   .refine((v) => /^\d{1,16}$/.test(v.value) && Number.isSafeInteger(Number(v.value)))
   .transform((v) => Number(v.value));
 const integerString = token.refine((v) => /^\d{1,30}$/.test(v.value)).transform((v) => v.value);
-export const numericText = token
-  .refine((v) => /^(0|[1-9]\d{0,29})(\.\d{1,12})?([eE][+-]?\d{1,2})?$/.test(v.value))
-  .transform((v) => v.value);
+const numericGrammar = /^(0|[1-9]\d{0,29})(\.\d{1,12})?([eE][+-]?\d{1,2})?$/;
+// Staging serializes some numeric fields as JSON strings (observed 2026-09-22: line
+// quantity "1.0" beside numeric unit_price); both token forms keep their exact text.
+export const numericText = z.union([
+  token.refine((v) => numericGrammar.test(v.value)).transform((v) => v.value),
+  z.string().regex(numericGrammar),
+]);
 const inputDecimal = z
   .string()
   .refine((v) => {
@@ -58,12 +62,15 @@ const providerDate = z
   .regex(/^\d{2}-\d{2}-\d{4}$/)
   .transform((v) => `${v.slice(6)}-${v.slice(3, 5)}-${v.slice(0, 2)}`)
   .pipe(isoDate);
+// Docs show "2026-05-13 10:00:00 +0300"; staging emits ISO "2026-09-18T14:28:41+03:00"
+// (observed 2026-09-22). Both separators and offset spellings are accepted, never reparsed.
 const timestamp = z
   .string()
   .refine(
     (v) =>
-      /^\d{4}-\d{2}-\d{2} (?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d [+-](?:0\d|1[0-4])[0-5]\d$/.test(v) &&
-      isCalendarDate(v.slice(0, 10)),
+      /^\d{4}-\d{2}-\d{2}[T ](?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d ?[+-](?:0\d|1[0-4]):?[0-5]\d$/.test(
+        v,
+      ) && isCalendarDate(v.slice(0, 10)),
   );
 const counterpartFields = {
   name: nonempty,
@@ -170,7 +177,8 @@ export const detailsSchema = z.object({
   vat_total_amount: numericText,
   total_amount: numericText,
   payable_total_amount: numericText,
-  counterpart: z.object(counterpartFields),
+  // Observed 2026-09-22: staging sends vat: "" for counterparts without a VAT number.
+  counterpart: z.object({ ...counterpartFields, vat: text.optional() }),
   invoice_lines: z
     .array(
       z.object({
@@ -212,8 +220,9 @@ export const tenantSchema = z.object({
   next_payment_date: isoDate.nullable(),
   next_payment_amount: numericText.nullable(),
 });
+// Observed 2026-09-22: staging serializes the branch code as a JSON number (code: 0).
 export const branchesSchema = z
-  .array(z.object({ id: identifier, name: nonempty, code: text }))
+  .array(z.object({ id: identifier, name: nonempty, code: z.union([text, integerString]) }))
   .max(10_000);
 export const booksSchema = z
   .array(

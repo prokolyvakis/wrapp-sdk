@@ -76,3 +76,22 @@ Never use real customer data or test production as a substitute for missing stag
 V01 local disposition (2026-09-21): proceed with original hand-written codecs, not generated
 or copied vendor code. Revisit if an official maintained SDK/schema is supplied. No vendor
 answer or authenticated provider observation is claimed by this disposition.
+
+## Staging observations (2026-09-22, authorized staging account, read-only scopes)
+
+First authenticated observations, recorded per the format above; synthetic staging data only.
+
+- V09 (partial): an empty listing window returns `{ invoices: [], total_count: 0,
+total_pages: 0, current_page: 1 }` — the total_pages-0 convention. Behavior under
+  concurrent writes remains open.
+- V10 (this account): `issue_invoice_status: true`; billing books exist for types 2.1, 11.2
+  and credit-note types 5.1, 5.2, 11.4 (the latter three are outside the supported surface).
+- Wire deviations from the documentation examples, now in the observation profile:
+  branch `code` arrives as a JSON number; full-detail `issued_at` uses ISO 8601 with a `T`
+  separator and colon offset (docs show a space-separated form; both are accepted);
+  `counterpart.vat` arrives as `""` when absent; a line `quantity` can arrive as a JSON
+  string ("1.0") beside numeric amounts — numeric read fields accept either token form,
+  always preserving exact text.
+- Additive fields observed and ignored as designed: authentication_code, payment_method,
+  branch, is_delivery_note, fuel_invoice, other_taxes_amount, withholding fields,
+  stamp-duty fields, deductions.
