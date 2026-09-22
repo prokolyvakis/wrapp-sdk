@@ -16,6 +16,7 @@ temp/
 
 # Internal working notes (agent context, planning artifacts)
 docs/internal/
+staging/
 .remember/
 .claude/
 graphify-out/

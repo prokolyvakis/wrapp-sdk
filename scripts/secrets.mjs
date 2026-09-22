@@ -88,8 +88,8 @@ function scan() {
       readFileSync(config, 'utf8') +
         `
 [[allowlists]]
-description = "Local dependencies and generated artifacts only; not applied to Git scans."
-paths = ['(^|/)(node_modules|[.]git|[.]tools|coverage)/']
+description = "Local dependencies, generated artifacts and the sanctioned gitignored secret store; not applied to Git scans."
+paths = ['(^|/)(node_modules|[.]git|[.]tools|coverage)/', '(^|/)[.]env[^/]*$']
 `,
     );
     const scopes =
