@@ -7,6 +7,8 @@
  */
 export { WrappClient } from './client.js';
 export type { InvoiceResource } from './client.js';
+export { getProviderDiagnostics } from './diagnostics.js';
+export type { ProviderDiagnostics, ProviderIssue } from './diagnostics.js';
 export { WrappError } from './errors.js';
 export type { ErrorCode, EffectCertainty } from './errors.js';
 export { decimal, calendarDate } from './values.js';
@@ -22,6 +24,9 @@ export type {
   IdentityEvidence,
   CreateInvoiceInput,
   CreateOutcome,
+  InvoiceStatusOutcome,
+  PendingInvoiceOutcome,
+  PendingIdentityEvidence,
   InvoiceObservation,
   InvoiceDetails,
   InvoiceLine,

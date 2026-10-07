@@ -11,18 +11,18 @@ import {
   identifier,
   identity,
   input,
+  invoiceOutcome,
   listSchema,
-  observationSchema,
   pageSchema,
   pdfSchema,
   pdfStatusSchema,
-  pendingSchema,
   referenceSchema,
   rejection,
   tenantSchema,
   vatInputSchema,
   vatSchema,
 } from './codecs.js';
+import { attach, transfer } from './diagnostics.js';
 import { WrappError } from './errors.js';
 import { operations, assertActive, scope, Transport } from './transport.js';
 import type { Operation } from './transport.js';
@@ -35,9 +35,9 @@ import type {
   CreateOutcome,
   IdentityEvidence,
   InvoiceDetails,
-  InvoiceObservation,
   InvoicePage,
   InvoiceReference,
+  InvoiceStatusOutcome,
   ListInvoicesInput,
   PdfOutcome,
   RequestOptions,
@@ -69,26 +69,29 @@ const optionsSchema = z.strictObject({
 const requestSchema = z.strictObject({
   timeoutMs: limit.optional(),
   signal: z.instanceof(AbortSignal).optional(),
+  diagnostics: z.literal('provider-issues').optional(),
 });
-function readValue(value: unknown): unknown {
-  if (rejection(value) !== undefined) throw new WrappError('PROVIDER_REJECTED', 'decode');
+// Retains the provider's issues for a result or error when the call opted in; otherwise a no-op.
+type Report = (target: object, body: unknown) => void;
+function rejected(operation: string, body: unknown, report: Report): WrappError {
+  const error = new WrappError('PROVIDER_REJECTED', operation);
+  report(error, body);
+  return error;
+}
+function readValue(value: unknown, report: Report): unknown {
+  if (rejection(value) !== undefined) throw rejected('decode', value, report);
   if (value !== null && typeof value === 'object' && 'status' in value)
     throw new WrappError('PROTOCOL_ERROR', 'decode');
   return value;
 }
 /** Invoice operations. Reference-addressed reads report identity evidence; writes preserve ambiguity. */
 export interface InvoiceResource {
-  /** Status lookup with identity evidence; a not-found never proves a reference is free. */
-  getStatus(
-    reference: InvoiceReference,
-    options?: RequestOptions,
-  ): Promise<
-    Readonly<{
-      invoice: InvoiceObservation;
-      identity: IdentityEvidence;
-    }>
-  >;
-  /** Validated core projection, not a complete fiscal archive. */
+  /**
+   * Status lookup with identity evidence: an observed invoice or a pending one. A not-found
+   * never proves a reference is free, and a pending status is never an issued invoice.
+   */
+  getStatus(reference: InvoiceReference, options?: RequestOptions): Promise<InvoiceStatusOutcome>;
+  /** Validated projection, not a complete fiscal archive. */
   get(
     reference: InvoiceReference,
     options?: RequestOptions,
@@ -139,6 +142,7 @@ export class WrappClient {
   #session: Session;
   #timeout: number;
   #maxRequestBytes: number;
+  #apiKey: string;
 
   constructor(options: ClientOptions) {
     const config = input(optionsSchema, options, 'configure');
@@ -164,6 +168,7 @@ export class WrappClient {
       }
     }
     this.#timeout = config.timeoutMs ?? 30_000;
+    this.#apiKey = config.credentials.apiKey;
     this.#maxRequestBytes = config.maxRequestBytes ?? 2_097_152;
     this.#transport = new Transport(
       origin,
@@ -182,7 +187,7 @@ export class WrappClient {
         this.#run(
           'tenant',
           '/tenant_details',
-          (v) => decode(tenantSchema, readValue(v), 'tenant'),
+          (v, report) => decode(tenantSchema, readValue(v, report), 'tenant'),
           opts,
         ),
     });
@@ -191,7 +196,7 @@ export class WrappClient {
         this.#run(
           'branches',
           '/branches',
-          (v) => decode(branchesSchema, readValue(v), 'branches'),
+          (v, report) => decode(branchesSchema, readValue(v, report), 'branches'),
           opts,
         ),
     });
@@ -200,7 +205,7 @@ export class WrappClient {
         this.#run(
           'billingBooks',
           '/billing_books',
-          (v) => decode(booksSchema, readValue(v), 'billingBooks'),
+          (v, report) => decode(booksSchema, readValue(v, report), 'billingBooks'),
           opts,
         ),
     });
@@ -213,7 +218,7 @@ export class WrappClient {
         return this.#run(
           'vat',
           '/vat_search?' + new URLSearchParams(data).toString(),
-          (v) => decode(vatSchema, readValue(v), 'vat'),
+          (v, report) => decode(vatSchema, readValue(v, report), 'vat'),
           opts,
         );
       },
@@ -221,7 +226,7 @@ export class WrappClient {
         this.#run(
           'exemptions',
           '/vat_exemptions',
-          (v) => decode(exemptionsSchema, readValue(v), 'exemptions'),
+          (v, report) => decode(exemptionsSchema, readValue(v, report), 'exemptions'),
           opts,
         ),
     });
@@ -233,9 +238,9 @@ export class WrappClient {
         return this.#run(
           'status',
           '/invoices/' + encodeURIComponent(valid.value),
-          (v) => {
-            const invoice = decode(observationSchema, readValue(v), 'status');
-            return freeze({ invoice, identity: identity(valid, invoice) });
+          (v, report) => {
+            if (rejection(v) !== undefined) throw rejected('status', v, report);
+            return invoiceOutcome(v, valid, 'status');
           },
           opts,
         );
@@ -245,8 +250,8 @@ export class WrappClient {
         return this.#run(
           'details',
           '/invoices/' + encodeURIComponent(valid.value) + '/find_invoice_by_id',
-          (v) => {
-            const invoice = decode(detailsSchema, readValue(v), 'details');
+          (v, report) => {
+            const invoice = decode(detailsSchema, readValue(v, report), 'details');
             return freeze({ invoice, identity: identity(valid, invoice) });
           },
           opts,
@@ -263,30 +268,19 @@ export class WrappClient {
         return this.#run(
           'create',
           '/invoices',
-          (value): CreateOutcome => {
-            const rejected = rejection(value);
-            if (rejected !== undefined)
-              return freeze({
+          (value, report): CreateOutcome => {
+            const refusal = rejection(value);
+            if (refusal !== undefined) {
+              const outcome = freeze({
                 kind: 'rejected',
-                errorCount: rejected.errorCount,
-                rejectionSource: rejected.source,
+                errorCount: refusal.errorCount,
+                rejectionSource: refusal.source,
                 referenceState: 'unknown',
-              });
-            if (value !== null && typeof value === 'object' && 'status' in value) {
-              if ('id' in value) throw new WrappError('PROTOCOL_ERROR', 'create');
-              const pending = decode(pendingSchema, value, 'create');
-              return freeze({
-                kind: 'pending',
-                invoiceId: pending.invoice_id,
-                referenceState: 'unknown',
-              });
+              } as const);
+              report(outcome, value);
+              return outcome;
             }
-            const observed = decode(observationSchema, value, 'create');
-            return freeze({
-              kind: 'observed',
-              invoice: observed,
-              identity: identity({ kind: 'externalId', value: data.external_id }, observed),
-            });
+            return invoiceOutcome(value, { kind: 'externalId', value: data.external_id }, 'create');
           },
           opts,
           body,
@@ -297,14 +291,17 @@ export class WrappClient {
         return this.#run(
           'pdf',
           '/invoices/' + encodeURIComponent(valid) + '/generate_pdf',
-          (value): PdfOutcome => {
-            const rejected = rejection(value);
-            if (rejected !== undefined)
-              return freeze({
+          (value, report): PdfOutcome => {
+            const refusal = rejection(value);
+            if (refusal !== undefined) {
+              const outcome = freeze({
                 kind: 'rejected',
-                errorCount: rejected.errorCount,
-                rejectionSource: rejected.source,
-              });
+                errorCount: refusal.errorCount,
+                rejectionSource: refusal.source,
+              } as const);
+              report(outcome, value);
+              return outcome;
+            }
             if (value !== null && typeof value === 'object' && 'download_url' in value) {
               if ('status' in value) throw new WrappError('PROTOCOL_ERROR', 'pdf');
               return freeze({
@@ -324,7 +321,7 @@ export class WrappClient {
   async #run<T>(
     operation: Operation,
     path: string,
-    decoder: (v: unknown) => T,
+    decoder: (v: unknown, report: Report) => T,
     options: RequestOptions = {},
     body?: string,
   ): Promise<T> {
@@ -332,21 +329,38 @@ export class WrappClient {
     const deadline = scope(config.timeoutMs ?? this.#timeout, config.signal);
     let dispatched = false;
     let token: string | undefined;
+    const optedIn = config.diagnostics !== undefined;
+    const report: Report = (target, value) => {
+      if (optedIn) attach(target, value, [this.#apiKey, token ?? '']);
+    };
     try {
       assertActive(deadline.signal, operation, 'not-sent');
       token = await this.#session.get(deadline.signal);
       assertActive(deadline.signal, operation, 'not-sent');
       dispatched = true;
-      return decoder(await this.#transport.send(operation, path, deadline.signal, token, body));
+      return decoder(
+        await this.#transport.send(
+          operation,
+          path,
+          deadline.signal,
+          token,
+          body,
+          optedIn ? report : undefined,
+        ),
+        report,
+      );
     } catch (error) {
       if (error instanceof WrappError) {
         if (error.code === 'AUTH_ERROR' && token !== undefined) this.#session.invalidate(token);
-        throw new WrappError(
+        const failure = new WrappError(
           error.code,
           operation,
           dispatched && operations[operation].effectful ? 'unknown' : 'not-sent',
           error.httpStatus,
         );
+        // The caller only ever sees this replacement, so retained detail must follow it.
+        transfer(error, failure);
+        throw failure;
       }
       throw new WrappError(
         'PROTOCOL_ERROR',
@@ -368,8 +382,8 @@ export class WrappClient {
     return this.#run(
       'list',
       '/invoices/find_all_invoices?' + query.toString(),
-      (v) => {
-        const result = decode(pageSchema, readValue(v), 'list');
+      (v, report) => {
+        const result = decode(pageSchema, readValue(v, report), 'list');
         // Providers report empty collections either as total_pages 0 or as one empty page.
         if (
           result.current_page !== page ||
@@ -401,6 +415,7 @@ export class WrappClient {
     const request: RequestOptions = {
       ...(config.signal === undefined ? {} : { signal: config.signal }),
       ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }),
+      ...(config.diagnostics === undefined ? {} : { diagnostics: config.diagnostics }),
     };
     for (let count = 0; count < config.maxPages; count++, page++) {
       const result = await this.#list(

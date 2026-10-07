@@ -52,26 +52,29 @@ observation profile follows the wire:
 - Empty listing windows return the `total_pages: 0` convention.
 - PDF generation is two-phase as documented: an acknowledgement first, then a time-limited
   URL on a later call.
-- Additive response fields observed and ignored as designed include authentication_code,
+- Additive response fields were observed on the wire, including authentication_code,
   payment_method, branch, delivery/fuel flags, withholding and stamp-duty fields, and
-  deductions.
+  deductions. Their presence was observed; their value types and nullability were not
+  recorded. The SDK now decodes most of them from the shapes in reference v1.18.0
+  (documentation-derived, not re-observed); deductions and the line withholding rate stay
+  ignored until their populated shape is established.
 
 ## Coverage inventory
 
 Implement incrementally, never advertise entire-API support from a small endpoint wrapper.
 
-| Family                                                                             | Initial disposition                                          |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Login, tenant details                                                              | Core                                                         |
-| VAT search/exemptions, branch/billing-book reads                                   | Core read capabilities                                       |
-| Invoice create/status/full lookup/list                                             | Core, supported-field matrix required                        |
-| PDF request + issued/PDF webhook parsing                                           | Core, side-effect rules apply                                |
-| Branch/billing-book writes                                                         | Later management tranche                                     |
-| Draft issue/delete, reference assignment, mark-as-paid, cancellation, issued count | Later explicit tranche; no generic escape hatch              |
-| Thermal PDF/POS-error callbacks                                                    | Later typed event support; unknown events handled safely now |
-| POS devices/sessions and Viva links                                                | Deferred                                                     |
-| Catering tables/order notes                                                        | Deferred                                                     |
-| Digital clienteles/transports                                                      | Deferred                                                     |
+| Family                                                                             | Initial disposition                                           |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Login, tenant details                                                              | Core                                                          |
+| VAT search/exemptions, branch/billing-book reads                                   | Core read capabilities                                        |
+| Invoice create/status/full lookup/list                                             | Core, supported-field matrix required                         |
+| PDF request + issued/PDF webhook parsing                                           | Core, side-effect rules apply                                 |
+| Branch/billing-book writes                                                         | Later management tranche                                      |
+| Draft issue/delete, reference assignment, mark-as-paid, cancellation, issued count | Later explicit tranche; no generic escape hatch               |
+| Thermal PDF/POS-error callbacks                                                    | Core typed events; body shapes from documentation, unobserved |
+| POS devices/sessions and Viva links                                                | Deferred                                                      |
+| Catering tables/order notes                                                        | Deferred                                                      |
+| Digital clienteles/transports                                                      | Deferred                                                      |
 
 Endpoint paths and parameter schemas must be transcribed and tested per implemented operation
 against the linked source. Do not copy the complete vendor document or sample payloads into

@@ -22,6 +22,13 @@ export interface RequestOptions {
   readonly signal?: AbortSignal;
   /** Overrides the client default (30 seconds) for this call only; 1 to 120 000 ms. */
   readonly timeoutMs?: number;
+  /**
+   * Opt in to keeping the provider's rejection detail for this call. It is read back with
+   * getProviderDiagnostics and stays out of the result, the error, its message and its JSON.
+   * On a non-2xx response it also reads the error body, bounded by the same deadline and
+   * byte cap. Without this option nothing is retained and no error body is read.
+   */
+  readonly diagnostics?: 'provider-issues';
 }
 /** Construction options. Credentials stay memory-only; rotation requires a new client. */
 export interface ClientOptions {
@@ -58,6 +65,8 @@ export interface Counterpart {
 /**
  * One invoice line. The caller supplies every amount and tax classification; the SDK
  * computes no totals, VAT rates or tax decisions. A zero VAT rate requires an exemption code.
+ * The numeric codes are checked against the provider's documented request sets before any
+ * network access. Those sets say what the SDK will send, not which code is fiscally correct.
  */
 export interface InvoiceLine {
   readonly line_number: number;
@@ -65,12 +74,18 @@ export interface InvoiceLine {
   readonly code?: string;
   readonly description?: string;
   readonly quantity: Decimal;
+  /** One of 1 to 6. */
   readonly quantity_type?: number;
   readonly unit_price: Decimal;
   readonly net_total_price: Decimal;
+  /**
+   * One of 0, 3, 4, 6, 9, 13, 17, 24. The provider documents that it does not refuse other
+   * values but issues the invoice as if without VAT, so they are rejected here instead.
+   */
   readonly vat_rate: number;
   readonly vat_total: Decimal;
   readonly subtotal: Decimal;
+  /** One of 1 to 31; required when vat_rate is 0. */
   readonly vat_exemption_code?: number;
   readonly classification_category: string;
   readonly classification_type: string;
@@ -102,6 +117,7 @@ export interface CreateInvoiceInput {
   readonly notes?: string;
   /** Three uppercase letters (ISO 4217 shape; membership is not validated). Must be provided together with exchange_rate or not at all. */
   readonly currency?: string;
+  /** At most 2 fraction digits; more precision is rejected, never rounded. */
   readonly exchange_rate?: Decimal;
   readonly correlated_invoices?: readonly string[];
   readonly customer_emails?: readonly string[];
@@ -112,6 +128,11 @@ export interface CreateInvoiceInput {
 /** An issued invoice as observed via status lookup, creation or a verified webhook. */
 export interface InvoiceObservation {
   readonly id: string;
+  /**
+   * The reference as the provider stores it: free-form text, never trimmed, case-folded or
+   * decoded. It can hold characters this SDK refuses in an outbound reference, when another
+   * producer wrote it.
+   */
   readonly external_id: string | null;
   /** Greek myDATA registration mark, accepted as the JSON string the provider documents. */
   readonly my_data_mark: string | null;
@@ -126,7 +147,44 @@ export interface InvoiceObservation {
   /** Portal link returned as data; the SDK never fetches it. */
   readonly wrapp_invoice_url: string;
   readonly wrapp_invoice_url_en: string;
+  /**
+   * The five fields below are absent when the provider omits them and null when it reports
+   * that they do not apply. Absent and null are different observations.
+   */
+  readonly authentication_code?: string | null;
+  readonly catering_table_id?: string | null;
+  readonly card_type?: string | null;
+  /** Masked by the provider; kept as received. */
+  readonly card_number?: string | null;
+  readonly transaction_id?: string | null;
 }
+/**
+ * Identity evidence for a pending outcome. 'unavailable' means the provider returned only its
+ * own invoice id, so nothing could be compared with the requested external reference; a
+ * provider id is never treated as proof about a reference.
+ */
+export type PendingIdentityEvidence = IdentityEvidence | 'unavailable';
+/**
+ * The provider reports the invoice as pending. This is never an issued invoice, whatever
+ * evidence accompanies it: on a provider-to-authority connection loss the provider already
+ * returns a number, UID and QR URL while the invoice is still pending. referenceState stays
+ * 'unknown', so pending is never permission to mint a replacement external reference.
+ */
+export interface PendingInvoiceOutcome {
+  readonly kind: 'pending';
+  readonly invoiceId: string;
+  readonly referenceState: 'unknown';
+  readonly identity: PendingIdentityEvidence;
+  /** Present only when the provider returned the full observation with the pending status. */
+  readonly invoice?: InvoiceObservation;
+}
+/**
+ * Result of a status lookup: an observed invoice or a pending one. Switch on kind before
+ * reading invoice. A provider rejection, including not-found, is a PROVIDER_REJECTED error.
+ */
+export type InvoiceStatusOutcome =
+  | Readonly<{ kind: 'observed'; invoice: InvoiceObservation; identity: IdentityEvidence }>
+  | PendingInvoiceOutcome;
 /**
  * Closed result union for invoice creation. No outcome establishes compliance, reference
  * freedom, or equality to an earlier request: rejections carry referenceState 'unknown'
@@ -135,7 +193,7 @@ export interface InvoiceObservation {
  */
 export type CreateOutcome =
   | Readonly<{ kind: 'observed'; invoice: InvoiceObservation; identity: IdentityEvidence }>
-  | Readonly<{ kind: 'pending'; invoiceId: string; referenceState: 'unknown' }>
+  | PendingInvoiceOutcome
   | Readonly<{
       kind: 'rejected';
       errorCount: number;
@@ -143,22 +201,37 @@ export type CreateOutcome =
       referenceState: 'unknown';
     }>;
 /**
- * Validated core projection of a full invoice lookup, not a complete fiscal archive.
- * Amounts retain the provider's exact numeric text; no rounding or float conversion occurs.
+ * Validated projection of a full invoice lookup, not a complete fiscal archive.
+ * Amounts and returned numeric codes retain the provider's exact text; no rounding or float
+ * conversion occurs. Optional fields are absent when the provider omits them. Fields whose
+ * returned shape the provider has not documented are not projected at all.
  */
 export interface InvoiceDetails {
   readonly id: string;
+  /** Free-form text exactly as stored by the provider; see InvoiceObservation.external_id. */
   readonly external_id: string | null;
   readonly invoice_type_code: string;
   readonly billing_book_id: string;
   /** Documented provider timestamp with numeric offset, validated but not reinterpreted. */
   readonly issued_at: string;
   readonly code: string;
+  /** Provider payment-method code as exact text; unknown codes are kept, not interpreted. */
+  readonly payment_method?: string;
+  /** Provider branch code as exact text. */
+  readonly branch?: string;
+  readonly is_delivery_note?: boolean;
+  readonly fuel_invoice?: boolean;
+  readonly third_party_collection?: boolean;
   readonly currency: string;
+  readonly exchange_rate?: string;
+  readonly other_taxes_amount?: string;
   readonly net_total_amount: string;
   readonly vat_total_amount: string;
   readonly total_amount: string;
   readonly payable_total_amount: string;
+  readonly notes?: string;
+  readonly withholding_total_amount?: string;
+  readonly total_stamp_duty_amount?: string;
   readonly counterpart: Readonly<{
     name: string;
     country_code?: string | undefined;
@@ -172,14 +245,22 @@ export interface InvoiceDetails {
   readonly invoice_lines: readonly Readonly<{
     line_number: number;
     name: string;
+    code?: string;
+    description?: string;
     quantity: string;
+    quantity_type?: string;
     unit_price: string;
     net_total_price: string;
     vat_rate: number;
     vat_total: string;
     subtotal: string;
+    withhold_tax_code?: string;
+    withholding_total?: string;
     classification_category: string;
     classification_type: string;
+    stamp_duty_tax_code?: string;
+    stamp_duty_amount?: string;
+    deductions_amount?: string;
   }>[];
 }
 /** One validated result page. No snapshot guarantee exists under concurrent writes. */
@@ -239,15 +320,33 @@ export interface VatDetails {
   readonly street_number: string;
 }
 /**
- * Byte-authenticated webhook payload. eventTypeAuthenticated is always false because the
- * Event-Type header lies outside the signed body; the type was used as a routing hint and
- * the corresponding body shape was validated, nothing more.
+ * Byte-authenticated webhook payload. The kind names the body that was validated, not the
+ * header: the two PDF headers carry the same body and share kind 'pdf'. eventTypeHint repeats
+ * the Event-Type header as received and eventTypeAuthenticated is always false, because that
+ * header lies outside the signed body. A valid signature proves which bytes were signed. It
+ * does not prove the tenant, freshness, that issuance completed, or which PDF format a link
+ * points to.
  */
 export type VerifiedWebhook =
-  | Readonly<{ kind: 'issued-invoice'; invoice: InvoiceObservation; eventTypeAuthenticated: false }>
   | Readonly<{
-      kind: 'invoice-pdf';
+      kind: 'invoice-observation';
+      invoice: InvoiceObservation;
+      eventTypeHint: 'issued-invoice';
+      eventTypeAuthenticated: false;
+    }>
+  | Readonly<{
+      kind: 'pdf';
       invoiceId: string;
+      /** Returned as data; the SDK never fetches it. */
       downloadUrl: string;
+      eventTypeHint: 'invoice-pdf' | 'thermal-print-pdf';
+      eventTypeAuthenticated: false;
+    }>
+  | Readonly<{
+      kind: 'pos-payment-error';
+      invoiceId: string;
+      /** The provider's failure text, kept as data. It may describe a customer transaction. */
+      providerMessage: string;
+      eventTypeHint: 'pos-payment';
       eventTypeAuthenticated: false;
     }>;

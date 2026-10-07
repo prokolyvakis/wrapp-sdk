@@ -2,7 +2,12 @@ import { z } from 'zod';
 import { LosslessNumber, parse, stringify } from 'lossless-json';
 import { WrappError } from './errors.js';
 import { calendarDate, decimal, freeze, isCalendarDate } from './values.js';
-import type { IdentityEvidence, InvoiceReference, RejectionSource } from './types.js';
+import type {
+  IdentityEvidence,
+  InvoiceReference,
+  InvoiceStatusOutcome,
+  RejectionSource,
+} from './types.js';
 
 const text = z.string().max(4096);
 const nonempty = text.min(1);
@@ -23,6 +28,10 @@ export const referenceSchema = z.strictObject({
   kind: z.enum(['invoiceId', 'externalId']),
   value: identifier,
 });
+// A reference the provider returns is free-form text another producer may have stored. It is
+// kept exactly as received: never trimmed, case-folded, percent-decoded or turned from empty
+// into null. The path-safety rules of `identifier` govern only what this SDK sends.
+const returnedExternalReference = text.refine(validUnicode).nullable();
 const httpsUrl = nonempty.refine((v) => {
   try {
     const u = new URL(v);
@@ -54,8 +63,22 @@ const inputDecimal = z
     }
   })
   .transform((v) => new LosslessNumber(v));
-// Monetary totals stay at 2 fraction digits; rates and quantities may need more (V07 is open).
+// Monetary totals stay at 2 fraction digits; quantities and unit prices may need more (V07 is
+// open).
 const inputAmount = inputDecimal.refine((v) => /^\d+(\.\d{1,2})?$/.test(v.value));
+// The reference bounds the exchange rate at 2 fraction digits. Excess precision is refused,
+// never rounded.
+const inputExchangeRate = inputDecimal.refine((v) => /^\d+(\.\d{1,2})?$/.test(v.value));
+// Reviewed request-contract member sets. They decide what this SDK will send, not tax
+// eligibility, and are never applied to values the provider returns. The reference warns that
+// a VAT rate outside its table is not refused: the invoice is issued as if without VAT.
+const member = (values: readonly number[]) => z.number().refine((v) => values.includes(v));
+const vatRate = member([0, 3, 4, 6, 9, 13, 17, 24]);
+const quantityType = member([1, 2, 3, 4, 5, 6]);
+const vatExemptionCode = member([
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
+  28, 29, 30, 31,
+]);
 const isoDate = z.string().refine(isCalendarDate).transform(calendarDate);
 const providerDate = z
   .string()
@@ -91,13 +114,13 @@ const lineFields = {
   code: text.optional(),
   description: text.optional(),
   quantity: inputDecimal,
-  quantity_type: z.number().int().min(1).max(100).optional(),
+  quantity_type: quantityType.optional(),
   unit_price: inputDecimal,
   net_total_price: inputAmount,
-  vat_rate: z.number().int().min(0).max(100),
+  vat_rate: vatRate,
   vat_total: inputAmount,
   subtotal: inputAmount,
-  vat_exemption_code: z.number().int().min(1).max(1000).optional(),
+  vat_exemption_code: vatExemptionCode.optional(),
   classification_category: nonempty,
   classification_type: nonempty,
 };
@@ -127,7 +150,7 @@ export const createSchema = z
       .string()
       .regex(/^[A-Z]{3}$/)
       .optional(),
-    exchange_rate: inputDecimal.optional(),
+    exchange_rate: inputExchangeRate.optional(),
     correlated_invoices: z.array(identifier).max(100).optional(),
     customer_emails: z.array(nonempty).max(100).optional(),
     email_locale: z.enum(['el', 'en']).optional(),
@@ -153,7 +176,7 @@ export const createSchema = z
 
 export const observationSchema = z.object({
   id: identifier,
-  external_id: identifier.nullable(),
+  external_id: returnedExternalReference,
   my_data_mark: nonempty.nullable(),
   my_data_uid: nonempty.nullable(),
   my_data_qr_url: httpsUrl.nullable(),
@@ -164,19 +187,40 @@ export const observationSchema = z.object({
   transmission_failure: integerString.nullable(),
   wrapp_invoice_url: httpsUrl,
   wrapp_invoice_url_en: httpsUrl,
+  // Optional so earlier supported payloads still decode; absent stays absent and the
+  // provider's explicit null stays null.
+  authentication_code: text.nullable().exactOptional(),
+  catering_table_id: text.nullable().exactOptional(),
+  card_type: text.nullable().exactOptional(),
+  card_number: text.nullable().exactOptional(),
+  transaction_id: text.nullable().exactOptional(),
 });
 export const detailsSchema = z.object({
   id: identifier,
-  external_id: identifier.nullable(),
+  external_id: returnedExternalReference,
   invoice_type_code: nonempty,
   billing_book_id: identifier,
   issued_at: timestamp,
   code: text,
+  // The optional fields below and on each line follow the documented full-detail shape.
+  // Returned codes keep their exact digits as text and are not checked against the request
+  // member sets. The reference shows these fields populated and does not say they can be
+  // null, so by SDK policy a null is a protocol error rather than a second kind of absence.
+  payment_method: integerString.exactOptional(),
+  branch: integerString.exactOptional(),
+  is_delivery_note: z.boolean().exactOptional(),
+  fuel_invoice: z.boolean().exactOptional(),
+  third_party_collection: z.boolean().exactOptional(),
   currency: nonempty,
+  exchange_rate: numericText.exactOptional(),
+  other_taxes_amount: numericText.exactOptional(),
   net_total_amount: numericText,
   vat_total_amount: numericText,
   total_amount: numericText,
   payable_total_amount: numericText,
+  notes: text.exactOptional(),
+  withholding_total_amount: numericText.exactOptional(),
+  total_stamp_duty_amount: numericText.exactOptional(),
   // Provider-observed: the wire carries vat: "" for counterparts without a VAT number.
   counterpart: z.object({ ...counterpartFields, vat: text.optional() }),
   invoice_lines: z
@@ -184,14 +228,22 @@ export const detailsSchema = z.object({
       z.object({
         line_number: integer,
         name: nonempty,
+        code: text.exactOptional(),
+        description: text.exactOptional(),
         quantity: numericText,
+        quantity_type: integerString.exactOptional(),
         unit_price: numericText,
         net_total_price: numericText,
         vat_rate: integer,
         vat_total: numericText,
         subtotal: numericText,
+        withhold_tax_code: text.exactOptional(),
+        withholding_total: numericText.exactOptional(),
         classification_category: nonempty,
         classification_type: nonempty,
+        stamp_duty_tax_code: text.exactOptional(),
+        stamp_duty_amount: numericText.exactOptional(),
+        deductions_amount: numericText.exactOptional(),
       }),
     )
     .min(1)
@@ -274,6 +326,9 @@ export const pendingSchema = z.object({ status: z.literal('pending'), invoice_id
 export const pdfSchema = z.object({ download_url: httpsUrl });
 export const pdfStatusSchema = z.object({ status: nonempty });
 export const webhookPdfSchema = z.object({ invoice_id: identifier, download_url: httpsUrl });
+// The POS failure webhook carries its message as a plain string under `errors`; it is not the
+// HTTP `errors[]` envelope and is decoded on its own terms.
+export const webhookPosErrorSchema = z.object({ errors: text, invoice_id: identifier });
 const errorsSchema = z
   .array(
     z
@@ -366,4 +421,44 @@ export function identity(
     return 'ascii-case-variant';
   }
   throw new WrappError('PROTOCOL_ERROR', 'identity');
+}
+const observationKeys = Object.keys(observationSchema.shape);
+/**
+ * Decodes what create and status return once a rejection envelope has been ruled out: a
+ * pending envelope or an issued observation. Pending is decided by the status discriminator
+ * alone, never by a failure code, a number or a date.
+ */
+export function invoiceOutcome(
+  value: unknown,
+  reference: InvoiceReference,
+  operation: string,
+): InvoiceStatusOutcome {
+  if (value === null || typeof value !== 'object' || !('status' in value)) {
+    const invoice = decode(observationSchema, value, operation);
+    return freeze({ kind: 'observed', invoice, identity: identity(reference, invoice) });
+  }
+  const pending = decode(pendingSchema, value, operation);
+  // One known observation field makes this the enriched form, and then all of it must be
+  // valid: malformed evidence is never stripped to fall back on the minimal form.
+  if (observationKeys.some((key) => key in value)) {
+    const invoice = decode(observationSchema, value, operation);
+    if (invoice.id !== pending.invoice_id) throw new WrappError('PROTOCOL_ERROR', operation);
+    return freeze({
+      kind: 'pending',
+      invoiceId: pending.invoice_id,
+      referenceState: 'unknown',
+      identity: identity(reference, invoice),
+      invoice,
+    });
+  }
+  // The minimal form echoes no reference. A provider id can confirm a lookup by that id; it
+  // is never compared with an external reference.
+  if (reference.kind === 'invoiceId' && pending.invoice_id !== reference.value)
+    throw new WrappError('PROTOCOL_ERROR', operation);
+  return freeze({
+    kind: 'pending',
+    invoiceId: pending.invoice_id,
+    referenceState: 'unknown',
+    identity: reference.kind === 'invoiceId' ? 'exact' : 'unavailable',
+  });
 }

@@ -56,8 +56,8 @@ const outcome = await client.invoices.create(input); // input carries your durab
 switch (outcome.kind) {
   case 'observed': // the provider returned the invoice; identity evidence included
     return record(outcome.invoice, outcome.identity); // 'exact' | 'ascii-case-variant'
-  case 'pending': // acknowledged but not yet observable
-    return schedule(outcome.invoiceId); // reconcile later via getStatus
+  case 'pending': // not issued yet, even when it already carries a number, UID or QR URL
+    return schedule(outcome.invoiceId); // reconcile later via getStatus; identity may be 'unavailable'
   case 'rejected': // provider reported errors
     return investigate(outcome.errorCount); // referenceState stays 'unknown'
 }
@@ -74,6 +74,10 @@ The rules behind this shape:
 - There are **no automatic retries of anything**, including reads and login, and no mutation
   replay after 401, 429, 5xx or timeout.
 
+- `getStatus` reports the same two non-error states: `'observed'` or `'pending'`. Switch on
+  `kind` before reading `invoice`; a pending outcome carries one only when the provider
+  returned its evidence along with the pending status.
+
 The full rationale is in the [design notes](docs/design.md).
 
 ## Safety model
@@ -82,15 +86,19 @@ The full rationale is in the [design notes](docs/design.md).
   responses are returned as deeply frozen copies. Inbound numeric fields keep their exact
   numeric text via a lossless parser.
 - **Safe diagnostics.** Errors carry a code, the operation and effect certainty — never raw
-  provider bodies, credentials or URLs.
+  provider bodies, credentials or URLs. When you need the provider's own wording, opt in per
+  call with `diagnostics: 'provider-issues'` and read it with `getProviderDiagnostics`; it is
+  bounded, marked sensitive and never serialized with the result or error.
 - **Bounded everything.** 30-second default request budget spanning auth through body, 2 MiB
   request/response caps, bounded arrays and strings. These are SDK policies, not claims about
   provider limits.
 - **Pinned origins.** `redirect: 'error'` on every request; credentials can never reach a
   redirect target. `advanced.testBaseUrl` accepts loopback only.
 - **Webhook verification.** `verifyWebhook` authenticates raw bytes (HMAC-SHA256,
-  constant-time, 1–5 rotation keys) before parsing. It does not prove freshness, uniqueness
-  or tenant ownership — keep a durable inbox and read back.
+  constant-time, 1–5 rotation keys) before parsing, for all four provider events. The result
+  `kind` names the validated body (`invoice-observation`, `pdf`, `pos-payment-error`); the
+  unsigned `Event-Type` header comes back as `eventTypeHint`. It does not prove freshness,
+  uniqueness or tenant ownership — keep a durable inbox and read back.
 - **Explicit iteration.** `invoices.iterate` requires `maxPages` and throws on exhaustion
   instead of silently truncating.
 - **PDF links are data.** Returned HTTPS URLs are never fetched by the SDK.

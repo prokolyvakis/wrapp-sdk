@@ -70,12 +70,18 @@ export class Transport {
     private readonly fetcher: typeof globalThis.fetch,
     private readonly maxBytes: number,
   ) {}
+  /**
+   * `diagnose`, when given, receives the decoded JSON body of a non-2xx response together
+   * with the failure about to be thrown. It is optional detail: the HTTP failure, its status
+   * and its effect stay primary whatever reading that body does.
+   */
   async send(
     operation: Operation,
     path: string,
     signal: AbortSignal,
     token?: string,
     body?: string,
+    diagnose?: (failure: WrappError, value: unknown) => void,
   ): Promise<unknown> {
     assertActive(signal, operation, 'not-sent');
     const effect = operations[operation].effectful ? 'unknown' : 'not-sent';
@@ -93,41 +99,23 @@ export class Transport {
         ...(body === undefined ? {} : { body }),
       });
       response = await waitFor(pending, signal, operation, effect);
-      if (!response.ok)
-        throw new WrappError(
+      if (!response.ok) {
+        const failure = new WrappError(
           response.status === 401 ? 'AUTH_ERROR' : 'HTTP_ERROR',
           operation,
           effect,
           response.status,
         );
-      const contentType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
-      if (
-        contentType !== 'application/json' &&
-        !(contentType?.startsWith('application/') && contentType.endsWith('+json'))
-      ) {
-        throw new WrappError('PROTOCOL_ERROR', operation, effect);
-      }
-      const length = response.headers.get('content-length');
-      if (length !== null && (!/^\d+$/.test(length) || Number(length) > this.maxBytes)) {
-        throw new WrappError('RESPONSE_TOO_LARGE', operation, effect);
-      }
-      if (!response.body) throw new WrappError('PROTOCOL_ERROR', operation, effect);
-      const reader = response.body.getReader();
-      const chunks: Uint8Array[] = [];
-      let bytes = 0;
-      try {
-        for (;;) {
-          const chunk = await waitFor(reader.read(), signal, operation, effect);
-          if (chunk.done) break;
-          bytes += chunk.value.byteLength;
-          if (bytes > this.maxBytes) throw new WrappError('RESPONSE_TOO_LARGE', operation, effect);
-          chunks.push(chunk.value);
+        if (diagnose !== undefined) {
+          try {
+            diagnose(failure, await this.read(response, signal, operation, effect));
+          } catch {
+            // An unreadable, oversized, malformed or interrupted error body yields no detail.
+          }
         }
-      } finally {
-        void reader.cancel().catch(() => undefined);
-        reader.releaseLock();
+        throw failure;
       }
-      return parseJson(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
+      return await this.read(response, signal, operation, effect);
     } catch (error) {
       if (response?.body && !response.body.locked)
         void response.body.cancel().catch(() => undefined);
@@ -139,5 +127,41 @@ export class Transport {
         effect,
       );
     }
+  }
+  // Reads a JSON body under the caller's deadline and the byte cap, never unbounded.
+  private async read(
+    response: Response,
+    signal: AbortSignal,
+    operation: Operation,
+    effect: EffectCertainty,
+  ): Promise<unknown> {
+    const contentType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
+    if (
+      contentType !== 'application/json' &&
+      !(contentType?.startsWith('application/') && contentType.endsWith('+json'))
+    ) {
+      throw new WrappError('PROTOCOL_ERROR', operation, effect);
+    }
+    const length = response.headers.get('content-length');
+    if (length !== null && (!/^\d+$/.test(length) || Number(length) > this.maxBytes)) {
+      throw new WrappError('RESPONSE_TOO_LARGE', operation, effect);
+    }
+    if (!response.body) throw new WrappError('PROTOCOL_ERROR', operation, effect);
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    try {
+      for (;;) {
+        const chunk = await waitFor(reader.read(), signal, operation, effect);
+        if (chunk.done) break;
+        bytes += chunk.value.byteLength;
+        if (bytes > this.maxBytes) throw new WrappError('RESPONSE_TOO_LARGE', operation, effect);
+        chunks.push(chunk.value);
+      }
+    } finally {
+      void reader.cancel().catch(() => undefined);
+      reader.releaseLock();
+    }
+    return parseJson(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
   }
 }

@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import * as sdk from '@prokolyvakis/wrapp-sdk';
-import type { CreateInvoiceInput, CreateOutcome } from '@prokolyvakis/wrapp-sdk';
+import type { CreateInvoiceInput, CreateOutcome, InvoiceStatusOutcome, VerifiedWebhook } from '@prokolyvakis/wrapp-sdk';
 
-assert.deepEqual(Object.keys(sdk).sort(), ['WrappClient', 'WrappError', 'calendarDate', 'decimal', 'verifyWebhook'].sort());
+assert.deepEqual(Object.keys(sdk).sort(), ['WrappClient', 'WrappError', 'calendarDate', 'decimal', 'getProviderDiagnostics', 'verifyWebhook'].sort());
 assert.equal(sdk.decimal('9007199254740993.12'), '9007199254740993.12');
 const client = new sdk.WrappClient({
   environment: 'staging',
@@ -30,6 +31,53 @@ function consume(outcome: CreateOutcome): string {
   }
 }
 assert.equal(consume({ kind: 'rejected', errorCount: 1, rejectionSource: 'unknown', referenceState: 'unknown' }), 'unknown');
+assert.equal(consume({ kind: 'pending', invoiceId: 'i', referenceState: 'unknown', identity: 'unavailable' }), 'i');
+
+function status(outcome: InvoiceStatusOutcome): string {
+  switch (outcome.kind) {
+    case 'observed': return outcome.invoice.id + '/' + outcome.identity;
+    case 'pending': return outcome.invoiceId + '/' + outcome.identity + '/' + (outcome.invoice?.my_data_uid ?? 'no-evidence');
+    default: { const unreachable: never = outcome; return unreachable; }
+  }
+}
+assert.equal(status({ kind: 'pending', invoiceId: 'i', referenceState: 'unknown', identity: 'unavailable' }), 'i/unavailable/no-evidence');
+const refusing = new sdk.WrappClient({
+  environment: 'staging',
+  credentials: { apiKey: 'synthetic-consumer-key', tenant: { kind: 'userId', value: 'tenant' } },
+  advanced: { fetch: async (resource) => {
+    const url = resource instanceof Request ? resource.url : String(resource);
+    return new Response(JSON.stringify(url.endsWith('/login')
+      ? { data: { type: 'jwt', attributes: { jwt: 'fake.jwt' } } }
+      : { errors: [{ title: 'Record not found' }] }),
+      { headers: { 'content-type': 'application/json' } });
+  } },
+});
+const lookup = { kind: 'invoiceId', value: 'invoice' } as const;
+const silent: unknown = await refusing.invoices.getStatus(lookup).catch((error: unknown) => error);
+assert.ok(silent instanceof sdk.WrappError);
+assert.equal(silent.code, 'PROVIDER_REJECTED');
+assert.equal(sdk.getProviderDiagnostics(silent), undefined);
+const detailed: unknown = await refusing.invoices.getStatus(lookup, { diagnostics: 'provider-issues' }).catch((error: unknown) => error);
+assert.deepEqual(sdk.getProviderDiagnostics(detailed), { issues: [{ title: 'Record not found' }], truncated: false, sensitive: true });
+assert.ok(!JSON.stringify(detailed).includes('Record not found'));
+
+function route(event: VerifiedWebhook): string {
+  switch (event.kind) {
+    case 'invoice-observation': return event.invoice.id;
+    case 'pdf': return event.eventTypeHint + ' ' + event.downloadUrl;
+    case 'pos-payment-error': return event.providerMessage;
+    default: { const unreachable: never = event; return unreachable; }
+  }
+}
+const webhookBody = new TextEncoder().encode(JSON.stringify({ invoice_id: 'invoice', download_url: 'https://example.invalid/pdf' }));
+const webhook = sdk.verifyWebhook({
+  body: webhookBody,
+  signature: createHmac('sha256', 'synthetic-consumer-key').update(webhookBody).digest('hex'),
+  keys: ['synthetic-consumer-key'],
+  eventType: 'thermal-print-pdf',
+});
+assert.equal(route(webhook), 'thermal-print-pdf https://example.invalid/pdf');
+assert.equal(webhook.eventTypeAuthenticated, false);
 if (false) {
   // @ts-expect-error Explicit environment is required.
   new sdk.WrappClient({ credentials: { apiKey: 'fake', tenant: { kind: 'userId', value: 'test' } } });
@@ -38,4 +86,15 @@ if (false) {
   void amount;
   // @ts-expect-error No conflict classifier exists in this release.
   consume({ kind: 'conflict' });
+  // @ts-expect-error Webhook kinds name the validated body; the 0.1 header-named kinds are gone.
+  const retired: VerifiedWebhook['kind'] = 'issued-invoice';
+  void retired;
+  // @ts-expect-error Only the documented diagnostics level exists.
+  void client.tenant.get({ diagnostics: 'everything' });
+  const unnarrowed = undefined as unknown as InvoiceStatusOutcome;
+  // @ts-expect-error A pending status may carry no invoice: switch on kind first.
+  void unnarrowed.invoice.id;
+  // @ts-expect-error Pending identity can be unavailable, which is not identity evidence.
+  const proven: 'exact' | 'ascii-case-variant' = unnarrowed.identity;
+  void proven;
 }

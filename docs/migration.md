@@ -1,0 +1,145 @@
+# Migration guide
+
+Changes that need action when you upgrade, newest first. The SDK is on the 0.x line, where a
+breaking change ships as a minor release with a note here; see
+[compatibility.md](compatibility.md) for the policy.
+
+## From 0.1 to the next minor
+
+This release makes six changes. The first five can require code edits: each corrects a
+behavior, and each is breaking because it changes a result shape, a discriminant or which
+input is accepted. The sixth is additive, with one case that needs attention.
+
+### 1. `invoices.getStatus` returns a tagged outcome
+
+A status lookup can now report a pending invoice, so its result is a union. Switch on `kind`
+before reading `invoice`.
+
+Before:
+
+```ts
+const { invoice, identity } = await client.invoices.getStatus(reference);
+record(invoice.my_data_mark, identity);
+```
+
+After:
+
+```ts
+const status = await client.invoices.getStatus(reference);
+switch (status.kind) {
+  case 'observed':
+    record(status.invoice.my_data_mark, status.identity);
+    break;
+  case 'pending':
+    // Not issued yet. status.invoice is present only when the provider returned its evidence
+    // with the pending status; it may already hold a number, a UID and a QR URL.
+    schedule(status.invoiceId);
+    break;
+}
+```
+
+Previously a pending answer made `getStatus` fail with `PROTOCOL_ERROR`. A provider
+rejection, including not-found, is still a `PROVIDER_REJECTED` error.
+
+### 2. A pending outcome carries identity evidence, which can be `'unavailable'`
+
+The pending variant of `CreateOutcome` and of the status outcome is now `PendingInvoiceOutcome`:
+
+```ts
+{ kind: 'pending'; invoiceId: string; referenceState: 'unknown';
+  identity: 'exact' | 'ascii-case-variant' | 'unavailable'; invoice?: InvoiceObservation }
+```
+
+`'unavailable'` means the provider returned only its own invoice id, so nothing could be
+compared with your external reference. Do not treat it as a match.
+
+- Code that compares a pending outcome with an exact object needs the new `identity` field:
+  `{ kind: 'pending', invoiceId, referenceState: 'unknown', identity: 'unavailable' }`.
+- An exhaustive `switch` over `CreateOutcome['kind']` needs no change: the kinds are the same.
+- Create now accepts the provider's enriched pending answer (a pending status alongside the
+  full observation), which it used to reject. It stays `pending`: a number or a QR URL is
+  not a registration mark.
+
+### 3. Webhook kinds name the validated body, and two more events are supported
+
+`VerifiedWebhook['kind']` changed, and every result now repeats the unsigned header as
+`eventTypeHint`.
+
+| Event-Type header   | 0.1 kind         | New kind              | `eventTypeHint`     |
+| ------------------- | ---------------- | --------------------- | ------------------- |
+| `issued-invoice`    | `issued-invoice` | `invoice-observation` | `issued-invoice`    |
+| `invoice-pdf`       | `invoice-pdf`    | `pdf`                 | `invoice-pdf`       |
+| `thermal-print-pdf` | not supported    | `pdf`                 | `thermal-print-pdf` |
+| `pos-payment`       | not supported    | `pos-payment-error`   | `pos-payment`       |
+
+Before:
+
+```ts
+const event = verifyWebhook(input);
+if (event.kind === 'issued-invoice') onIssued(event.invoice);
+if (event.kind === 'invoice-pdf') onPdf(event.invoiceId, event.downloadUrl);
+```
+
+After:
+
+```ts
+const event = verifyWebhook(input);
+switch (event.kind) {
+  case 'invoice-observation':
+    onIssued(event.invoice);
+    break;
+  case 'pdf': // event.eventTypeHint says which header arrived; it is not authenticated
+    onPdf(event.invoiceId, event.downloadUrl);
+    break;
+  case 'pos-payment-error':
+    onPosError(event.invoiceId, event.providerMessage);
+    break;
+}
+```
+
+The two PDF headers share one kind because their bodies are identical: nothing signed says
+which format a link points to. If you previously rejected `thermal-print-pdf` or
+`pos-payment` by catching `WEBHOOK_INVALID`, those events now verify.
+
+### 4. Three line codes and the exchange rate are validated before any request
+
+`invoices.create` now fails with `INVALID_INPUT`, before login, when:
+
+- `vat_rate` is not one of 0, 3, 4, 6, 9, 13, 17, 24;
+- `quantity_type` is not one of 1 to 6;
+- `vat_exemption_code` is not one of 1 to 31;
+- `exchange_rate` has more than 2 fraction digits.
+
+Before, any integer from 0 to 100 passed as a VAT rate. The provider documents that it does
+not refuse an unlisted rate but issues the invoice as if without VAT, so such an input could
+produce a wrong fiscal document. If you computed a rate such as 25 or sent an exchange rate
+such as `decimal('1.0834')`, decide the correct value in your application; the SDK does not
+round or pick codes. Quantity and unit-price precision are unchanged.
+
+### 5. Reads return more fields, and are stricter about them
+
+Additive for most code: `InvoiceObservation` gains five optional fields. `InvoiceDetails`
+gains ten optional fields on the record and eight optional fields on each invoice line. See
+"Returned fields" in the [API reference](api-reference.md). Two things can still need
+attention:
+
+- A returned `external_id` is now free-form text exactly as the provider stores it. A record
+  whose reference contains a space, slash, percent sign, question mark or hash used to make
+  the read fail and now succeeds; do not assume a returned reference is safe to use as an
+  outbound one.
+- The new full-detail fields are validated. If the provider sends one of them with an
+  unexpected type, or as `null`, that read fails with `PROTOCOL_ERROR` where 0.1 ignored the
+  field. This is deliberate: the SDK does not return a value it could not validate.
+
+### 6. Provider diagnostics are available on request
+
+Additive. `getProviderDiagnostics(resultOrError)`, with the per-call option
+`diagnostics: 'provider-issues'`, exposes the provider's rejection detail when you ask for it.
+Results and errors are otherwise unchanged: the same codes, operations and effect certainty,
+and the same safe serialization.
+
+One case needs an edit: if you assert the package's exact runtime export list, for example
+with `Object.keys`, add `getProviderDiagnostics`.
+
+The release also adds these type exports: `InvoiceStatusOutcome`, `PendingInvoiceOutcome`,
+`PendingIdentityEvidence`, `ProviderDiagnostics` and `ProviderIssue`.

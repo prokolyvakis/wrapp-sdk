@@ -53,6 +53,81 @@ export function details(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+/** The whole documented observation field set (reference v1.18.0), with synthetic values. */
+export function fullObservation(overrides: Record<string, unknown> = {}) {
+  return observation({
+    catering_table_id: null,
+    authentication_code: 'SYNTHETIC-AUTHENTICATION-CODE',
+    card_type: 'SYNTHETIC',
+    card_number: 'XXXX-XXXX-XXXX-0000',
+    transaction_id: 'transaction-one',
+    ...overrides,
+  });
+}
+/**
+ * The whole documented full-detail field set (reference v1.18.0), with synthetic values. It
+ * includes the fields whose populated shape is undocumented, in their documented empty form.
+ */
+export function fullDetails(overrides: Record<string, unknown> = {}) {
+  return details({
+    payment_method: 3,
+    branch: 0,
+    is_delivery_note: false,
+    fuel_invoice: false,
+    third_party_collection: false,
+    exchange_rate: 1,
+    other_taxes_amount: 0,
+    notes: '',
+    withholding_total_amount: 0,
+    total_stamp_duty_amount: 0,
+    invoice_lines: [
+      {
+        line_number: 1,
+        name: 'Synthetic service',
+        code: 'SKU-SYNTHETIC',
+        description: '',
+        quantity: 1,
+        quantity_type: 1,
+        unit_price: 10,
+        net_total_price: 10,
+        vat_rate: 24,
+        vat_total: 2.4,
+        subtotal: 12.4,
+        withhold_tax_rate: '',
+        withhold_tax_code: '',
+        withholding_total: 0,
+        classification_category: 'category1_3',
+        classification_type: 'E3_561_001',
+        stamp_duty_tax_code: '',
+        stamp_duty_amount: 0,
+        deductions_amount: 0,
+        deductions: [],
+      },
+    ],
+    ...overrides,
+  });
+}
+/** The documented minimal pending envelope: a status and the provider invoice id, nothing else. */
+export function pending(overrides: Record<string, unknown> = {}) {
+  return { status: 'pending', invoice_id: 'invoice-one', ...overrides };
+}
+/**
+ * The documented enriched pending envelope for transmission failure 2: the whole observation
+ * field set, with no MARK yet, plus the pending status and invoice id.
+ */
+export function enrichedPending(overrides: Record<string, unknown> = {}) {
+  return fullObservation({
+    my_data_mark: null,
+    authentication_code: null,
+    card_type: null,
+    card_number: null,
+    transaction_id: null,
+    transmission_failure: 2,
+    status: 'pending',
+    invoice_id: 'invoice-one',
+    ...overrides,
+  });
+}
 export function tenant(overrides: Record<string, unknown> = {}) {
   return {
     wrapp_user_id: 'tenant-test',

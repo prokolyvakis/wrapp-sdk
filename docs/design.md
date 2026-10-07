@@ -54,9 +54,44 @@ not-found result does not establish that a previous write cannot issue. A provid
 rejection is not a durable guarantee that later repair cannot issue, and an observed invoice
 is evidence, not a declaration of jurisdictional compliance.
 
+Pending is decided by the provider's status discriminator alone, and both create and status
+lookup report it. The provider documents two pending forms: a minimal one carrying only its
+own invoice id, and an enriched one, returned on a provider-to-tax-authority connection loss,
+that already carries a number, a date, a UID and a QR URL. Both stay pending. The enriched
+evidence is validated and kept on the outcome, and is never promoted to an observed invoice,
+because a number or a QR URL is not a registration mark. Every identity comparison the
+response allows is made: the enriched form is compared with the requested reference, and a
+minimal form answering a lookup by provider id must echo that id. A minimal form answering an
+external-reference request echoes no reference, so its identity is reported as unavailable
+instead of being inferred from a provider id. Pending, like a rejection, leaves the reference
+state unknown.
+
 Errors carry separate fields for operation, failure class and effect certainty (not-sent /
 unknown). HTTP failure is never equated with "no side effect", and user cancellation after
 dispatch is also potentially ambiguous.
+
+## Provider diagnostics
+
+Ordinary results and errors stay small and loggable: a rejection reports how many issues the
+provider raised and which validation family raised them, never the provider's words, which can
+name a customer or a document. A caller that needs those words opts in per call. The detail is
+then held in a private WeakMap keyed by the returned result or error object and read with
+getProviderDiagnostics. Because it is not a property, it cannot leak through serialization,
+inspection, spreading, cloning or wrapping the error.
+
+The detail is bounded and marked sensitive. Exact occurrences of the active API key and
+bearer token are replaced before any text is shortened, so no fragment of a credential
+survives a cut. That replacement is a safety net rather than a guarantee, since it cannot
+recognize an encoded or split credential, which is why the detail is always sensitive. On a
+non-2xx response the opt-in also reads the error body, under the same deadline and byte cap as
+any other response. That read is optional detail only: an unreadable, oversized or stalled
+body yields no diagnostics and leaves the HTTP failure, its status and its effect certainty
+exactly as they would have been. Login failures carry no diagnostics, because the login is
+shared between concurrent callers.
+
+Diagnostics are for people and for logs the caller controls. Provider wording is never used to
+decide that a duplicate matches an earlier request, that a reference is free, or that a write
+can be repeated.
 
 ## Transport and retries
 
@@ -118,6 +153,20 @@ and fails closed on missing, malformed, duplicate or oversized inputs.
 
 The documented Event-Type header is outside the signed body, so a valid signature does not
 authenticate routing metadata: the event type is a hint, and the corresponding body is
-validated against it. With no signed timestamp or event ID, there is no inherent freshness or
+validated against it.
+
+All four documented headers are supported. The result kind names the body that was validated,
+not the header: issued-invoice gives an invoice observation, pos-payment a POS payment error,
+and invoice-pdf and thermal-print-pdf both give a PDF notice, because their documented bodies
+are identical and nothing signed tells them apart. The header travels with the result as
+eventTypeHint, marked unauthenticated, so an application can route on it knowing what it is.
+Each family refuses a body that carries another family's defining fields, instead of
+trimming it to fit: a download_url, invoice_id or errors on an observation, errors or an
+invoice series or number on a PDF notice, a download_url or an invoice series or number on a
+POS error. Because each family also requires its own defining fields, no signed body can
+verify as two kinds. Any other additive field is tolerated and dropped. An issued-invoice body carrying a pending
+envelope is refused, because the provider documents none for this event; an observation with
+a transmission failure and no registration mark is an observation, never a claim that
+issuance completed. With no signed timestamp or event ID, there is no inherent freshness or
 replay prevention — applications need durable deduplication, and key scope across tenants
 must be established before a valid MAC is treated as proof of tenant ownership.

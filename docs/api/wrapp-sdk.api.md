@@ -88,7 +88,6 @@ export interface CreateInvoiceInput {
     readonly customer_emails?: readonly string[];
     // (undocumented)
     readonly email_locale?: 'el' | 'en';
-    // (undocumented)
     readonly exchange_rate?: Decimal;
     readonly external_id: string;
     // (undocumented)
@@ -119,11 +118,7 @@ export type CreateOutcome = Readonly<{
     kind: 'observed';
     invoice: InvoiceObservation;
     identity: IdentityEvidence;
-}> | Readonly<{
-    kind: 'pending';
-    invoiceId: string;
-    referenceState: 'unknown';
-}> | Readonly<{
+}> | PendingInvoiceOutcome | Readonly<{
     kind: 'rejected';
     errorCount: number;
     rejectionSource: RejectionSource;
@@ -145,12 +140,16 @@ export type EffectCertainty = 'not-sent' | 'unknown';
 export type ErrorCode = 'INVALID_INPUT' | 'PROTOCOL_ERROR' | 'HTTP_ERROR' | 'AUTH_ERROR' | 'PROVIDER_REJECTED' | 'NETWORK_ERROR' | 'TIMEOUT' | 'ABORTED' | 'RESPONSE_TOO_LARGE' | 'PAGINATION_LIMIT' | 'WEBHOOK_INVALID';
 
 // @public
+export function getProviderDiagnostics(target: unknown): ProviderDiagnostics | undefined;
+
+// @public
 export type IdentityEvidence = 'exact' | 'ascii-case-variant';
 
 // @public
 export interface InvoiceDetails {
     // (undocumented)
     readonly billing_book_id: string;
+    readonly branch?: string;
     // (undocumented)
     readonly code: string;
     // (undocumented)
@@ -167,33 +166,57 @@ export interface InvoiceDetails {
     // (undocumented)
     readonly currency: string;
     // (undocumented)
+    readonly exchange_rate?: string;
     readonly external_id: string | null;
+    // (undocumented)
+    readonly fuel_invoice?: boolean;
     // (undocumented)
     readonly id: string;
     // (undocumented)
     readonly invoice_lines: readonly Readonly<{
         line_number: number;
         name: string;
+        code?: string;
+        description?: string;
         quantity: string;
+        quantity_type?: string;
         unit_price: string;
         net_total_price: string;
         vat_rate: number;
         vat_total: string;
         subtotal: string;
+        withhold_tax_code?: string;
+        withholding_total?: string;
         classification_category: string;
         classification_type: string;
+        stamp_duty_tax_code?: string;
+        stamp_duty_amount?: string;
+        deductions_amount?: string;
     }>[];
     // (undocumented)
     readonly invoice_type_code: string;
+    // (undocumented)
+    readonly is_delivery_note?: boolean;
     readonly issued_at: string;
     // (undocumented)
     readonly net_total_amount: string;
     // (undocumented)
+    readonly notes?: string;
+    // (undocumented)
+    readonly other_taxes_amount?: string;
+    // (undocumented)
     readonly payable_total_amount: string;
+    readonly payment_method?: string;
+    // (undocumented)
+    readonly third_party_collection?: boolean;
     // (undocumented)
     readonly total_amount: string;
     // (undocumented)
+    readonly total_stamp_duty_amount?: string;
+    // (undocumented)
     readonly vat_total_amount: string;
+    // (undocumented)
+    readonly withholding_total_amount?: string;
 }
 
 // @public
@@ -214,15 +237,12 @@ export interface InvoiceLine {
     readonly net_total_price: Decimal;
     // (undocumented)
     readonly quantity: Decimal;
-    // (undocumented)
     readonly quantity_type?: number;
     // (undocumented)
     readonly subtotal: Decimal;
     // (undocumented)
     readonly unit_price: Decimal;
-    // (undocumented)
     readonly vat_exemption_code?: number;
-    // (undocumented)
     readonly vat_rate: number;
     // (undocumented)
     readonly vat_total: Decimal;
@@ -230,9 +250,14 @@ export interface InvoiceLine {
 
 // @public
 export interface InvoiceObservation {
+    readonly authentication_code?: string | null;
     // (undocumented)
     readonly cancelled_by_mark: string | null;
+    readonly card_number?: string | null;
     // (undocumented)
+    readonly card_type?: string | null;
+    // (undocumented)
+    readonly catering_table_id?: string | null;
     readonly external_id: string | null;
     // (undocumented)
     readonly id: string;
@@ -247,6 +272,8 @@ export interface InvoiceObservation {
     readonly num: string;
     // (undocumented)
     readonly series: string;
+    // (undocumented)
+    readonly transaction_id?: string | null;
     readonly transmission_failure: string | null;
     readonly wrapp_invoice_url: string;
     // (undocumented)
@@ -278,10 +305,7 @@ export interface InvoiceResource {
         invoice: InvoiceDetails;
         identity: IdentityEvidence;
     }>>;
-    getStatus(reference: InvoiceReference, options?: RequestOptions): Promise<Readonly<{
-        invoice: InvoiceObservation;
-        identity: IdentityEvidence;
-    }>>;
+    getStatus(reference: InvoiceReference, options?: RequestOptions): Promise<InvoiceStatusOutcome>;
     iterate(filters: ListInvoicesInput, options: RequestOptions & {
         readonly maxPages: number;
     }): AsyncIterable<InvoiceDetails>;
@@ -289,6 +313,13 @@ export interface InvoiceResource {
     list(filters?: ListInvoicesInput, options?: RequestOptions): Promise<InvoicePage>;
     requestPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
 }
+
+// @public
+export type InvoiceStatusOutcome = Readonly<{
+    kind: 'observed';
+    invoice: InvoiceObservation;
+    identity: IdentityEvidence;
+}> | PendingInvoiceOutcome;
 
 // @public
 export interface ListInvoicesInput {
@@ -314,10 +345,45 @@ export type PdfOutcome = Readonly<{
 }>;
 
 // @public
+export type PendingIdentityEvidence = IdentityEvidence | 'unavailable';
+
+// @public
+export interface PendingInvoiceOutcome {
+    // (undocumented)
+    readonly identity: PendingIdentityEvidence;
+    readonly invoice?: InvoiceObservation;
+    // (undocumented)
+    readonly invoiceId: string;
+    // (undocumented)
+    readonly kind: 'pending';
+    // (undocumented)
+    readonly referenceState: 'unknown';
+}
+
+// @public
+export interface ProviderDiagnostics {
+    readonly issues: readonly ProviderIssue[];
+    readonly providerStatus?: string;
+    readonly sensitive: true;
+    readonly truncated: boolean;
+}
+
+// @public
+export interface ProviderIssue {
+    // (undocumented)
+    readonly code?: string;
+    // (undocumented)
+    readonly message?: string;
+    // (undocumented)
+    readonly title?: string;
+}
+
+// @public
 export type RejectionSource = 'invoice-errors' | 'mydata-errors' | 'unknown';
 
 // @public
 export interface RequestOptions {
+    readonly diagnostics?: 'provider-issues';
     // (undocumented)
     readonly signal?: AbortSignal;
     readonly timeoutMs?: number;
@@ -367,13 +433,21 @@ export interface VatDetails {
 
 // @public
 export type VerifiedWebhook = Readonly<{
-    kind: 'issued-invoice';
+    kind: 'invoice-observation';
     invoice: InvoiceObservation;
+    eventTypeHint: 'issued-invoice';
     eventTypeAuthenticated: false;
 }> | Readonly<{
-    kind: 'invoice-pdf';
+    kind: 'pdf';
     invoiceId: string;
     downloadUrl: string;
+    eventTypeHint: 'invoice-pdf' | 'thermal-print-pdf';
+    eventTypeAuthenticated: false;
+}> | Readonly<{
+    kind: 'pos-payment-error';
+    invoiceId: string;
+    providerMessage: string;
+    eventTypeHint: 'pos-payment';
     eventTypeAuthenticated: false;
 }>;
 

@@ -3,9 +3,9 @@ import { WrappError } from './errors.js';
 declare const decimalBrand: unique symbol;
 declare const dateBrand: unique symbol;
 /**
- * Nonnegative exact decimal; maximum 18 integer / 12 fractional digits. Monetary totals are
- * further limited to 2 fractional digits at the create() boundary; rates and quantities may
- * use the full precision.
+ * Nonnegative exact decimal; maximum 18 integer / 12 fractional digits. Monetary totals and
+ * the exchange rate are further limited to 2 fractional digits at the create() boundary;
+ * quantities and unit prices may use the full precision.
  */
 export type Decimal = string & { readonly [decimalBrand]: true };
 /** Validated ISO YYYY-MM-DD calendar date; no timezone interpretation is ever applied. */

@@ -21,7 +21,9 @@ export type EffectCertainty = 'not-sent' | 'unknown';
 
 /**
  * Safe diagnostics: never retains provider payloads, credentials, URLs or raw causes.
- * All fields, including the JSON serialization, are bounded and loggable.
+ * All fields, including the JSON serialization, are bounded and loggable. Provider detail
+ * requested with RequestOptions.diagnostics is held outside the error and is reachable only
+ * through getProviderDiagnostics.
  */
 export class WrappError extends Error {
   override readonly name = 'WrappError';

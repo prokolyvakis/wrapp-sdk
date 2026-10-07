@@ -71,6 +71,8 @@ document the impact and advisory instead of pretending compatibility is unchange
 
 During 0.x, announce incompatible changes in a minor release with a migration note and
 explicit breaking-change commit marker. Do not use pre-1.0 as permission for silent churn.
+Migration notes live in [migration.md](migration.md), one section per release that needs
+action, with before and after code for each change.
 
 ## Deprecation and migration
 
