@@ -5,6 +5,11 @@ import type { CreateInvoiceInput, CreateOutcome, InvoiceStatusOutcome, VerifiedW
 
 assert.deepEqual(Object.keys(sdk).sort(), ['WrappClient', 'WrappError', 'calendarDate', 'decimal', 'getProviderDiagnostics', 'verifyWebhook'].sort());
 assert.equal(sdk.decimal('9007199254740993.12'), '9007199254740993.12');
+const written: Record<string, unknown> = {
+  'POST /api/v1/branches': { id: 'new-branch', name: 'Branch', code: 2 },
+  'PUT /api/v1/branches/new-branch': { id: 'new-branch', name: 'Renamed', code: 2 },
+  'POST /api/v1/billing_books': { id: 'new-book', name: 'Book', series: 'S', invoice_type_code: '2.1' },
+};
 const routes: Record<string, unknown> = {
   '/api/v1/login': { data: { type: 'jwt', attributes: { jwt: 'fake.jwt' } } },
   '/api/v1/tenant_details': { wrapp_user_id: 'tenant', partner_user_id: null, issue_invoice_status: true,
@@ -24,9 +29,10 @@ const routes: Record<string, unknown> = {
 const client = new sdk.WrappClient({
   environment: 'staging',
   credentials: { apiKey: 'synthetic-consumer-key', tenant: { kind: 'userId', value: 'tenant' } },
-  advanced: { fetch: async (resource) => {
+  advanced: { fetch: async (resource, init) => {
     const url = new URL(resource instanceof Request ? resource.url : String(resource));
-    return new Response(JSON.stringify(routes[url.pathname]), { headers: { 'content-type': 'application/json' } });
+    const answer = written[(init?.method ?? 'GET') + ' ' + url.pathname] ?? routes[url.pathname];
+    return new Response(JSON.stringify(answer), { headers: { 'content-type': 'application/json' } });
   } },
 });
 assert.equal((await client.tenant.get()).wrapp_user_id, 'tenant');
@@ -45,6 +51,12 @@ assert.equal(cancelled.kind === 'observed' ? cancelled.cancellation.cancelled_by
 const assigned = await client.invoices.setExternalId('invoice', { external_id: 'reference' });
 assert.equal(assigned.kind === 'acknowledged' ? assigned.externalId + '/' + assigned.identity : assigned.referenceState, 'reference/exact');
 assert.equal((await client.invoices.markAsPaid('invoice')).kind, 'acknowledged');
+const branch = await client.branches.create({ name: 'Branch', code: 2, address: 'Street', street_number: '1', city: 'City', postal_code: '00000', default_option: false });
+assert.equal(branch.kind === 'observed' ? branch.branch.id : branch.kind, 'new-branch');
+const renamed = await client.branches.update('new-branch', { name: 'Renamed' });
+assert.equal(renamed.kind === 'observed' ? renamed.branch.name : renamed.kind, 'Renamed');
+const book = await client.billingBooks.create({ name: 'Book', series: 'S', number: 1, invoice_type_code: '2.1' });
+assert.equal(book.kind === 'observed' ? book.billingBook.number : book.kind, undefined);
 const deleted = await client.invoices.drafts.delete('invoice');
 assert.equal(deleted.kind === 'rejected' ? deleted.errorCount : 0, 1);
 const forbiddenPath = '@prokolyvakis/wrapp-sdk/dist/client.js';

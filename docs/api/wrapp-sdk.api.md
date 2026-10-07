@@ -26,6 +26,38 @@ export interface BillingBook {
     readonly series: string;
 }
 
+// @public (undocumented)
+export type BillingBookCreateOutcome = Readonly<{
+    kind: 'observed';
+    billingBook: BillingBookReceipt;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
+export interface BillingBookReceipt {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly invoice_type_code: string;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly number?: string;
+    // (undocumented)
+    readonly series: string;
+}
+
+// @public
+export interface BillingBookResource {
+    // (undocumented)
+    create(input: CreateBillingBookInput, options?: RequestOptions): Promise<BillingBookCreateOutcome>;
+    // (undocumented)
+    list(options?: RequestOptions): Promise<readonly BillingBook[]>;
+}
+
 // @public
 export interface Branch {
     // (undocumented)
@@ -35,6 +67,26 @@ export interface Branch {
     // (undocumented)
     readonly name: string;
 }
+
+// @public
+export interface BranchResource {
+    // (undocumented)
+    create(input: CreateBranchInput, options?: RequestOptions): Promise<BranchWriteOutcome>;
+    // (undocumented)
+    list(options?: RequestOptions): Promise<readonly Branch[]>;
+    // (undocumented)
+    update(branchId: string, patch: UpdateBranchInput, options?: RequestOptions): Promise<BranchWriteOutcome>;
+}
+
+// @public
+export type BranchWriteOutcome = Readonly<{
+    kind: 'observed';
+    branch: Branch;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
 
 // @public
 export type CalendarDate = string & {
@@ -111,6 +163,43 @@ export interface Counterpart {
     readonly street?: string;
     // (undocumented)
     readonly vat?: string;
+}
+
+// @public
+export interface CreateBillingBookInput {
+    // (undocumented)
+    readonly invoice_type_code: string;
+    // (undocumented)
+    readonly name: string;
+    readonly number: number;
+    // (undocumented)
+    readonly series: string;
+}
+
+// @public
+export interface CreateBranchInput {
+    // (undocumented)
+    readonly address: string;
+    // (undocumented)
+    readonly address_en?: string;
+    // (undocumented)
+    readonly city: string;
+    // (undocumented)
+    readonly city_en?: string;
+    readonly code: number;
+    // (undocumented)
+    readonly company_activity?: string;
+    // (undocumented)
+    readonly company_activity_en?: string;
+    readonly default_option?: boolean;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly phone?: string;
+    // (undocumented)
+    readonly postal_code: string;
+    // (undocumented)
+    readonly street_number: string;
 }
 
 // @public
@@ -481,6 +570,9 @@ export type TenantIdentity = Readonly<{
 }>;
 
 // @public
+export type UpdateBranchInput = Partial<CreateBranchInput>;
+
+// @public
 export interface VatDetails {
     // (undocumented)
     readonly address: string;
@@ -532,13 +624,9 @@ export interface WebhookInput {
 export class WrappClient {
     constructor(options: ClientOptions);
     // (undocumented)
-    readonly billingBooks: Readonly<{
-        list(options?: RequestOptions): Promise<readonly BillingBook[]>;
-    }>;
+    readonly billingBooks: Readonly<BillingBookResource>;
     // (undocumented)
-    readonly branches: Readonly<{
-        list(options?: RequestOptions): Promise<readonly Branch[]>;
-    }>;
+    readonly branches: Readonly<BranchResource>;
     // (undocumented)
     readonly invoices: Readonly<InvoiceResource>;
     // (undocumented)

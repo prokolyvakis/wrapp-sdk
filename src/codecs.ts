@@ -279,9 +279,12 @@ export const tenantSchema = z.object({
   next_payment_amount: numericText.nullable(),
 });
 // Provider-observed: the branch code arrives as a JSON number (code: 0).
-export const branchesSchema = z
-  .array(z.object({ id: identifier, name: nonempty, code: z.union([text, integerString]) }))
-  .max(10_000);
+export const branchSchema = z.object({
+  id: identifier,
+  name: nonempty,
+  code: z.union([text, integerString]),
+});
+export const branchesSchema = z.array(branchSchema).max(10_000);
 export const booksSchema = z
   .array(
     z.object({

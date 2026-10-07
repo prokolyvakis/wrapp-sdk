@@ -21,6 +21,9 @@ export const operations = Object.freeze({
   // A GET that changes provider state: classified by effect, never by verb.
   markAsPaid: { method: 'GET', effectful: true },
   deleteDraft: { method: 'DELETE', effectful: true },
+  branchCreate: { method: 'POST', effectful: true },
+  branchUpdate: { method: 'PUT', effectful: true },
+  billingBookCreate: { method: 'POST', effectful: true },
 } as const);
 export type Operation = keyof typeof operations;
 export function scope(

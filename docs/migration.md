@@ -155,6 +155,10 @@ Additive. Each is a new method on an existing resource and changes nothing you a
 - `invoices.setExternalId(invoiceId, { external_id })` — permanent reference assignment.
 - `invoices.markAsPaid(invoiceId)` — an effectful GET.
 - `invoices.drafts.delete(invoiceId)` — the only draft operation available.
+- `branches.create(input)` and `branches.update(branchId, patch)`.
+- `billingBooks.create(input)`.
 
 One case needs an edit: code that implements the exported `InvoiceResource` interface itself,
-such as a typed test double, must add the new methods.
+such as a typed test double, must add the new methods. The same holds for an object typed as
+`WrappClient['branches']` or `WrappClient['billingBooks']`, now the exported `BranchResource`
+and `BillingBookResource` interfaces.

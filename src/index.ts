@@ -8,6 +8,16 @@
 export { WrappClient } from './client.js';
 export type { InvoiceResource } from './resources/invoices.js';
 export type {
+  BillingBookCreateOutcome,
+  BillingBookReceipt,
+  BillingBookResource,
+  BranchResource,
+  BranchWriteOutcome,
+  CreateBillingBookInput,
+  CreateBranchInput,
+  UpdateBranchInput,
+} from './management-types.js';
+export type {
   AcknowledgementOutcome,
   CancellationObservation,
   CancellationOutcome,

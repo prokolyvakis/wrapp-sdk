@@ -78,7 +78,8 @@ Implement incrementally, never advertise entire-API support from a small endpoin
 | VAT search/exemptions, branch/billing-book reads                               | Core read capabilities                                        |
 | Invoice create/status/full lookup/list                                         | Core, supported-field matrix required                         |
 | PDF request + issued/PDF webhook parsing                                       | Core, side-effect rules apply                                 |
-| Branch/billing-book writes                                                     | Later management tranche                                      |
+| Branch create/update, billing-book create                                      | Core; shapes from documentation, unobserved                   |
+| Billing-book number update                                                     | Blocked: method and body are not established                  |
 | Thermal PDF request, issued count                                              | Core; shapes from documentation, unobserved                   |
 | Delivery-note cancellation, reference assignment, mark-as-paid, draft deletion | Core; shapes from documentation, unobserved                   |
 | Draft save, issue and listing                                                  | Blocked on undocumented response contracts                    |

@@ -1,6 +1,4 @@
 import {
-  booksSchema,
-  branchesSchema,
   decode,
   exemptionsSchema,
   input,
@@ -8,17 +6,13 @@ import {
   vatInputSchema,
   vatSchema,
 } from './codecs.js';
+import type { BillingBookResource, BranchResource } from './management-types.js';
+import { billingBookResource } from './resources/billing-books.js';
+import { branchResource } from './resources/branches.js';
 import { invoiceResource } from './resources/invoices.js';
 import type { InvoiceResource } from './resources/invoices.js';
 import { createRuntime, readValue } from './runtime.js';
-import type {
-  BillingBook,
-  Branch,
-  ClientOptions,
-  RequestOptions,
-  TenantDetails,
-  VatDetails,
-} from './types.js';
+import type { ClientOptions, RequestOptions, TenantDetails, VatDetails } from './types.js';
 
 /**
  * Tenant/environment-isolated client. No requests occur during construction; login happens
@@ -26,10 +20,8 @@ import type {
  */
 export class WrappClient {
   readonly tenant: Readonly<{ get(options?: RequestOptions): Promise<TenantDetails> }>;
-  readonly branches: Readonly<{ list(options?: RequestOptions): Promise<readonly Branch[]> }>;
-  readonly billingBooks: Readonly<{
-    list(options?: RequestOptions): Promise<readonly BillingBook[]>;
-  }>;
+  readonly branches: Readonly<BranchResource>;
+  readonly billingBooks: Readonly<BillingBookResource>;
   readonly vat: Readonly<{
     search(
       query: Readonly<{ vat: string; country_code: string }>,
@@ -52,24 +44,8 @@ export class WrappClient {
           opts,
         ),
     });
-    this.branches = Object.freeze({
-      list: (opts?: RequestOptions) =>
-        runtime.run(
-          'branches',
-          '/branches',
-          (v, report) => decode(branchesSchema, readValue(v, report), 'branches'),
-          opts,
-        ),
-    });
-    this.billingBooks = Object.freeze({
-      list: (opts?: RequestOptions) =>
-        runtime.run(
-          'billingBooks',
-          '/billing_books',
-          (v, report) => decode(booksSchema, readValue(v, report), 'billingBooks'),
-          opts,
-        ),
-    });
+    this.branches = Object.freeze(branchResource(runtime));
+    this.billingBooks = Object.freeze(billingBookResource(runtime));
     this.vat = Object.freeze({
       search: async (
         query: Readonly<{ vat: string; country_code: string }>,

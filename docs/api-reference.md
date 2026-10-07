@@ -25,6 +25,9 @@ grounded in documentation, what is observed behavior, and what remains an open q
 | invoices.setExternalId      | PUT /invoices/:invoice_id/set_external_id | effectful      |
 | invoices.markAsPaid         | GET /invoices/:invoice_id/mark_as_paid    | effectful      |
 | invoices.drafts.delete      | DELETE /invoices/:invoice_id/delete_draft | effectful      |
+| branches.create             | POST /branches                            | effectful      |
+| branches.update             | PUT /branches/:id                         | effectful      |
+| billingBooks.create         | POST /billing_books                       | effectful      |
 
 There is no generic request escape hatch. Origins are explicit staging/production; the
 loopback-only test-origin override is visibly an advanced test capability. An injected fetch
@@ -96,6 +99,32 @@ rejection is a rejected result (errorCount and rejectionSource only), not an err
 
 The status text of an acknowledgement is validated as present and then dropped, like any
 other provider wording. Use the diagnostics option to read a rejection's detail.
+
+## Branch and billing-book writes
+
+Three operations change account configuration. Each is dispatched at most once and never
+retried; a failure after dispatch carries effect unknown; a provider rejection is a rejected
+result (errorCount and rejectionSource only).
+
+- branches.create(input) requires name, code, address, street_number, city and postal_code.
+  code is a nonnegative integer on the request. Optional: phone, address_en, city_en,
+  default_option, company_activity, company_activity_en. An omitted optional field is not
+  sent; an explicit false is sent as false. The result is observed with the branch (id, name,
+  code as text) or rejected.
+- branches.update(branchId, patch) takes the same fields, all optional, at least one. Only
+  the fields given are sent: the SDK never reads the branch first, merges values or fills in
+  defaults. The returned branch id must equal the requested one.
+- billingBooks.create(input) requires name, series, number and invoice_type_code.
+  invoice_type_code is any of the provider's 52 type codes, since a book can exist for a type
+  create does not issue. The result is observed with the book (id, name, series,
+  invoice_type_code, and number only when the provider returns it) or rejected.
+
+Three provider behaviors are worth knowing before calling these. Setting default_option true
+removes the default from every other branch. A billing book's number is the counter invoices
+are numbered from: the SDK sends the value given and neither allocates nor reconciles
+counters. And the provider stores some types under their family, so a book requested as 1.2
+can come back as 1.1; the returned type is kept as given and is not compared with the request.
+Updating a billing book's number is not available.
 
 ## Returned fields
 
