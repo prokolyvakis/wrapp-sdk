@@ -342,165 +342,157 @@ function fuelChargeWithinOtherLines(
     .reduce((sum, line) => sum + hundredths(line.net_total_price), 0n);
   return hundredths(charge.net_total_price) <= others;
 }
-// One pipeline for every invoice type. It is built once for the codes create() accepts; tests
-// build it again for the prepared codes, so the rules stated for those types are exercised
-// through the same validation without any operation accepting them.
-export const createSchemaFor = <const Codes extends readonly [string, ...string[]]>(codes: Codes) =>
-  z
-    .strictObject({
-      external_id: identifier,
-      billing_book_id: identifier,
-      invoice_type_code: z.enum(codes),
-      payment_method_type: z.number().int().min(0).max(7),
-      counterpart: z.strictObject({
-        ...counterpartFields,
-        // A request field only: the shared fields above also shape the counterpart that reads
-        // return, and no returned supply account is claimed. The provider documents that it
-        // ignores this on an invoice that is not a fuel invoice, so it is sent as given either
-        // way and never required.
-        supply_account_no: nonempty.optional(),
-      }),
-      net_total_amount: inputAmount,
-      vat_total_amount: inputAmount,
-      total_amount: inputAmount,
-      payable_total_amount: inputAmount,
-      invoice_lines: z.array(lineSchema).min(1).max(1000),
-      branch: identifier.optional(),
-      payment_details: text.optional(),
-      notes: text.optional(),
-      currency: z
-        .string()
-        .regex(/^[A-Z]{3}$/)
-        .optional(),
-      exchange_rate: inputExchangeRate.optional(),
-      correlated_invoices: z.array(identifier).max(100).optional(),
-      customer_emails: z.array(nonempty).max(100).optional(),
-      email_locale: z.enum(['el', 'en']).optional(),
-      generate_pdf: z.boolean().optional(),
-      mark_as_paid: z.boolean().optional(),
-      email_subject: text.optional(),
-      email_body: text.optional(),
-      num: positiveInteger.optional(),
-      self_pricing: z.boolean().optional(),
-      special_invoice_category: member([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]).optional(),
-      other_taxes_amount: inputAmount.optional(),
-      withholding_total_amount: inputAmount.optional(),
-      // Two documented fields with their own wire keys. Which of them the provider requires
-      // beside line stamp duty is an open provider question, so neither is enforced or aliased.
-      total_stamp_duty_amount: inputAmount.optional(),
-      stamp_duty_amount: inputAmount.optional(),
-      deductions_total_amount: inputAmount.optional(),
-      fees_amount: inputAmount.optional(),
-      pos_device_id: identifier.optional(),
-      installments: z.boolean().optional(),
-      tip_amount: inputAmount.optional(),
-      third_party_collection: z.boolean().optional(),
-      fuel_invoice: z.boolean().optional(),
-      b2g: z.boolean().optional(),
-      ...b2gRequiredFields,
-      b2g_buyer_reference: text.optional(),
-      b2g_bt_70: text.optional(),
-      is_delivery_note: z.boolean().optional(),
-      delivery_detail: deliveryDetailSchema.optional(),
-      other_correlated_entities: z.array(correlatedEntitySchema).max(100).optional(),
-      receiving_note_purpose: member([1, 2, 3, 4, 5, 6, 7]).optional(),
-      other_receiving_note_purpose_title: nonempty.max(150).optional(),
-    })
-    .refine((v) => (v.currency === undefined) === (v.exchange_rate === undefined))
-    // Per-profile refinement, kept apart from the field validation above: a business profile
-    // needs the counterpart's identity and address, a retail one only its name.
-    .refine((v) => {
-      const rule = typeProfile(v.invoice_type_code).counterpart;
-      if (rule === 'name-only') return true;
-      const { country_code, vat, city, street, number, postal_code } = v.counterpart;
-      const address = [city, street, number, postal_code];
-      return (rule === 'name-and-address' ? address : [country_code, vat, ...address]).every(
-        (field) => field !== undefined && field.length > 0,
-      );
-    })
-    .refine(
-      (v) => new Set(v.invoice_lines.map((l) => l.line_number)).size === v.invoice_lines.length,
-    )
-    // Presence rules across the invoice, as the reference words them: "required when
-    // self_pricing is true", "required when deductions present", "required when fees present".
-    .refine(
-      (v) =>
-        v.self_pricing !== true ||
-        v.invoice_lines.every((l) => l.expenses_vat_classification !== undefined),
-    )
-    .refine((v) => v.deductions_total_amount !== undefined || !v.invoice_lines.some(hasDeductions))
-    .refine(
-      (v) =>
-        v.fees_amount !== undefined ||
-        v.invoice_lines.every((l) => l.rec_type === undefined && l.fees_category === undefined),
-    )
-    // Whether the device is a terminal that offers installments is the provider's to decide;
-    // no device is looked up here.
-    .refine((v) => v.installments !== true || v.pos_device_id !== undefined)
-    .refine(
-      (v) =>
-        v.third_party_collection === undefined ||
-        thirdPartyCollectionTypes.includes(v.invoice_type_code),
-    )
-    // The provider refuses a fuel code on an invoice not sent as a fuel invoice.
-    .refine(
-      (v) => v.fuel_invoice === true || v.invoice_lines.every((l) => l.fuel_code === undefined),
-    )
-    .refine((v) => fuelChargeWithinOtherLines(v.invoice_lines))
-    .refine((v) =>
-      v.invoice_lines.every((l) =>
-        profileLineKeys.every(
-          (key) => l[key] === undefined || profileLineFieldTypes[key].includes(v.invoice_type_code),
-        ),
-      ),
-    )
-    // The flag and the detail are sent together or not at all.
-    .refine((v) => (v.is_delivery_note === true) === (v.delivery_detail !== undefined))
-    // The rules the reference states for particular invoice types. See TypeRules. No accepted
-    // type has any today, so for create() this only refuses the two receipt fields.
-    .refine((v) => {
-      const { rules } = typeProfile(v.invoice_type_code);
-      if (rules.deliveryNote === true && v.is_delivery_note !== true) return false;
-      if (rules.receivingNote !== undefined && v.is_delivery_note === true) return false;
-      if (
-        rules.zeroTotals === true &&
-        !(isZero(v.vat_total_amount) && isZero(v.total_amount) && isZero(v.payable_total_amount))
-      )
-        return false;
-      if (
-        rules.categoryThreeLines === true &&
-        !v.invoice_lines.every(
-          (l) =>
-            l.vat_rate === 24 &&
-            isZero(l.vat_total) &&
-            isZero(l.subtotal) &&
-            l.classification_category === 'category3' &&
-            l.classifications === undefined,
-        )
-      )
-        return false;
-      if (rules.receivingNote === undefined)
-        return (
-          v.receiving_note_purpose === undefined &&
-          v.other_receiving_note_purpose_title === undefined
-        );
-      if (v.receiving_note_purpose === undefined) return false;
-      if (v.receiving_note_purpose === 5 && rules.receivingNote !== 'correlated') return false;
-      if (v.receiving_note_purpose === 7 && v.other_receiving_note_purpose_title === undefined)
-        return false;
-      return (
-        rules.receivingNote !== 'correlated' ||
-        (v.correlated_invoices !== undefined && v.correlated_invoices.length > 0)
-      );
-    })
-    // Presence only: no authority, contract or budget is looked up or checked for meaning.
-    .refine(
-      (v) =>
-        v.b2g !== true ||
-        (b2gRequiredKeys.every((key) => v[key] !== undefined) &&
-          v.invoice_lines.every((l) => l.cpv_code !== undefined)),
+export const createSchema = z
+  .strictObject({
+    external_id: identifier,
+    billing_book_id: identifier,
+    invoice_type_code: z.enum(supportedInvoiceTypeCodes),
+    payment_method_type: z.number().int().min(0).max(7),
+    counterpart: z.strictObject({
+      ...counterpartFields,
+      // A request field only: the shared fields above also shape the counterpart that reads
+      // return, and no returned supply account is claimed. The provider documents that it
+      // ignores this on an invoice that is not a fuel invoice, so it is sent as given either
+      // way and never required.
+      supply_account_no: nonempty.optional(),
+    }),
+    net_total_amount: inputAmount,
+    vat_total_amount: inputAmount,
+    total_amount: inputAmount,
+    payable_total_amount: inputAmount,
+    invoice_lines: z.array(lineSchema).min(1).max(1000),
+    branch: identifier.optional(),
+    payment_details: text.optional(),
+    notes: text.optional(),
+    currency: z
+      .string()
+      .regex(/^[A-Z]{3}$/)
+      .optional(),
+    exchange_rate: inputExchangeRate.optional(),
+    correlated_invoices: z.array(identifier).max(100).optional(),
+    customer_emails: z.array(nonempty).max(100).optional(),
+    email_locale: z.enum(['el', 'en']).optional(),
+    generate_pdf: z.boolean().optional(),
+    mark_as_paid: z.boolean().optional(),
+    email_subject: text.optional(),
+    email_body: text.optional(),
+    num: positiveInteger.optional(),
+    self_pricing: z.boolean().optional(),
+    special_invoice_category: member([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]).optional(),
+    other_taxes_amount: inputAmount.optional(),
+    withholding_total_amount: inputAmount.optional(),
+    // Two documented fields with their own wire keys. Which of them the provider requires
+    // beside line stamp duty is an open provider question, so neither is enforced or aliased.
+    total_stamp_duty_amount: inputAmount.optional(),
+    stamp_duty_amount: inputAmount.optional(),
+    deductions_total_amount: inputAmount.optional(),
+    fees_amount: inputAmount.optional(),
+    pos_device_id: identifier.optional(),
+    installments: z.boolean().optional(),
+    tip_amount: inputAmount.optional(),
+    third_party_collection: z.boolean().optional(),
+    fuel_invoice: z.boolean().optional(),
+    b2g: z.boolean().optional(),
+    ...b2gRequiredFields,
+    b2g_buyer_reference: text.optional(),
+    b2g_bt_70: text.optional(),
+    is_delivery_note: z.boolean().optional(),
+    delivery_detail: deliveryDetailSchema.optional(),
+    other_correlated_entities: z.array(correlatedEntitySchema).max(100).optional(),
+    receiving_note_purpose: member([1, 2, 3, 4, 5, 6, 7]).optional(),
+    other_receiving_note_purpose_title: nonempty.max(150).optional(),
+  })
+  .refine((v) => (v.currency === undefined) === (v.exchange_rate === undefined))
+  // Per-profile refinement, kept apart from the field validation above: a business profile
+  // needs the counterpart's identity and address, a retail one only its name.
+  .refine((v) => {
+    if (typeProfile(v.invoice_type_code).counterpart === 'name-only') return true;
+    const { country_code, vat, city, street, number, postal_code } = v.counterpart;
+    return [country_code, vat, city, street, number, postal_code].every(
+      (field) => field !== undefined && field.length > 0,
     );
-export const createSchema = createSchemaFor(supportedInvoiceTypeCodes);
+  })
+  .refine((v) => new Set(v.invoice_lines.map((l) => l.line_number)).size === v.invoice_lines.length)
+  // Presence rules across the invoice, as the reference words them: "required when
+  // self_pricing is true", "required when deductions present", "required when fees present".
+  .refine(
+    (v) =>
+      v.self_pricing !== true ||
+      v.invoice_lines.every((l) => l.expenses_vat_classification !== undefined),
+  )
+  .refine((v) => v.deductions_total_amount !== undefined || !v.invoice_lines.some(hasDeductions))
+  .refine(
+    (v) =>
+      v.fees_amount !== undefined ||
+      v.invoice_lines.every((l) => l.rec_type === undefined && l.fees_category === undefined),
+  )
+  // Whether the device is a terminal that offers installments is the provider's to decide;
+  // no device is looked up here.
+  .refine((v) => v.installments !== true || v.pos_device_id !== undefined)
+  .refine(
+    (v) =>
+      v.third_party_collection === undefined ||
+      thirdPartyCollectionTypes.includes(v.invoice_type_code),
+  )
+  // The provider refuses a fuel code on an invoice not sent as a fuel invoice.
+  .refine((v) => v.fuel_invoice === true || v.invoice_lines.every((l) => l.fuel_code === undefined))
+  .refine((v) => fuelChargeWithinOtherLines(v.invoice_lines))
+  .refine((v) =>
+    v.invoice_lines.every((l) =>
+      profileLineKeys.every(
+        (key) => l[key] === undefined || profileLineFieldTypes[key].includes(v.invoice_type_code),
+      ),
+    ),
+  )
+  // The flag and the detail are sent together or not at all.
+  .refine((v) => (v.is_delivery_note === true) === (v.delivery_detail !== undefined))
+  // The rules of particular invoice types. See TypeRules.
+  .refine((v) => {
+    const { rules } = typeProfile(v.invoice_type_code);
+    const marked = v.correlated_invoices !== undefined && v.correlated_invoices.length > 0;
+    if (rules.correlatedInvoices === true && !marked) return false;
+    if (rules.deliveryNote === true && v.is_delivery_note !== true) return false;
+    if (rules.receivingNote !== undefined && v.is_delivery_note === true) return false;
+    if (
+      rules.zeroTotals === true &&
+      !(
+        isZero(v.net_total_amount) &&
+        isZero(v.vat_total_amount) &&
+        isZero(v.total_amount) &&
+        isZero(v.payable_total_amount)
+      )
+    )
+      return false;
+    if (
+      rules.zeroValueLines === true &&
+      !v.invoice_lines.every(
+        (l) =>
+          isZero(l.net_total_price) &&
+          l.vat_rate === 24 &&
+          isZero(l.vat_total) &&
+          isZero(l.subtotal) &&
+          l.classification_category === 'category3' &&
+          l.classifications === undefined,
+      )
+    )
+      return false;
+    if (rules.receivingNote === undefined)
+      return (
+        v.receiving_note_purpose === undefined && v.other_receiving_note_purpose_title === undefined
+      );
+    if (v.receiving_note_purpose === undefined) return false;
+    if (v.receiving_note_purpose === 5 && rules.receivingNote !== 'correlated') return false;
+    if (v.receiving_note_purpose === 7 && v.other_receiving_note_purpose_title === undefined)
+      return false;
+    return rules.receivingNote !== 'correlated' || marked;
+  })
+  // Presence only: no authority, contract or budget is looked up or checked for meaning.
+  .refine(
+    (v) =>
+      v.b2g !== true ||
+      (b2gRequiredKeys.every((key) => v[key] !== undefined) &&
+        v.invoice_lines.every((l) => l.cpv_code !== undefined)),
+  );
 
 export const observationSchema = z.object({
   id: identifier,

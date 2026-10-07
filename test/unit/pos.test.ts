@@ -7,7 +7,14 @@ import {
   supportedInvoiceTypeCodes,
   thirdPartyCollectionTypes,
 } from '../../src/invoice-contracts.js';
-import { invoice, json, login, observation, provider } from '../fixtures/provider.js';
+import {
+  invoice,
+  invoiceOfType,
+  json,
+  login,
+  observation,
+  provider,
+} from '../fixtures/provider.js';
 import type { RecordedRequest } from '../fixtures/provider.js';
 
 // Synthetic bodies in the documented shapes of the Wrapp reference v1.18.0. Methods, paths
@@ -614,14 +621,12 @@ describe('invoice POS fields', () => {
   it.each(supportedInvoiceTypeCodes)(
     'should send pos_device_id, installments and tip_amount exactly on invoice type %s',
     async (invoice_type_code) => {
-      const body = await sent(
-        build({
-          invoice_type_code,
-          pos_device_id: 'device-one',
-          installments: true,
-          tip_amount: decimal('2.00'),
-        }),
-      );
+      const body = await sent({
+        ...invoiceOfType(invoice_type_code),
+        pos_device_id: 'device-one',
+        installments: true,
+        tip_amount: decimal('2.00'),
+      });
       expect(body).toMatchObject({
         pos_device_id: 'device-one',
         installments: true,
@@ -683,7 +688,12 @@ describe('invoice POS fields', () => {
   )(
     'should keep invoice type %s closed to %s %j: no supported profile carries it',
     async (invoice_type_code, key, value) => {
-      await refused(build({ invoice_type_code, [key]: value }));
+      // The same invoice is accepted without the field, so the field is what is refused.
+      expect((await sent(invoiceOfType(invoice_type_code))).invoice_type_code).toBe(
+        invoice_type_code,
+      );
+      const withField: unknown = { ...invoiceOfType(invoice_type_code), [key]: value };
+      await refused(withField as CreateInvoiceInput);
     },
   );
   it('should bind third_party_collection to types 8.4 and 8.5, neither of which is issued yet', () => {

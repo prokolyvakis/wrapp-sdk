@@ -176,6 +176,65 @@ export function invoice(): CreateInvoiceInput {
     ],
   };
 }
+/**
+ * A minimal valid create input for each supported type, in the shape the provider was observed
+ * to accept for it (values are synthetic): the ordinary invoice for goods, service and credit
+ * types, with a correlated mark on 5.1; zero totals and a zero-value category3 line for 9.2,
+ * 9.3, 10.1 and 10.2, with a delivery detail on the first two and a receipt purpose and a
+ * received mark on the last two.
+ */
+export function invoiceOfType(code: CreateInvoiceInput['invoice_type_code']): CreateInvoiceInput {
+  const base = { ...invoice(), invoice_type_code: code };
+  if (code === '5.1') return { ...base, correlated_invoices: ['400000000000001'] };
+  if (!['9.2', '9.3', '10.1', '10.2'].includes(code)) return base;
+  const [first] = base.invoice_lines;
+  if (first === undefined) throw new Error('The invoice fixture has no line');
+  const zero = {
+    net_total_amount: decimal('0'),
+    vat_total_amount: decimal('0'),
+    total_amount: decimal('0'),
+    payable_total_amount: decimal('0'),
+    invoice_lines: [
+      {
+        ...first,
+        unit_price: decimal('0'),
+        net_total_price: decimal('0'),
+        vat_rate: 24,
+        vat_total: decimal('0'),
+        subtotal: decimal('0'),
+        classification_category: 'category3',
+        classification_type: '_',
+      },
+    ],
+  };
+  if (code === '10.1' || code === '10.2')
+    return {
+      ...base,
+      ...zero,
+      receiving_note_purpose: 1,
+      correlated_invoices: ['400000000000001'],
+    };
+  return {
+    ...base,
+    ...zero,
+    is_delivery_note: true,
+    delivery_detail: {
+      dispatch_date: '21-03-2026',
+      dispatch_time: '02:30',
+      vehicle_number: 'ABC1234',
+      purpose_of_movement: '1',
+      issuer_of_movement: 'Synthetic Carrier',
+      from_address: 'Origin Street',
+      from_number: '10',
+      from_city: 'Origin City',
+      from_zipcode: '12345',
+      to_address: 'Destination Street',
+      to_number: '20',
+      to_city: 'Destination City',
+      to_zipcode: '54321',
+    },
+  };
+}
 export function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,

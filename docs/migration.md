@@ -192,15 +192,15 @@ and `BillingBookResource` interfaces.
 
 ### New create fields
 
-Additive. `invoices.create` accepts more of the provider's documented request, on the same
-four invoice types:
+Additive. `invoices.create` accepts more of the provider's documented request:
 
 - on the invoice: `email_subject`, `email_body`, `num`, `self_pricing`,
   `special_invoice_category`, `other_taxes_amount`, `withholding_total_amount`,
   `total_stamp_duty_amount`, `stamp_duty_amount`, `deductions_total_amount`, `fees_amount`,
   `pos_device_id`, `installments`, `tip_amount`, `fuel_invoice`, `b2g`, the five
   `delivery_address_*` fields and the eight other `b2g_*` fields, `is_delivery_note`,
-  `delivery_detail`, `other_correlated_entities`;
+  `delivery_detail`, `other_correlated_entities`, `receiving_note_purpose`,
+  `other_receiving_note_purpose_title`;
 - on the counterpart: `supply_account_no`;
 - on a line: `classifications`, `withhold_tax_rate`, `withhold_tax_code`, `withholding_total`,
   `stamp_duty_tax_code`, `stamp_duty_amount`, `deductions`, `deductions_amount`,
@@ -215,6 +215,17 @@ One case needs an edit: `InvoiceLine.classification_category` and `classificatio
 now optional in the type, because a `classifications` array can replace them. Code that reads
 either field from an `InvoiceLine` value gets `string | undefined`. At run time a line still
 needs the pair or the array, and is refused before any request without one.
+
+### Nine more invoice types
+
+`invoices.create` now accepts types 1.1 and 11.1 (goods), 5.1, 5.2 and 11.4 (credits), 9.2
+and 9.3 (delivery notes) and 10.1 and 10.2 (quantity receipt notes). Some have rules of their
+own; see "Invoice types with rules of their own" in the [API reference](api-reference.md).
+A request for one of the four earlier types is unaffected.
+
+`CreateInvoiceInput['invoice_type_code']` gains nine members. Under this project's
+compatibility policy an added member of a closed union is a breaking type change: code that
+switches exhaustively over the union, or maps it with a `Record`, needs the new cases.
 
 ### A `__proto__` key in a provider or webhook body is always refused
 

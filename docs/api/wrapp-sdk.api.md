@@ -357,7 +357,7 @@ export interface CreateInvoiceInput {
     readonly installments?: boolean;
     // (undocumented)
     readonly invoice_lines: readonly InvoiceLine[];
-    readonly invoice_type_code: '2.1' | '2.2' | '2.3' | '11.2';
+    readonly invoice_type_code: '1.1' | '2.1' | '2.2' | '2.3' | '5.1' | '5.2' | '9.2' | '9.3' | '10.1' | '10.2' | '11.1' | '11.2' | '11.4';
     readonly is_delivery_note?: boolean;
     // (undocumented)
     readonly mark_as_paid?: boolean;
@@ -368,6 +368,7 @@ export interface CreateInvoiceInput {
     readonly num?: number;
     // (undocumented)
     readonly other_correlated_entities?: readonly OtherCorrelatedEntity[];
+    readonly other_receiving_note_purpose_title?: string;
     readonly other_taxes_amount?: Decimal;
     // (undocumented)
     readonly payable_total_amount: Decimal;
@@ -376,6 +377,7 @@ export interface CreateInvoiceInput {
     // (undocumented)
     readonly payment_method_type: number;
     readonly pos_device_id?: string;
+    readonly receiving_note_purpose?: number;
     readonly self_pricing?: boolean;
     readonly special_invoice_category?: number;
     // (undocumented)

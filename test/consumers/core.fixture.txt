@@ -220,16 +220,17 @@ const budgetType: string | null | undefined = readBack?.b2g_details?.b2g_budget_
 const withheld: string | null | undefined = readBack?.invoice_lines[0]?.withhold_tax_rate;
 const deductedAmount: string | undefined = readBack?.invoice_lines[0]?.deductions?.[0]?.amount;
 assert.equal([dispatchDate, budgetType, withheld, deductedAmount].every((value) => value === undefined), true);
+const receiptNote: Pick<CreateInvoiceInput, 'invoice_type_code' | 'receiving_note_purpose' | 'correlated_invoices'> =
+  { invoice_type_code: '10.1', receiving_note_purpose: 5, correlated_invoices: ['400000000000001'] };
+const types: readonly CreateInvoiceInput['invoice_type_code'][] = ['1.1', '5.1', '9.3', '11.4'];
+assert.equal(receiptNote.invoice_type_code + String(types.length), '10.14');
 const softpos: CreatePosDeviceInput = { pos_type: 'worldline_softpos', terminal_id: '16000002', merchant_id: 'merchant@example.invalid' };
 const pos: Pick<CreateInvoiceInput, 'pos_device_id' | 'installments' | 'tip_amount'> = { pos_device_id: 'device', installments: false, tip_amount: sdk.decimal('2.00') };
 assert.equal(softpos.pos_type + String(pos.installments), 'worldline_softposfalse');
 if (false) {
-  // @ts-expect-error Type 9.3 is not accepted: a delivery note is a supported type with the flag.
-  const unaccepted: CreateInvoiceInput['invoice_type_code'] = '9.3';
+  // @ts-expect-error Type 8.6 is not issued through create.
+  const unaccepted: CreateInvoiceInput['invoice_type_code'] = '8.6';
   void unaccepted;
-  // @ts-expect-error The receipt purpose belongs to types that are not accepted.
-  const purpose: CreateInvoiceInput['receiving_note_purpose'] = 1;
-  void purpose;
   // @ts-expect-error The delivery detail has no branch fields yet.
   const branched: DeliveryDetail = { ...movement, from_branch: 1 };
   void branched;

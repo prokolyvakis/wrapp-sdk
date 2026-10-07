@@ -1,14 +1,7 @@
 import { LosslessNumber, parse } from 'lossless-json';
 import { describe, expect, it } from 'vitest';
-import { createSchemaFor, encodeJson } from '../../src/codecs.js';
 import { decimal } from '../../src/index.js';
 import type { CreateInvoiceInput } from '../../src/index.js';
-import {
-  invoiceTypeCatalogue,
-  preparedInvoiceTypeCodes,
-  preparedTypeProfiles,
-  supportedInvoiceTypeCodes,
-} from '../../src/invoice-contracts.js';
 import { invoice, json, login, observation, provider } from '../fixtures/provider.js';
 
 // Synthetic values in the request shape of the Wrapp reference v1.18.0. The reference gives a
@@ -111,13 +104,6 @@ const zero = {
   vat_total_amount: decimal('0'),
   total_amount: decimal('0.00'),
   payable_total_amount: decimal('0.0'),
-};
-const noteLine = {
-  vat_rate: 24,
-  vat_total: decimal('0'),
-  subtotal: decimal('0.00'),
-  classification_category: 'category3',
-  classification_type: '_',
 };
 
 describe('delivery note fields', () => {
@@ -373,104 +359,45 @@ describe('other correlated entities', () => {
   });
 });
 
-// The four types below are NOT accepted by create(): the reference states rules for them in
-// field notes and shows no request for any of them. Their stated rules are kept as prepared
-// profiles, exercised here through the same validation pipeline built for the prepared codes.
-// Passing these tests shows the notes are implemented as written; it is not evidence that the
-// provider accepts such a request, and it does not justify accepting a type.
-const prepared = createSchemaFor(preparedInvoiceTypeCodes);
-type PreparedCode = (typeof preparedInvoiceTypeCodes)[number];
-function note(type: PreparedCode, root: Patch = {}, lines?: readonly Patch[]): unknown {
+// Delivery notes (9.2, 9.3) and quantity receipt notes (10.1, 10.2). Each is sent in the one
+// shape the provider was observed to accept: all four totals at zero, zero-value category3
+// lines, a full counterpart; the delivery flag and detail on 9.x; a receipt purpose on 10.x.
+// The cases below pin each rule separately. Values are synthetic.
+const noteTypes = ['9.2', '9.3', '10.1', '10.2'] as const;
+type NoteType = (typeof noteTypes)[number];
+const zeroLine = {
+  unit_price: decimal('0'),
+  net_total_price: decimal('0'),
+  vat_rate: 24,
+  vat_total: decimal('0'),
+  subtotal: decimal('0.00'),
+  classification_category: 'category3',
+  classification_type: '_',
+};
+const zeroTotals = { net_total_amount: decimal('0'), ...zero };
+function note(type: NoteType, root: Patch = {}, lines?: readonly Patch[], counterpart: Patch = {}) {
   const receipt = type.startsWith('10.')
     ? { receiving_note_purpose: 1, correlated_invoices: ['400000000000001'] }
     : { is_delivery_note: true, delivery_detail: detail };
   return build(
-    { invoice_type_code: type, ...zero, ...receipt, ...root },
-    lines ?? [type === '9.3' ? noteLine : {}],
+    { invoice_type_code: type, ...zeroTotals, ...receipt, ...root },
+    lines ?? [zeroLine],
+    counterpart,
   );
 }
-function withCounterpart(input: unknown, patch: Patch): unknown {
-  if (!isRecord(input) || !isRecord(input.counterpart)) throw new Error('Not a create input');
-  return { ...input, counterpart: strip({ ...input.counterpart, ...patch }) };
-}
-// The literal body the pipeline would serialize, or undefined when it refuses the input.
-function profiled(input: unknown): Sent | undefined {
-  const result = prepared.safeParse(input);
-  if (!result.success) return undefined;
-  const create = wire(parse(encodeJson(result.data)));
-  if (!isRecord(create) || !Array.isArray(create.invoice_lines) || !isRecord(create.counterpart))
-    throw new Error('The serialized value is not a create request');
-  return { create, counterpart: create.counterpart, lines: create.invoice_lines.filter(isRecord) };
-}
-const passes = (input: unknown) => profiled(input) !== undefined;
 
-describe('prepared profiles are not accepted by create', () => {
-  it('should prepare exactly the four codes and keep each of them unaccepted', () => {
-    expect([...preparedInvoiceTypeCodes]).toEqual(['9.2', '9.3', '10.1', '10.2']);
-    expect(Object.keys(preparedTypeProfiles)).toEqual([...preparedInvoiceTypeCodes]);
-    const supported: readonly string[] = supportedInvoiceTypeCodes;
-    for (const code of preparedInvoiceTypeCodes) {
-      expect(supported).not.toContain(code);
-      expect(invoiceTypeCatalogue.find((entry) => entry.code === code)).toEqual({
-        code,
-        supported: false,
-        reason: 'field-notes-only',
-      });
-    }
-  });
-  it.each(preparedInvoiceTypeCodes)(
-    'should refuse a well-formed type %s request before authentication',
-    async (type) => {
-      // The prepared pipeline accepts this very input; the public operation does not.
-      expect(passes(note(type))).toBe(true);
-      await refused(note(type) as CreateInvoiceInput);
-    },
-  );
-  it.each(supportedInvoiceTypeCodes)(
-    'should refuse a receiving note purpose or its title on invoice type %s',
-    async (type) => {
-      await refused(build({ invoice_type_code: type, receiving_note_purpose: 1 }));
-      await refused(
-        build({ invoice_type_code: type, other_receiving_note_purpose_title: 'Synthetic' }),
-      );
-    },
-  );
-  it.each(supportedInvoiceTypeCodes)(
-    'should leave invoice type %s without zero-total or category rules, with an optional delivery note',
-    async (type) => {
-      const plain = await accepted(build({ invoice_type_code: type }));
-      expect(plain.create.total_amount).toBe('#12.40');
-      const asNote = await accepted(delivery({}, { invoice_type_code: type }));
-      expect(asNote.create).toMatchObject({ is_delivery_note: true, total_amount: '#12.40' });
-    },
-  );
-});
-
-describe.each(preparedInvoiceTypeCodes)('prepared type %s totals', (type) => {
-  it('should pass with its three totals at zero, in any spelling of zero', () => {
-    expect(profiled(note(type))?.create).toMatchObject({
+describe.each(noteTypes)('invoice type %s shape', (type) => {
+  it('should send the type with all four totals at zero and a zero-value category3 line', async () => {
+    const sent = await accepted(note(type));
+    expect(sent.create).toMatchObject({
       invoice_type_code: type,
+      net_total_amount: '#0',
       vat_total_amount: '#0',
       total_amount: '#0.00',
       payable_total_amount: '#0.0',
-      net_total_amount: '#10.00',
     });
-  });
-  it.each(['vat_total_amount', 'total_amount', 'payable_total_amount'])(
-    'should fail when %s is not exactly zero',
-    (key) => {
-      expect(passes(note(type, { [key]: decimal('0.01') }))).toBe(false);
-      expect(passes(note(type, { [key]: decimal('10.00') }))).toBe(false);
-    },
-  );
-});
-
-describe('prepared type 9.3', () => {
-  it('should serialize the documented line representation exactly', () => {
-    const sent = profiled(note('9.3'));
-    expect(sent?.create.is_delivery_note).toBe(true);
-    expect(sent?.create.delivery_detail).toEqual(detail);
-    expect(sent?.lines[0]).toMatchObject({
+    expect(sent.lines[0]).toMatchObject({
+      net_total_price: '#0',
       vat_rate: '#24',
       vat_total: '#0',
       subtotal: '#0.00',
@@ -478,7 +405,15 @@ describe('prepared type 9.3', () => {
       classification_type: '_',
     });
   });
+  it.each(['net_total_amount', 'vat_total_amount', 'total_amount', 'payable_total_amount'])(
+    'should refuse a %s that is not exactly zero',
+    async (key) => {
+      await refused(note(type, { [key]: decimal('0.01') }));
+      await refused(note(type, { [key]: decimal('10.00') }));
+    },
+  );
   it.each([
+    ['a net price above zero', { net_total_price: decimal('10.00') }],
     ['a VAT rate other than 24', { vat_rate: 13 }],
     ['a zero VAT rate with an exemption', { vat_rate: 0, vat_exemption_code: 1 }],
     ['a line VAT total above zero', { vat_total: decimal('0.01') }],
@@ -493,133 +428,143 @@ describe('prepared type 9.3', () => {
       'a classifications array even of category3',
       { classifications: [{ category: 'category3', type: '_', amount: decimal('0') }] },
     ],
-  ])('should fail a line with %s', (_label, patch) => {
-    expect(passes(note('9.3', {}, [{ ...noteLine, ...patch }]))).toBe(false);
-    expect(passes(note('9.3', {}, [noteLine, { ...noteLine, ...patch }]))).toBe(false);
-  });
-  it('should fail without the delivery flag or without the delivery detail', () => {
-    expect(passes(note('9.3', { is_delivery_note: undefined, delivery_detail: undefined }))).toBe(
-      false,
-    );
-    expect(passes(note('9.3', { is_delivery_note: false, delivery_detail: undefined }))).toBe(
-      false,
-    );
-    expect(passes(note('9.3', { delivery_detail: undefined }))).toBe(false);
+  ])('should refuse a line with %s', async (_label, patch) => {
+    await refused(note(type, {}, [{ ...zeroLine, ...patch }]));
+    await refused(note(type, {}, [zeroLine, { ...zeroLine, ...patch }]));
   });
   it.each(['vat', 'country_code', 'city', 'street', 'number', 'postal_code'])(
-    'should keep the general counterpart rule: fail without %s',
-    (key) => {
-      expect(passes(withCounterpart(note('9.3'), { [key]: undefined }))).toBe(false);
+    'should require the full counterpart: refuse it without %s',
+    async (key) => {
+      await refused(note(type, {}, undefined, { [key]: undefined }));
     },
   );
 });
 
-describe('prepared type 9.2', () => {
-  const address = { vat: undefined, country_code: undefined };
-  it('should pass with a counterpart that has a name and an address and no tax id', () => {
-    expect(profiled(withCounterpart(note('9.2'), address))?.counterpart).toEqual({
-      name: 'Synthetic Company',
-      city: 'Athens',
-      street: 'Synthetic',
-      number: '1',
-      postal_code: '00000',
-    });
+describe.each(['9.2', '9.3'] as const)('delivery note type %s', (type) => {
+  it('should send the delivery flag and detail', async () => {
+    const sent = await accepted(note(type));
+    expect(sent.create.is_delivery_note).toBe(true);
+    expect(sent.create.delivery_detail).toEqual(detail);
   });
-  it.each(['name', 'city', 'street', 'number', 'postal_code'])(
-    'should fail a counterpart without %s',
-    (key) => {
-      expect(passes(withCounterpart(note('9.2'), { ...address, [key]: undefined }))).toBe(false);
-    },
-  );
-  it('should leave a supplied tax id as given: the reference says the provider transmits zeros', () => {
-    expect(profiled(note('9.2'))?.counterpart.vat).toBe('synthetic-vat');
+  it('should refuse the type without the delivery flag or without the delivery detail', async () => {
+    await refused(note(type, { is_delivery_note: undefined, delivery_detail: undefined }));
+    await refused(note(type, { is_delivery_note: false, delivery_detail: undefined }));
+    await refused(note(type, { delivery_detail: undefined }));
   });
-  it('should fail without the delivery flag or without the delivery detail', () => {
-    expect(passes(note('9.2', { is_delivery_note: undefined, delivery_detail: undefined }))).toBe(
-      false,
-    );
-    expect(passes(note('9.2', { delivery_detail: undefined }))).toBe(false);
-  });
-  it('should keep the ordinary line rules: no category3 representation is required', () => {
-    expect(profiled(note('9.2'))?.lines[0]).toMatchObject({
-      classification_category: 'category1_3',
-      vat_rate: '#24',
-    });
+  it('should refuse a receiving note purpose or its title', async () => {
+    await refused(note(type, { receiving_note_purpose: 1 }));
+    await refused(note(type, { other_receiving_note_purpose_title: 'Synthetic' }));
   });
 });
 
-describe.each(['10.1', '10.2'] as const)('prepared type %s receipt purpose', (type) => {
-  it('should fail without a receiving_note_purpose', () => {
-    expect(passes(note(type, { receiving_note_purpose: undefined }))).toBe(false);
+describe.each(['10.1', '10.2'] as const)('quantity receipt note type %s', (type) => {
+  it('should refuse the type without a receiving_note_purpose', async () => {
+    await refused(note(type, { receiving_note_purpose: undefined }));
   });
   it.each([1, 2, 3, 4, 6])(
-    'should serialize receiving_note_purpose %d as an integer',
-    (purpose) => {
-      expect(profiled(note(type, { receiving_note_purpose: purpose }))?.create).toMatchObject({
-        receiving_note_purpose: '#' + String(purpose),
+    'should send receiving_note_purpose %d as an integer',
+    async (purpose) => {
+      const sent = await accepted(note(type, { receiving_note_purpose: purpose }));
+      expect(sent.create.receiving_note_purpose).toBe('#' + String(purpose));
+    },
+  );
+  it.each([0, 8, 1.5, '1', null])('should refuse receiving_note_purpose %j', async (purpose) => {
+    await refused(note(type, { receiving_note_purpose: purpose }));
+  });
+  it('should require a title for purpose 7, of at most 150 characters', async () => {
+    await refused(note(type, { receiving_note_purpose: 7 }));
+    await refused(
+      note(type, { receiving_note_purpose: 7, other_receiving_note_purpose_title: '' }),
+    );
+    const longest = 'τ'.repeat(150);
+    const sent = await accepted(
+      note(type, { receiving_note_purpose: 7, other_receiving_note_purpose_title: longest }),
+    );
+    expect(sent.create.other_receiving_note_purpose_title).toBe(longest);
+    await refused(
+      note(type, { receiving_note_purpose: 7, other_receiving_note_purpose_title: longest + 'τ' }),
+    );
+  });
+  it('should refuse delivery fields: none was observed on a receipt note', async () => {
+    await refused(note(type, { is_delivery_note: true, delivery_detail: detail }));
+    await refused(note(type, { delivery_detail: detail }));
+  });
+});
+
+describe('quantity receipt note types differ', () => {
+  it('should accept purpose 5 on 10.1 only', async () => {
+    expect((await accepted(note('10.1', { receiving_note_purpose: 5 }))).create).toMatchObject({
+      receiving_note_purpose: '#5',
+    });
+    await refused(note('10.2', { receiving_note_purpose: 5 }));
+  });
+  it('should require the mark of the received delivery note on 10.1 only', async () => {
+    await refused(note('10.1', { correlated_invoices: undefined }));
+    await refused(note('10.1', { correlated_invoices: [] }));
+    const sent = await accepted(note('10.2', { correlated_invoices: undefined }));
+    expect(sent.create).not.toHaveProperty('correlated_invoices');
+    expect((await accepted(note('10.1'))).create.correlated_invoices).toEqual(['400000000000001']);
+  });
+});
+
+const ordinaryTypes = ['1.1', '2.1', '2.2', '2.3', '5.2', '11.1', '11.2', '11.4'] as const;
+describe('types without rules of their own', () => {
+  it.each(ordinaryTypes)(
+    'should send invoice type %s with ordinary amounts and lines',
+    async (type) => {
+      const sent = await accepted(build({ invoice_type_code: type }));
+      expect(sent.create).toMatchObject({ invoice_type_code: type, total_amount: '#12.40' });
+      expect(sent.lines[0]).toMatchObject({ classification_category: 'category1_3' });
+    },
+  );
+  it.each([...ordinaryTypes, '5.1'] as const)(
+    'should refuse a receiving note purpose or its title on invoice type %s',
+    async (type) => {
+      const marks = type === '5.1' ? { correlated_invoices: ['400000000000001'] } : {};
+      await refused(build({ invoice_type_code: type, ...marks, receiving_note_purpose: 1 }));
+      await refused(
+        build({
+          invoice_type_code: type,
+          ...marks,
+          other_receiving_note_purpose_title: 'Synthetic',
+        }),
+      );
+    },
+  );
+  it.each(['11.1', '11.2', '11.4'] as const)(
+    'should accept a name-only counterpart on retail type %s',
+    async (type) => {
+      const input = build({ invoice_type_code: type });
+      const patched: unknown = { ...input, counterpart: { name: 'Synthetic Person' } };
+      expect((await accepted(patched as CreateInvoiceInput)).counterpart).toEqual({
+        name: 'Synthetic Person',
       });
     },
   );
-  it.each([0, 8, 1.5, '1', null])('should fail receiving_note_purpose %j', (purpose) => {
-    expect(passes(note(type, { receiving_note_purpose: purpose }))).toBe(false);
-  });
-  it('should require a title for purpose 7, of at most 150 characters', () => {
-    expect(passes(note(type, { receiving_note_purpose: 7 }))).toBe(false);
-    expect(
-      passes(note(type, { receiving_note_purpose: 7, other_receiving_note_purpose_title: '' })),
-    ).toBe(false);
-    const longest = 'τ'.repeat(150);
-    expect(
-      profiled(
-        note(type, { receiving_note_purpose: 7, other_receiving_note_purpose_title: longest }),
-      )?.create.other_receiving_note_purpose_title,
-    ).toBe(longest);
-    expect(
-      passes(
-        note(type, {
-          receiving_note_purpose: 7,
-          other_receiving_note_purpose_title: longest + 'τ',
-        }),
-      ),
-    ).toBe(false);
-  });
-  it('should fail with delivery fields: the reference states none for a receipt note', () => {
-    expect(passes(note(type))).toBe(true);
-    expect(passes(note(type, { is_delivery_note: true, delivery_detail: detail }))).toBe(false);
-    expect(passes(note(type, { delivery_detail: detail }))).toBe(false);
-  });
-  it.each(['vat', 'country_code', 'city', 'street', 'number', 'postal_code'])(
-    'should keep the general counterpart rule: fail without %s',
-    (key) => {
-      expect(passes(withCounterpart(note(type), { [key]: undefined }))).toBe(false);
+  it.each(['1.1', '5.1', '5.2'] as const)(
+    'should require the full counterpart on type %s',
+    async (type) => {
+      const marks = type === '5.1' ? { correlated_invoices: ['400000000000001'] } : {};
+      await refused(build({ invoice_type_code: type, ...marks }, [{}], { vat: undefined }));
     },
   );
 });
 
-describe('prepared types 10.1 and 10.2 differ', () => {
-  it('should pass purpose 5 on 10.1 only', () => {
-    expect(profiled(note('10.1', { receiving_note_purpose: 5 }))?.create).toMatchObject({
-      receiving_note_purpose: '#5',
-    });
-    expect(passes(note('10.2', { receiving_note_purpose: 5 }))).toBe(false);
-  });
-  it('should require the mark of the received delivery note on 10.1 only', () => {
-    expect(passes(note('10.1', { correlated_invoices: undefined }))).toBe(false);
-    expect(passes(note('10.1', { correlated_invoices: [] }))).toBe(false);
-    expect(profiled(note('10.2', { correlated_invoices: undefined }))?.create).not.toHaveProperty(
-      'correlated_invoices',
+describe('credit invoice type 5.1', () => {
+  it('should send the mark of the credited invoice', async () => {
+    const sent = await accepted(
+      build({ invoice_type_code: '5.1', correlated_invoices: ['400000000000001'] }),
     );
-    expect(profiled(note('10.1'))?.create.correlated_invoices).toEqual(['400000000000001']);
+    expect(sent.create.correlated_invoices).toEqual(['400000000000001']);
   });
-});
-
-describe('receipt fields on prepared delivery types', () => {
-  it.each(['9.2', '9.3'] as const)(
-    'should fail a receiving note purpose or its title on type %s',
-    (type) => {
-      expect(passes(note(type))).toBe(true);
-      expect(passes(note(type, { receiving_note_purpose: 1 }))).toBe(false);
-      expect(passes(note(type, { other_receiving_note_purpose_title: 'Synthetic' }))).toBe(false);
-    },
-  );
+  it('should refuse the type without a correlated mark', async () => {
+    await refused(build({ invoice_type_code: '5.1' }));
+    await refused(build({ invoice_type_code: '5.1', correlated_invoices: [] }));
+  });
+  it('should leave the correlation optional on the uncorrelated credit types', async () => {
+    for (const type of ['5.2', '11.4'] as const)
+      expect((await accepted(build({ invoice_type_code: type }))).create).not.toHaveProperty(
+        'correlated_invoices',
+      );
+  });
 });

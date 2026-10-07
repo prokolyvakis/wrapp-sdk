@@ -71,14 +71,16 @@ fuel_invoice, and the fourteen B2G fields described below. The counterpart also 
 optional supply_account_no, and a line an optional fuel_code and cpv_code. All other fields
 reject pre-I/O.
 
-Invoice types 2.1/2.2/2.3/11.2 only; drafts, POS refunds and
+Thirteen invoice types (1.1, 2.1, 2.2, 2.3, 5.1, 5.2, 9.2, 9.3, 10.1, 10.2, 11.1, 11.2, 11.4);
+drafts, POS refunds and
 preloaded POS transactions (refund_invoice_id, aade_preloaded, third_party_collection), the
 invoice-level tax mode (taxes_totals), and the line fields the provider defines for invoice
 types this SDK does not issue yet (other_taxes_amount, accommodation_tax and
 other_taxes_percent_category for type 8.2, invoice_detail_type for type 1.5) are not
 supported. All 52 provider type codes and the status of each are listed in
 [invoice-capabilities.md](invoice-capabilities.md). Counterpart: name required; country_code, vat, city, street, number, postal_code
-also required for B2B service types 2.x; optional for retail 11.2. Email optional.
+also required for every type except the retail ones (11.1, 11.2, 11.4), where they are
+optional. Email optional.
 
 Each line: line_number, name, quantity, unit_price, net_total_price, vat_rate, vat_total and
 subtotal required, plus a classification (below); code, description, quantity_type,
@@ -172,12 +174,29 @@ Delivery notes:
   (text), country_code, branch_code (a nonnegative integer), name, street, number,
   postal_code and city, all required.
 
-Delivery-note and quantity-receipt invoice types (9.2, 9.3, 10.1, 10.2) are not accepted. The
-provider states rules for them in field notes and shows no request for any of them, so their
-whole profile is not known; [invoice-capabilities.md](invoice-capabilities.md) says what is
-and is not established. The fields receiving_note_purpose and
-other_receiving_note_purpose_title belong to 10.1 and 10.2 only and are refused. A delivery
-note is issued here on a supported type, with is_delivery_note: true.
+Invoice types with rules of their own. Each rule was observed to be enforced by the provider
+or the tax authority, or is the one shape in which the type was observed to be accepted:
+
+- 5.1 (correlated credit invoice) requires correlated_invoices to hold the mark of the
+  invoice it credits. 5.2 and 11.4 do not.
+- 9.2 and 9.3 (delivery notes) and 10.1 and 10.2 (quantity receipt notes) require
+  net_total_amount, vat_total_amount, total_amount and payable_total_amount to be zero ('0',
+  '0.0' and '0.00' are all zero), and every line to keep net_total_price 0, vat_rate 24,
+  vat_total 0, subtotal 0 and classification_category 'category3', without a classifications
+  array. The provider's reference names three of the totals; the tax authority also refuses
+  a nonzero net. These are exact-value rules: nothing is computed.
+- 9.2 and 9.3 require is_delivery_note: true, and so the delivery detail.
+- 10.1 and 10.2 require receiving_note_purpose, 1 to 7; 5 is accepted on 10.1 only, and 7
+  needs other_receiving_note_purpose_title of at most 150 characters. 10.1 also requires
+  correlated_invoices to hold the mark of the delivery note being received. Both fields are
+  refused on every other type, and the delivery flag is refused on 10.1 and 10.2.
+- All of them take the full counterpart. The provider's reference says 9.2 needs only a name
+  and an address; the provider refuses a 9.2 without the VAT number and country.
+
+What was observed about fields that depend on the type: the tax authority refuses the
+delivery-note fields and the fuel fields on a 2.1, and accepts both on a 1.1. The SDK does
+not refuse them by type; a request the authority refuses comes back as a rejected result,
+and was observed to use up a number in the series.
 
 These presence rules are the ones the provider's reference states. They only require a field
 to be there: the SDK never sums deductions, derives a total, or compares a total with its

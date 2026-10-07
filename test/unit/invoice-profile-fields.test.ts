@@ -3,7 +3,14 @@ import { encodeJson, profileLineFields, profileLineFieldTypes } from '../../src/
 import { decimal } from '../../src/index.js';
 import type { CreateInvoiceInput } from '../../src/index.js';
 import { invoiceTypeCatalogue, supportedInvoiceTypeCodes } from '../../src/invoice-contracts.js';
-import { invoice, json, login, observation, provider } from '../fixtures/provider.js';
+import {
+  invoice,
+  invoiceOfType,
+  json,
+  login,
+  observation,
+  provider,
+} from '../fixtures/provider.js';
 
 // The line fields the reference defines for invoice types 8.2 and 1.5. Neither type is issued
 // by create() yet, so these tests exercise the field codecs directly and then show that the
@@ -115,7 +122,19 @@ describe('profile-bound line fields stay closed', () => {
       Object.entries(valid).map(([key, value]) => [code, key, value] as const),
     ),
   )('should refuse invoice type %s carrying %s before authentication', async (code, key, value) => {
-    await refusedByCreate({ [key]: value }, { invoice_type_code: code });
+    const { client, calls } = provider(({ url }) =>
+      url.pathname.endsWith('/login') ? login() : json(observation()),
+    );
+    // The same invoice is accepted without the field, so the field is what is refused.
+    const base = invoiceOfType(code);
+    expect((await client.invoices.create(base)).kind).toBe('observed');
+    const [first] = base.invoice_lines;
+    const withField: unknown = { ...base, invoice_lines: [{ ...first, [key]: value }] };
+    await expect(client.invoices.create(withField as CreateInvoiceInput)).rejects.toMatchObject({
+      code: 'INVALID_INPUT',
+      effect: 'not-sent',
+    });
+    expect(calls).toHaveLength(2);
   });
   it.each(['8.2', '1.5'])(
     'should still refuse invoice type %s itself: a prepared field does not open a profile',

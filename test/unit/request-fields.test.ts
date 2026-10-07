@@ -613,7 +613,7 @@ describe.each(['2.1', '2.2', '2.3', '11.2'] as const)('invoice type %s profile',
   });
 });
 describe('unsupported invoice types', () => {
-  it.each(['1.1', '2.4', '8.6', '9.3', '11.1', '', 2.1, null])(
+  it.each(['1.2', '2.4', '8.2', '8.6', '11.3', '', 2.1, null])(
     'should refuse invoice type %j before authentication',
     async (type) => {
       await refused(place('create', 'invoice_type_code', type));

@@ -161,8 +161,25 @@ export interface CreateInvoiceInput {
    */
   readonly external_id: string;
   readonly billing_book_id: string;
-  /** Supported service-invoice subset; other document types are rejected pre-I/O. */
-  readonly invoice_type_code: '2.1' | '2.2' | '2.3' | '11.2';
+  /**
+   * The supported types; any other code is rejected pre-I/O. 5.1 needs the mark of the
+   * invoice it credits in `correlated_invoices`. 9.2 and 9.3 are delivery notes and 10.1 and
+   * 10.2 quantity receipt notes, each sent in one fixed shape; see the API reference.
+   */
+  readonly invoice_type_code:
+    | '1.1'
+    | '2.1'
+    | '2.2'
+    | '2.3'
+    | '5.1'
+    | '5.2'
+    | '9.2'
+    | '9.3'
+    | '10.1'
+    | '10.2'
+    | '11.1'
+    | '11.2'
+    | '11.4';
   readonly payment_method_type: number;
   readonly counterpart: Counterpart;
   readonly net_total_amount: Decimal;
@@ -256,6 +273,13 @@ export interface CreateInvoiceInput {
   readonly is_delivery_note?: boolean;
   readonly delivery_detail?: DeliveryDetail;
   readonly other_correlated_entities?: readonly OtherCorrelatedEntity[];
+  /**
+   * One of 1 to 7. Required on types 10.1 and 10.2 and refused on every other type. 5 is
+   * accepted on 10.1 only; 7 needs `other_receiving_note_purpose_title`.
+   */
+  readonly receiving_note_purpose?: number;
+  /** At most 150 characters. */
+  readonly other_receiving_note_purpose_title?: string;
 }
 /**
  * The movement of a delivery note. The provider's two branch fields (`from_branch`,
