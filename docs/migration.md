@@ -187,11 +187,13 @@ four invoice types:
 - on the invoice: `email_subject`, `email_body`, `num`, `self_pricing`,
   `special_invoice_category`, `other_taxes_amount`, `withholding_total_amount`,
   `total_stamp_duty_amount`, `stamp_duty_amount`, `deductions_total_amount`, `fees_amount`,
-  `pos_device_id`, `installments`, `tip_amount`, `fuel_invoice`;
+  `pos_device_id`, `installments`, `tip_amount`, `fuel_invoice`, `b2g`, the five
+  `delivery_address_*` fields and the eight other `b2g_*` fields;
 - on the counterpart: `supply_account_no`;
 - on a line: `classifications`, `withhold_tax_rate`, `withhold_tax_code`, `withholding_total`,
   `stamp_duty_tax_code`, `stamp_duty_amount`, `deductions`, `deductions_amount`,
-  `expenses_vat_classification`, `expense`, `rec_type`, `fees_category`, `fuel_code`.
+  `expenses_vat_classification`, `expense`, `rec_type`, `fees_category`, `fuel_code`,
+  `cpv_code`.
 
 A request that was valid before is still valid and is sent unchanged. See "General invoice
 and line fields" in the [API reference](api-reference.md) for the presence rules; the SDK

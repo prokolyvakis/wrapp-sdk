@@ -305,6 +305,21 @@ export interface CreateDigitalTransportInput extends TransportLegInput {
 
 // @public
 export interface CreateInvoiceInput {
+    readonly b2g?: boolean;
+    // (undocumented)
+    readonly b2g_bt_70?: string;
+    // (undocumented)
+    readonly b2g_budget_identifier?: string;
+    readonly b2g_budget_type?: number;
+    // (undocumented)
+    readonly b2g_buyer_reference?: string;
+    // (undocumented)
+    readonly b2g_contract_identifier?: string;
+    // (undocumented)
+    readonly b2g_contracting_authority_id?: string;
+    readonly b2g_due_date?: CalendarDate;
+    // (undocumented)
+    readonly b2g_payment_details?: string;
     // (undocumented)
     readonly billing_book_id: string;
     // (undocumented)
@@ -317,6 +332,15 @@ export interface CreateInvoiceInput {
     // (undocumented)
     readonly customer_emails?: readonly string[];
     readonly deductions_total_amount?: Decimal;
+    readonly delivery_address_city?: string;
+    // (undocumented)
+    readonly delivery_address_party_name?: string;
+    // (undocumented)
+    readonly delivery_address_postal_code?: string;
+    // (undocumented)
+    readonly delivery_address_street?: string;
+    // (undocumented)
+    readonly delivery_address_street_number?: string;
     // (undocumented)
     readonly email_body?: string;
     // (undocumented)
@@ -578,6 +602,7 @@ export interface InvoiceLine {
     readonly classifications?: readonly LineClassification[];
     // (undocumented)
     readonly code?: string;
+    readonly cpv_code?: string;
     // (undocumented)
     readonly deductions?: readonly LineDeduction[];
     readonly deductions_amount?: Decimal;

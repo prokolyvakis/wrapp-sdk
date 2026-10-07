@@ -128,6 +128,8 @@ export interface InvoiceLine {
    * `net_total_price` may not exceed the sum of the other lines' `net_total_price`.
    */
   readonly fuel_code?: number;
+  /** Required on every line when the invoice sets `b2g: true`. */
+  readonly cpv_code?: string;
 }
 /** One entry of a line's `classifications`. */
 export interface LineClassification {
@@ -222,6 +224,30 @@ export interface CreateInvoiceInput {
   readonly tip_amount?: Decimal;
   /** Marks a fuel invoice. Required as `true` for any line to carry a `fuel_code`. */
   readonly fuel_invoice?: boolean;
+  /**
+   * Marks a B2G (public sector) invoice. When true, the eleven fields from
+   * `delivery_address_city` to `b2g_due_date` are required, and every line needs a
+   * `cpv_code`. The SDK checks that they are present and well-formed; it does not look up or
+   * verify an authority, a contract or a budget. Without the flag the fields are optional and
+   * are sent as given.
+   */
+  readonly b2g?: boolean;
+  /** The B2G invoice's own delivery address; unrelated to a delivery note. */
+  readonly delivery_address_city?: string;
+  readonly delivery_address_street?: string;
+  readonly delivery_address_street_number?: string;
+  readonly delivery_address_postal_code?: string;
+  readonly delivery_address_party_name?: string;
+  readonly b2g_contracting_authority_id?: string;
+  readonly b2g_contract_identifier?: string;
+  /** One of 1, 2, 3. */
+  readonly b2g_budget_type?: number;
+  readonly b2g_budget_identifier?: string;
+  readonly b2g_payment_details?: string;
+  /** A real calendar date, YYYY-MM-DD. */
+  readonly b2g_due_date?: CalendarDate;
+  readonly b2g_buyer_reference?: string;
+  readonly b2g_bt_70?: string;
 }
 /** An issued invoice as observed via status lookup, creation or a verified webhook. */
 export interface InvoiceObservation {

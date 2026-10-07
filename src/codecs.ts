@@ -176,7 +176,24 @@ const lineFields = {
     10, 11, 12, 13, 14, 15, 20, 21, 30, 31, 32, 33, 34, 35, 36, 37, 38, 40, 41, 42, 43, 44, 50, 60,
     61, 70, 71, 72, 999,
   ]).optional(),
+  cpv_code: nonempty.optional(),
 };
+// The invoice fields the reference marks "required for B2G". These address fields belong to
+// the B2G invoice itself and are unrelated to the delivery-note object.
+const b2gRequiredFields = {
+  delivery_address_city: nonempty.optional(),
+  delivery_address_street: nonempty.optional(),
+  delivery_address_street_number: nonempty.optional(),
+  delivery_address_postal_code: nonempty.optional(),
+  delivery_address_party_name: nonempty.optional(),
+  b2g_contracting_authority_id: nonempty.optional(),
+  b2g_contract_identifier: nonempty.optional(),
+  b2g_budget_type: member([1, 2, 3]).optional(),
+  b2g_budget_identifier: nonempty.optional(),
+  b2g_payment_details: nonempty.optional(),
+  b2g_due_date: isoDate.optional(),
+};
+const b2gRequiredKeys = Object.keys(b2gRequiredFields) as (keyof typeof b2gRequiredFields)[];
 // Presence rules the reference states for one line. They require a field to be there; they
 // never compute or compare an amount.
 const lineSchema = z
@@ -264,6 +281,10 @@ export const createSchema = z
     tip_amount: inputAmount.optional(),
     third_party_collection: z.boolean().optional(),
     fuel_invoice: z.boolean().optional(),
+    b2g: z.boolean().optional(),
+    ...b2gRequiredFields,
+    b2g_buyer_reference: text.optional(),
+    b2g_bt_70: text.optional(),
   })
   .refine((v) => (v.currency === undefined) === (v.exchange_rate === undefined))
   // Per-profile refinement, kept apart from the field validation above: a business profile
@@ -304,7 +325,14 @@ export const createSchema = z
   )
   // The provider refuses a fuel code on an invoice not sent as a fuel invoice.
   .refine((v) => v.fuel_invoice === true || v.invoice_lines.every((l) => l.fuel_code === undefined))
-  .refine((v) => fuelChargeWithinOtherLines(v.invoice_lines));
+  .refine((v) => fuelChargeWithinOtherLines(v.invoice_lines))
+  // Presence only: no authority, contract or budget is looked up or checked for meaning.
+  .refine(
+    (v) =>
+      v.b2g !== true ||
+      (b2gRequiredKeys.every((key) => v[key] !== undefined) &&
+        v.invoice_lines.every((l) => l.cpv_code !== undefined)),
+  );
 
 export const observationSchema = z.object({
   id: identifier,

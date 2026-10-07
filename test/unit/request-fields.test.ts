@@ -593,7 +593,6 @@ describe.each(['2.1', '2.2', '2.3', '11.2'] as const)('invoice type %s profile',
     for (const [key, value] of [
       ['draft', true],
       ['is_delivery_note', true],
-      ['b2g', true],
       ['taxes_totals', []],
       ['refund_invoice_id', 'invoice-one'],
       ['aade_preloaded', true],

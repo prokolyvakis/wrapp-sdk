@@ -67,10 +67,11 @@ customer_emails, email_locale, email_subject, email_body, generate_pdf, mark_as_
 self_pricing, special_invoice_category, and the invoice-level totals other_taxes_amount,
 withholding_total_amount, total_stamp_duty_amount, stamp_duty_amount, deductions_total_amount
 and fees_amount, the POS fields pos_device_id, installments and tip_amount, and
-fuel_invoice. The counterpart also takes an optional supply_account_no, and a line an
-optional fuel_code. All other fields reject pre-I/O.
+fuel_invoice, and the fourteen B2G fields described below. The counterpart also takes an
+optional supply_account_no, and a line an optional fuel_code and cpv_code. All other fields
+reject pre-I/O.
 
-Invoice types 2.1/2.2/2.3/11.2 only; draft/B2G/delivery features, POS refunds and
+Invoice types 2.1/2.2/2.3/11.2 only; draft/delivery features, POS refunds and
 preloaded POS transactions (refund_invoice_id, aade_preloaded, third_party_collection) and the
 invoice-level tax mode (taxes_totals) are not supported. All 52 provider type codes and the status of each are listed in
 [invoice-capabilities.md](invoice-capabilities.md). Counterpart: name required; country_code, vat, city, street, number, postal_code
@@ -130,6 +131,22 @@ Fuel fields on an invoice:
 - counterpart.supply_account_no is optional. The provider documents that it uses it only on
   a fuel invoice and ignores it, without storing it, on any other; the SDK sends it as given
   in both cases and does not claim it is returned by a read.
+
+B2G (public sector) fields on an invoice:
+
+- b2g: true marks a B2G invoice. It then requires delivery_address_city,
+  delivery_address_street, delivery_address_street_number, delivery_address_postal_code,
+  delivery_address_party_name, b2g_contracting_authority_id, b2g_contract_identifier,
+  b2g_budget_type, b2g_budget_identifier, b2g_payment_details and b2g_due_date, and a
+  cpv_code on every line. b2g_buyer_reference and b2g_bt_70 stay optional.
+- b2g_budget_type is 1, 2 or 3. b2g_due_date is a real calendar date written YYYY-MM-DD
+  (the calendarDate() brand). The other fields are nonempty text.
+- The SDK checks presence and form only. It does not look up or verify a contracting
+  authority, a contract or a budget, and it applies no procurement rule.
+- Without b2g: true none of these fields is required. If they are supplied anyway they are
+  still validated and are sent as given, as the provider's own request example does.
+- The delivery_address_* fields are the B2G invoice's own address. They are unrelated to a
+  delivery note, whose delivery_detail object is not available.
 
 These presence rules are the ones the provider's reference states. They only require a field
 to be there: the SDK never sums deductions, derives a total, or compares a total with its

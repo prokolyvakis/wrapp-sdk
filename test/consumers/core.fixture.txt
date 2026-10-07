@@ -203,10 +203,17 @@ const fuelLine: Pick<InvoiceLine, 'fuel_code'> = { fuel_code: 20 };
 const fuelRoot: Pick<CreateInvoiceInput, 'fuel_invoice'> & { counterpart: Pick<CreateInvoiceInput['counterpart'], 'supply_account_no'> } =
   { fuel_invoice: true, counterpart: { supply_account_no: '12345678' } };
 assert.equal(String(fuelLine.fuel_code) + String(fuelRoot.fuel_invoice), '20true');
+const publicSector: Pick<CreateInvoiceInput, 'b2g' | 'b2g_budget_type' | 'b2g_due_date' | 'delivery_address_city'> =
+  { b2g: true, b2g_budget_type: 1, b2g_due_date: sdk.calendarDate('2026-01-31'), delivery_address_city: 'City' };
+const cpvLine: Pick<InvoiceLine, 'cpv_code'> = { cpv_code: '72000000-5' };
+assert.equal(String(publicSector.b2g_due_date) + String(cpvLine.cpv_code), '2026-01-3172000000-5');
 const softpos: CreatePosDeviceInput = { pos_type: 'worldline_softpos', terminal_id: '16000002', merchant_id: 'merchant@example.invalid' };
 const pos: Pick<CreateInvoiceInput, 'pos_device_id' | 'installments' | 'tip_amount'> = { pos_device_id: 'device', installments: false, tip_amount: sdk.decimal('2.00') };
 assert.equal(softpos.pos_type + String(pos.installments), 'worldline_softposfalse');
 if (false) {
+  // @ts-expect-error A due date is a validated calendar date, not any string.
+  const dueDate: CreateInvoiceInput['b2g_due_date'] = '2026-01-31';
+  void dueDate;
   // @ts-expect-error A delivery outcome is FULL, PARTIAL or NONE, exactly as written.
   void client.digitalTransports.confirmDelivery('transport', { outcome: 'full' });
   // @ts-expect-error A number node carries exact text, not a JavaScript number.
