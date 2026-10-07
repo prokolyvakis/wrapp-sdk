@@ -390,12 +390,15 @@ export interface PendingInvoiceOutcome {
   readonly invoice?: InvoiceObservation;
 }
 /**
- * Result of a status lookup: an observed invoice or a pending one. Switch on kind before
- * reading invoice. A provider rejection, including not-found, is a PROVIDER_REJECTED error.
+ * Result of a status lookup: an observed invoice, a pending one, or a draft. Switch on kind
+ * before reading invoice. The provider answers for a draft with its status alone: 'draft'
+ * carries no record, and its identity is always 'unavailable' because nothing in the answer
+ * names the invoice. A provider rejection, including not-found, is a PROVIDER_REJECTED error.
  */
 export type InvoiceStatusOutcome =
   | Readonly<{ kind: 'observed'; invoice: InvoiceObservation; identity: IdentityEvidence }>
-  | PendingInvoiceOutcome;
+  | PendingInvoiceOutcome
+  | Readonly<{ kind: 'draft'; identity: 'unavailable' }>;
 /**
  * Closed result union for invoice creation. No outcome establishes compliance, reference
  * freedom, or equality to an earlier request: rejections carry referenceState 'unknown'
@@ -559,6 +562,54 @@ export interface InvoicePage {
   readonly total_pages: number;
   readonly current_page: number;
 }
+/**
+ * A draft as the draft listing returns it: the full-detail projection of an invoice that has
+ * not been issued. It has no document code, registration mark or number. `issued_at` is the
+ * date the provider holds for the draft, as it sent it; it is not an issue time.
+ */
+export type DraftInvoiceDetails = Omit<InvoiceDetails, 'code'>;
+/** One validated page of drafts. No snapshot guarantee exists under concurrent writes. */
+export interface DraftInvoicePage {
+  readonly invoices: readonly DraftInvoiceDetails[];
+  readonly total_count: number;
+  readonly total_pages: number;
+  readonly current_page: number;
+}
+/**
+ * The request of a draft: that of an ordinary create without `generate_pdf` and
+ * `mark_as_paid`, which are not offered for a draft. A PDF is requested when the draft is
+ * issued.
+ */
+export type CreateDraftInput = Omit<CreateInvoiceInput, 'generate_pdf' | 'mark_as_paid'>;
+/**
+ * Result of saving a draft. 'saved' carries the provider's id of the draft and nothing else:
+ * a draft has no number, mark or issue date, and it is not a pending transmission. A
+ * rejection does not show whether the external reference is free.
+ */
+export type DraftCreateOutcome =
+  | Readonly<{ kind: 'saved'; invoiceId: string }>
+  | Readonly<{ kind: 'rejected'; errorCount: number; rejectionSource: RejectionSource }>;
+/** Options the provider takes when a draft is issued; every one optional. */
+export interface IssueDraftInput {
+  /** The POS device to charge, for an invoice paid at a terminal. */
+  readonly pos_device_id?: string;
+  readonly customer_emails?: readonly string[];
+  readonly email_locale?: 'el' | 'en';
+  /** Sent as given; the provider's placeholders and line breaks are not touched. */
+  readonly email_subject?: string;
+  readonly email_body?: string;
+  readonly generate_pdf?: boolean;
+}
+/**
+ * Result of issuing a draft. 'observed' carries the issued invoice the provider returned for
+ * the requested id; read its mark and transmission_failure before concluding anything.
+ * 'pending' is the provider's pending answer, as on create. A rejection says the provider
+ * refused, and leaves the draft's state to be read back.
+ */
+export type DraftIssueOutcome =
+  | Readonly<{ kind: 'observed'; invoice: InvoiceObservation; identity: IdentityEvidence }>
+  | PendingInvoiceOutcome
+  | Readonly<{ kind: 'rejected'; errorCount: number; rejectionSource: RejectionSource }>;
 /** Listing filters. Dates are ISO calendar dates; start must not exceed end. */
 export interface ListInvoicesInput {
   readonly start_date?: CalendarDate;

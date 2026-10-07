@@ -318,6 +318,9 @@ export interface CreateDigitalTransportInput extends TransportLegInput {
 }
 
 // @public
+export type CreateDraftInput = Omit<CreateInvoiceInput, 'generate_pdf' | 'mark_as_paid'>;
+
+// @public
 export interface CreateInvoiceInput {
     readonly b2g?: boolean;
     // (undocumented)
@@ -551,6 +554,42 @@ export interface DigitalTransportResource {
     }>, options?: RequestOptions): Promise<DigitalTransportOutcome>;
     transfer(transportId: string, leg: TransportLegInput, options?: RequestOptions): Promise<DigitalTransportOutcome>;
 }
+
+// @public
+export type DraftCreateOutcome = Readonly<{
+    kind: 'saved';
+    invoiceId: string;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
+export type DraftInvoiceDetails = Omit<InvoiceDetails, 'code'>;
+
+// @public
+export interface DraftInvoicePage {
+    // (undocumented)
+    readonly current_page: number;
+    // (undocumented)
+    readonly invoices: readonly DraftInvoiceDetails[];
+    // (undocumented)
+    readonly total_count: number;
+    // (undocumented)
+    readonly total_pages: number;
+}
+
+// @public
+export type DraftIssueOutcome = Readonly<{
+    kind: 'observed';
+    invoice: InvoiceObservation;
+    identity: IdentityEvidence;
+}> | PendingInvoiceOutcome | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
 
 // @public
 export type EffectCertainty = 'not-sent' | 'unknown';
@@ -837,6 +876,16 @@ export interface InvoiceResource {
     cancelDeliveryNote(invoiceId: string, options?: RequestOptions): Promise<CancellationOutcome>;
     create(invoice: CreateInvoiceInput, options?: RequestOptions): Promise<CreateOutcome>;
     readonly drafts: Readonly<{
+        create(invoice: CreateDraftInput, options?: RequestOptions): Promise<DraftCreateOutcome>;
+        issue(invoiceId: string, input?: IssueDraftInput, options?: RequestOptions): Promise<DraftIssueOutcome>;
+        list(filters?: Readonly<{
+            page?: number;
+        }>, options?: RequestOptions): Promise<DraftInvoicePage>;
+        iterate(filters: Readonly<{
+            page?: number;
+        }>, options: RequestOptions & {
+            readonly maxPages: number;
+        }): AsyncIterable<DraftInvoiceDetails>;
         delete(invoiceId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
     }>;
     get(reference: InvoiceReference, options?: RequestOptions): Promise<Readonly<{
@@ -870,7 +919,24 @@ export type InvoiceStatusOutcome = Readonly<{
     kind: 'observed';
     invoice: InvoiceObservation;
     identity: IdentityEvidence;
-}> | PendingInvoiceOutcome;
+}> | PendingInvoiceOutcome | Readonly<{
+    kind: 'draft';
+    identity: 'unavailable';
+}>;
+
+// @public
+export interface IssueDraftInput {
+    // (undocumented)
+    readonly customer_emails?: readonly string[];
+    // (undocumented)
+    readonly email_body?: string;
+    // (undocumented)
+    readonly email_locale?: 'el' | 'en';
+    readonly email_subject?: string;
+    // (undocumented)
+    readonly generate_pdf?: boolean;
+    readonly pos_device_id?: string;
+}
 
 // @public
 export interface LineClassification {

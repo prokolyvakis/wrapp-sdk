@@ -445,9 +445,11 @@ describe('invoices.setExternalId reference handling', () => {
 });
 
 describe('invoice management resource shape', () => {
-  it('should expose draft deletion only, on a frozen drafts namespace', () => {
+  it('should expose the five draft operations on a frozen drafts namespace', () => {
     const { client } = provider(() => login(token));
-    expect(Object.keys(client.invoices.drafts)).toEqual(['delete']);
+    expect(Object.keys(client.invoices.drafts).sort()).toEqual(
+      ['create', 'delete', 'issue', 'iterate', 'list'].sort(),
+    );
     expect(Object.isFrozen(client.invoices.drafts)).toBe(true);
     expect(Object.isFrozen(client.invoices)).toBe(true);
   });

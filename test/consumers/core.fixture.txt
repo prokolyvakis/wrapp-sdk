@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import * as sdk from '@prokolyvakis/wrapp-sdk';
-import type { CreateInvoiceInput, CreateOutcome, CreatePosDeviceInput, DeliveryDetail, InvoiceDetails, InvoiceLine, InvoiceStatusOutcome, LineClassification, LineDeduction, OtherCorrelatedEntity, ProviderJson, VerifiedWebhook } from '@prokolyvakis/wrapp-sdk';
+import type { CreateDraftInput, CreateInvoiceInput, CreateOutcome, CreatePosDeviceInput, DeliveryDetail, InvoiceDetails, InvoiceLine, InvoiceStatusOutcome, LineClassification, LineDeduction, OtherCorrelatedEntity, ProviderJson, VerifiedWebhook } from '@prokolyvakis/wrapp-sdk';
 
 assert.deepEqual(Object.keys(sdk).sort(), ['WrappClient', 'WrappError', 'calendarDate', 'decimal', 'getProviderDiagnostics', 'verifyWebhook'].sort());
 assert.equal(sdk.decimal('9007199254740993.12'), '9007199254740993.12');
@@ -11,6 +11,13 @@ const written: Record<string, unknown> = {
   'POST /api/v1/billing_books': { id: 'new-book', name: 'Book', series: 'S', invoice_type_code: '2.1' },
   'PUT /api/v1/billing_books/new-book': { id: 'new-book', name: 'Book', series: 'S', invoice_type_code: '2.1', number: 7, branches: [] },
   'GET /api/v1/invoices/invoice/generate_pdf': { download_url: 'https://example.invalid/pdf' },
+  'POST /api/v1/invoices': { status: 'successfully saved as draft', invoice_id: 'draft' },
+  'GET /api/v1/invoices/draft-reference': { status: 'draft' },
+  'GET /api/v1/invoices/find_all_invoices': { invoices: [{ id: 'draft', external_id: 'draft-reference', invoice_type_code: '2.1', billing_book_id: 'book', issued_at: '2026-09-21 10:00:00 +0300', code: '', my_data_mark: '', my_data_uid: '', currency: 'EUR',
+    net_total_amount: 10, vat_total_amount: 2.4, total_amount: 12.4, payable_total_amount: 12.4, counterpart: { name: 'Company' },
+    invoice_lines: [{ line_number: 1, name: 'Service', quantity: 1, unit_price: 10, net_total_price: 10, vat_rate: 24, vat_total: 2.4, subtotal: 12.4, classification_category: 'category1_3', classification_type: 'E3_561_001' }] }], total_count: 1, total_pages: 1, current_page: 1 },
+  'POST /api/v1/invoices/draft/issue_draft': { id: 'draft', external_id: 'draft-reference', my_data_mark: '400000000000001', my_data_uid: 'uid', my_data_qr_url: 'https://example.invalid/qr', series: 'S', num: 5, issued_at: '21-09-2026',
+    cancelled_by_mark: null, transmission_failure: null, wrapp_invoice_url: 'https://example.invalid/el', wrapp_invoice_url_en: 'https://example.invalid/en', issued_at_datetime: '2026-09-21T10:00:00.000+03:00' },
   'GET /api/v1/catering_tables/transfer': { id: 'other', status: 'open', name: 'table2', total: 4.5, invoices: ['note'], error_message: null },
   'POST /api/v1/digital_clienteles/entry/correlate_by_mark': { notice: 'Correlated' },
   'POST /api/v1/digital_clienteles/entry/correlate_by_fim': { errors: 'Refused' },
@@ -129,6 +136,23 @@ const moved = await client.digitalTransports.transfer('transport', leg);
 assert.equal(moved.kind === 'observed' ? moved.transport.status : moved.kind, 'IN_TRANSIT');
 const deleted = await client.invoices.drafts.delete('invoice');
 assert.equal(deleted.kind === 'rejected' ? deleted.errorCount : 0, 1);
+const draftInput: CreateDraftInput = { external_id: 'draft-reference', billing_book_id: 'book', invoice_type_code: '2.1', payment_method_type: 1,
+  counterpart: { name: 'Company', country_code: 'GR', vat: 'synthetic-vat', city: 'City', street: 'Street', number: '1', postal_code: '00000' },
+  net_total_amount: sdk.decimal('10.00'), vat_total_amount: sdk.decimal('2.40'), total_amount: sdk.decimal('12.40'), payable_total_amount: sdk.decimal('12.40'),
+  invoice_lines: [{ line_number: 1, name: 'Service', quantity: sdk.decimal('1'), unit_price: sdk.decimal('10'), net_total_price: sdk.decimal('10'), vat_rate: 24, vat_total: sdk.decimal('2.40'), subtotal: sdk.decimal('12.40'),
+    classification_category: 'category1_3', classification_type: 'E3_561_001' }] };
+const savedDraft = await client.invoices.drafts.create(draftInput);
+assert.equal(savedDraft.kind === 'saved' ? savedDraft.invoiceId : savedDraft.kind, 'draft');
+const draftStatus = await client.invoices.getStatus({ kind: 'externalId', value: 'draft-reference' });
+assert.equal(draftStatus.kind + draftStatus.identity, 'draftunavailable');
+const draftPage = await client.invoices.drafts.list({ page: 1 });
+const draftDate: string | null | undefined = draftPage.invoices[0]?.issued_at;
+assert.equal(String(draftDate) + String(draftPage.invoices[0] !== undefined && 'code' in draftPage.invoices[0]), '2026-09-21 10:00:00 +0300false');
+const draftIds: string[] = [];
+for await (const draft of client.invoices.drafts.iterate({}, { maxPages: 1 })) draftIds.push(draft.id);
+assert.deepEqual(draftIds, ['draft']);
+const issuedDraft = await client.invoices.drafts.issue('draft', { customer_emails: ['customer@example.invalid'], email_locale: 'en', generate_pdf: true });
+assert.equal(issuedDraft.kind === 'observed' ? issuedDraft.invoice.num + issuedDraft.identity : issuedDraft.kind, '5exact');
 const forbiddenPath = '@prokolyvakis/wrapp-sdk/dist/client.js';
 await assert.rejects(import(forbiddenPath), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
 
@@ -158,10 +182,12 @@ function status(outcome: InvoiceStatusOutcome): string {
   switch (outcome.kind) {
     case 'observed': return outcome.invoice.id + '/' + outcome.identity;
     case 'pending': return outcome.invoiceId + '/' + outcome.identity + '/' + (outcome.invoice?.my_data_uid ?? 'no-evidence');
+    case 'draft': return 'draft/' + outcome.identity;
     default: { const unreachable: never = outcome; return unreachable; }
   }
 }
 assert.equal(status({ kind: 'pending', invoiceId: 'i', referenceState: 'unknown', identity: 'unavailable' }), 'i/unavailable/no-evidence');
+assert.equal(status({ kind: 'draft', identity: 'unavailable' }), 'draft/unavailable');
 const refusing = new sdk.WrappClient({
   environment: 'staging',
   credentials: { apiKey: 'synthetic-consumer-key', tenant: { kind: 'userId', value: 'tenant' } },
@@ -242,6 +268,15 @@ if (false) {
   // @ts-expect-error Type 8.6 is not issued through create.
   const unaccepted: CreateInvoiceInput['invoice_type_code'] = '8.6';
   void unaccepted;
+  // @ts-expect-error A draft takes no generate_pdf: a PDF is asked for when it is issued.
+  const draftWithPdf: CreateDraftInput = { ...draftInput, generate_pdf: true };
+  void draftWithPdf;
+  // @ts-expect-error A draft row has no document code.
+  void draftPage.invoices[0]?.code;
+  // @ts-expect-error Issuing a draft takes no payment method.
+  void client.invoices.drafts.issue('draft', { payment_method_type: 1 });
+  // @ts-expect-error A draft status carries no invoice record.
+  void draftStatus.invoice;
   // @ts-expect-error A delivery branch is a branch code, a number, not a branch id.
   const byBranchId: DeliveryDetail = { ...movement, from_branch: 'branch' };
   void byBranchId;

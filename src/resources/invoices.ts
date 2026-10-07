@@ -2,12 +2,19 @@ import { z } from 'zod';
 import {
   createSchema,
   decode,
+  decodeDraftPage,
   detailsSchema,
+  draftCreateSchema,
+  draftListSchema,
+  draftSavedSchema,
   encodeJson,
+  hasObservation,
   identifier,
   identity,
   input,
   invoiceOutcome,
+  isDraftStatus,
+  issueDraftSchema,
   listSchema,
   pageSchema,
   pdfSchema,
@@ -42,13 +49,19 @@ import { acknowledgement, readValue, refused, rejected, requestSchema } from '..
 import type { Report, Runtime } from '../runtime.js';
 import { freeze } from '../values.js';
 import type {
+  CreateDraftInput,
   CreateInvoiceInput,
   CreateOutcome,
+  DraftCreateOutcome,
+  DraftInvoiceDetails,
+  DraftInvoicePage,
+  DraftIssueOutcome,
   IdentityEvidence,
   InvoiceDetails,
   InvoicePage,
   InvoiceReference,
   InvoiceStatusOutcome,
+  IssueDraftInput,
   ListInvoicesInput,
   PdfOutcome,
   RequestOptions,
@@ -142,8 +155,38 @@ export interface InvoiceResource {
     input: CancelCateringOrderNotesInput,
     options?: RequestOptions,
   ): Promise<CateringOrderNoteCancellationOutcome>;
-  /** Draft invoices. Only deletion is available. */
+  /**
+   * Draft invoices: saved with the provider, not issued and not sent to the tax authority.
+   * Each write is dispatched at most once and never retried, and nothing follows it: saving
+   * does not issue, and issuing reads nothing back.
+   */
   readonly drafts: Readonly<{
+    /**
+     * Saves an invoice as a draft. The request is validated as an ordinary create and the
+     * draft flag is added by this method. After a failure whose effect is 'unknown', read
+     * the status by the external reference before saving again.
+     */
+    create(invoice: CreateDraftInput, options?: RequestOptions): Promise<DraftCreateOutcome>;
+    /**
+     * Issues a draft, addressed by the provider's id. This is a fiscal creation. After a
+     * failure whose effect is 'unknown', read the status before deciding anything; the
+     * provider answers a second issue of the same draft with an HTTP error.
+     */
+    issue(
+      invoiceId: string,
+      input?: IssueDraftInput,
+      options?: RequestOptions,
+    ): Promise<DraftIssueOutcome>;
+    /** One page of drafts, 1 by default. `invoices.list` returns issued invoices only. */
+    list(
+      filters?: Readonly<{ page?: number }>,
+      options?: RequestOptions,
+    ): Promise<DraftInvoicePage>;
+    /** Lazy, finite iteration over drafts with the rules of `invoices.iterate`. */
+    iterate(
+      filters: Readonly<{ page?: number }>,
+      options: RequestOptions & { readonly maxPages: number },
+    ): AsyncIterable<DraftInvoiceDetails>;
     /**
      * Deletes a draft. The provider decides whether the invoice is an untransmitted draft.
      * Dispatched at most once. An acknowledgement does not show that the draft's external
@@ -164,6 +207,13 @@ function common(config: z.infer<typeof requestSchema>): RequestOptions {
 }
 // Both PDF requests answer with the same three envelopes: a rejection, a link to an existing
 // artifact, or a status whose wording is not evidence of anything.
+const iterationSchema = requestSchema.extend({ maxPages: z.number().int().min(1).max(10_000) });
+interface Page<T> {
+  readonly invoices: readonly T[];
+  readonly total_count: number;
+  readonly total_pages: number;
+  readonly current_page: number;
+}
 function pdfOutcome(value: unknown, report: Report, operation: 'pdf' | 'thermalPdf'): PdfOutcome {
   const refusal = rejection(value);
   if (refusal !== undefined) {
@@ -187,19 +237,20 @@ function pdfOutcome(value: unknown, report: Report, operation: 'pdf' | 'thermalP
 }
 
 export function invoiceResource(runtime: Runtime): InvoiceResource {
-  async function list(filters: ListInvoicesInput, options?: RequestOptions): Promise<InvoicePage> {
-    const data = input(listSchema, filters, 'list');
-    const page = data.page ?? 1;
-    const query = new URLSearchParams({
-      page: String(page),
-      ...(data.start_date === undefined ? {} : { start_date: data.start_date }),
-      ...(data.end_date === undefined ? {} : { end_date: data.end_date }),
-    });
+  // One page of the listing route, for issued invoices or for drafts: the page checks are
+  // the same, the query and the record model are the caller's.
+  function fetchPage<T>(
+    operation: 'list' | 'listDrafts',
+    query: URLSearchParams,
+    page: number,
+    decodePage: (value: unknown) => Page<T>,
+    options?: RequestOptions,
+  ): Promise<Page<T>> {
     return runtime.run(
-      'list',
+      operation,
       '/invoices/find_all_invoices?' + query.toString(),
       (v, report) => {
-        const result = decode(pageSchema, readValue(v, report), 'list');
+        const result = decodePage(readValue(v, report));
         // Providers report empty collections either as total_pages 0 or as one empty page.
         if (
           result.current_page !== page ||
@@ -209,45 +260,79 @@ export function invoiceResource(runtime: Runtime): InvoiceResource {
           (result.total_pages > 0 && page > result.total_pages) ||
           (result.total_pages > 0 && result.total_count > 0 && result.invoices.length === 0)
         ) {
-          throw new WrappError('PROTOCOL_ERROR', 'list');
+          throw new WrappError('PROTOCOL_ERROR', operation);
         }
         return result;
       },
       options,
     );
   }
+  async function* pages<T extends { readonly id: string }>(
+    operation: 'list' | 'listDrafts',
+    start: number,
+    config: z.infer<typeof iterationSchema>,
+    fetch: (page: number, request: RequestOptions) => Promise<Page<T>>,
+  ): AsyncGenerator<T> {
+    const seen = new Set<string>();
+    const request = common(config);
+    let page = start;
+    for (let count = 0; count < config.maxPages; count++, page++) {
+      const result = await fetch(page, request);
+      const fingerprint = JSON.stringify(result.invoices.map((v) => v.id).sort());
+      if (seen.has(fingerprint)) throw new WrappError('PROTOCOL_ERROR', operation);
+      seen.add(fingerprint);
+      for (const invoice of result.invoices) {
+        if (config.signal?.aborted) throw new WrappError('ABORTED', operation);
+        yield invoice;
+      }
+      if (page >= result.total_pages) return;
+    }
+    throw new WrappError('PAGINATION_LIMIT', operation);
+  }
+  async function list(filters: ListInvoicesInput, options?: RequestOptions): Promise<InvoicePage> {
+    const data = input(listSchema, filters, 'list');
+    const page = data.page ?? 1;
+    const query = new URLSearchParams({
+      page: String(page),
+      ...(data.start_date === undefined ? {} : { start_date: data.start_date }),
+      ...(data.end_date === undefined ? {} : { end_date: data.end_date }),
+    });
+    return fetchPage('list', query, page, (v) => decode(pageSchema, v, 'list'), options);
+  }
   async function* iterate(
     filters: ListInvoicesInput,
     options: RequestOptions & { readonly maxPages: number },
   ): AsyncGenerator<InvoiceDetails> {
-    const config = input(
-      requestSchema.extend({ maxPages: z.number().int().min(1).max(10_000) }),
-      options,
-      'list',
-    );
+    const config = input(iterationSchema, options, 'list');
     const valid = input(listSchema, filters, 'list');
-    const seen = new Set<string>();
-    let page = valid.page ?? 1;
-    const request = common(config);
-    for (let count = 0; count < config.maxPages; count++, page++) {
-      const result = await list(
+    yield* pages('list', valid.page ?? 1, config, (page, request) =>
+      list(
         {
           page,
           ...(valid.start_date === undefined ? {} : { start_date: valid.start_date }),
           ...(valid.end_date === undefined ? {} : { end_date: valid.end_date }),
         },
         request,
-      );
-      const fingerprint = JSON.stringify(result.invoices.map((v) => v.id).sort());
-      if (seen.has(fingerprint)) throw new WrappError('PROTOCOL_ERROR', 'list');
-      seen.add(fingerprint);
-      for (const invoice of result.invoices) {
-        if (config.signal?.aborted) throw new WrappError('ABORTED', 'list');
-        yield invoice;
-      }
-      if (page >= result.total_pages) return;
-    }
-    throw new WrappError('PAGINATION_LIMIT', 'list');
+      ),
+    );
+  }
+  async function listDrafts(
+    filters: Readonly<{ page?: number }>,
+    options?: RequestOptions,
+  ): Promise<DraftInvoicePage> {
+    const page = input(draftListSchema, filters, 'listDrafts').page ?? 1;
+    const query = new URLSearchParams({ status: 'draft', page: String(page) });
+    return fetchPage('listDrafts', query, page, (v) => decodeDraftPage(v, 'listDrafts'), options);
+  }
+  async function* iterateDrafts(
+    filters: Readonly<{ page?: number }>,
+    options: RequestOptions & { readonly maxPages: number },
+  ): AsyncGenerator<DraftInvoiceDetails> {
+    const config = input(iterationSchema, options, 'listDrafts');
+    const valid = input(draftListSchema, filters, 'listDrafts');
+    yield* pages('listDrafts', valid.page ?? 1, config, (page, request) =>
+      listDrafts({ page }, request),
+    );
   }
   // Resource methods are async so validation failures reject rather than throw
   // synchronously out of a Promise-returning call.
@@ -257,8 +342,9 @@ export function invoiceResource(runtime: Runtime): InvoiceResource {
       return runtime.run(
         'status',
         '/invoices/' + encodeURIComponent(valid.value),
-        (v, report) => {
+        (v, report): InvoiceStatusOutcome => {
           if (rejection(v) !== undefined) throw rejected('status', v, report);
+          if (isDraftStatus(v, 'status')) return freeze({ kind: 'draft', identity: 'unavailable' });
           return invoiceOutcome(v, valid, 'status');
         },
         opts,
@@ -461,6 +547,49 @@ export function invoiceResource(runtime: Runtime): InvoiceResource {
       );
     },
     drafts: Object.freeze({
+      create: async (invoice: CreateDraftInput, opts?: RequestOptions) => {
+        const data = input(draftCreateSchema, invoice, 'createDraft');
+        return runtime.run(
+          'createDraft',
+          '/invoices',
+          (value, report): DraftCreateOutcome => {
+            const outcome = refused(value, report);
+            if (outcome !== undefined) return outcome;
+            // Only the exact status says a draft was saved; a pending or issued answer here
+            // is another outcome and is never read as one.
+            const draft = decode(draftSavedSchema, value, 'createDraft');
+            if (hasObservation(value)) throw new WrappError('PROTOCOL_ERROR', 'createDraft');
+            return freeze({ kind: 'saved', invoiceId: draft.invoice_id });
+          },
+          opts,
+          encodeJson({ ...data, draft: true }),
+        );
+      },
+      issue: async (invoiceId: string, fields?: IssueDraftInput, opts?: RequestOptions) => {
+        const valid = input(identifier, invoiceId, 'issueDraft');
+        const data = input(issueDraftSchema.optional(), fields, 'issueDraft');
+        // The provider was observed to issue on a request without a body, so none is sent
+        // when there is nothing to say.
+        const body =
+          data !== undefined && Object.values(data).some((field) => field !== undefined)
+            ? encodeJson(data)
+            : undefined;
+        return runtime.run(
+          'issueDraft',
+          '/invoices/' + encodeURIComponent(valid) + '/issue_draft',
+          (value, report): DraftIssueOutcome =>
+            refused(value, report) ??
+            invoiceOutcome(value, { kind: 'invoiceId', value: valid }, 'issueDraft'),
+          opts,
+          body,
+        );
+      },
+      list: (filters: Readonly<{ page?: number }> = {}, opts?: RequestOptions) =>
+        listDrafts(filters, opts),
+      iterate: (
+        filters: Readonly<{ page?: number }>,
+        opts: RequestOptions & { readonly maxPages: number },
+      ) => iterateDrafts(filters, opts),
       delete: async (invoiceId: string, opts?: RequestOptions) => {
         const valid = input(identifier, invoiceId, 'deleteDraft');
         return runtime.run(

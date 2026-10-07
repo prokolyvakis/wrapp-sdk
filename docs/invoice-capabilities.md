@@ -85,5 +85,5 @@ the mark of the invoice it credits.
 Three more input rules apply to every supported type and are described in
 the [API reference](api-reference.md): the request code sets for VAT rate, quantity type and
 VAT exemption; the exact-decimal amount rules; and the fields that are rejected because their
-profile is not implemented (drafts, invoice-level taxes, POS refunds and preloaded POS
-transactions).
+profile is not implemented (invoice-level taxes, POS refunds and preloaded POS
+transactions). Any supported type can also be saved as a draft with `invoices.drafts.create`.

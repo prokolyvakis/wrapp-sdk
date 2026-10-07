@@ -12,8 +12,8 @@ input is accepted. The sixth is additive, with one case that needs attention.
 
 ### 1. `invoices.getStatus` returns a tagged outcome
 
-A status lookup can now report a pending invoice, so its result is a union. Switch on `kind`
-before reading `invoice`.
+A status lookup can now report a pending invoice or a draft, so its result is a union. Switch
+on `kind` before reading `invoice`.
 
 Before:
 
@@ -35,10 +35,13 @@ switch (status.kind) {
     // with the pending status; it may already hold a number, a UID and a QR URL.
     schedule(status.invoiceId);
     break;
+  case 'draft':
+    // Saved, not issued. The answer names no invoice: there is no record to read.
+    break;
 }
 ```
 
-Previously a pending answer made `getStatus` fail with `PROTOCOL_ERROR`. A provider
+Previously a pending answer and a draft answer made `getStatus` fail with `PROTOCOL_ERROR`. A provider
 rejection, including not-found, is still a `PROVIDER_REJECTED` error.
 
 ### 2. A pending outcome carries identity evidence, which can be `'unavailable'`
@@ -153,7 +156,10 @@ One case needs an edit: if you assert the package's exact runtime export list, f
 with `Object.keys`, add `getProviderDiagnostics`.
 
 The release also adds these type exports: `InvoiceStatusOutcome`, `PendingInvoiceOutcome`,
-`PendingIdentityEvidence`, `ProviderDiagnostics` and `ProviderIssue`.
+`PendingIdentityEvidence`, `ProviderDiagnostics` and `ProviderIssue`. The new operations
+below come with their own input and result types, each exported under the name its method
+signature shows, such as `CreateDraftInput`, `DraftCreateOutcome`, `IssueDraftInput`,
+`DraftIssueOutcome`, `DraftInvoiceDetails` and `DraftInvoicePage` for drafts.
 
 ### New operations
 
@@ -168,7 +174,9 @@ already call.
 - `invoices.cancelDeliveryNote(invoiceId)` — delivery notes only.
 - `invoices.setExternalId(invoiceId, { external_id })` — permanent reference assignment.
 - `invoices.markAsPaid(invoiceId)` — an effectful GET.
-- `invoices.drafts.delete(invoiceId)` — the only draft operation available.
+- `invoices.drafts.create(invoice)`, `issue(invoiceId, input?)`, `list({ page? })`,
+  `iterate({ page? }, { maxPages })` and `delete(invoiceId)` — draft invoices. A draft is
+  saved through `drafts.create`; `invoices.create` still refuses a `draft` key.
 - `branches.create(input)` and `branches.update(branchId, patch)`.
 - `billingBooks.create(input)` and `billingBooks.updateNumber(billingBookId, { number })`.
 - `digitalClienteles.correlateByMark` and `digitalClienteles.correlateByFim`, on a new

@@ -25,6 +25,9 @@ grounded in documentation, what is observed behavior, and what remains an open q
 | invoices.setExternalId              | PUT /invoices/:invoice_id/set_external_id      | effectful      |
 | invoices.markAsPaid                 | GET /invoices/:invoice_id/mark_as_paid         | effectful      |
 | invoices.drafts.delete              | DELETE /invoices/:invoice_id/delete_draft      | effectful      |
+| invoices.drafts.create              | POST /invoices                                 | effectful      |
+| invoices.drafts.issue               | POST /invoices/:invoice_id/issue_draft         | effectful      |
+| invoices.drafts.list / iterate      | GET /invoices/find_all_invoices?status=draft   | read           |
 | branches.create                     | POST /branches                                 | effectful      |
 | branches.update                     | PUT /branches/:id                              | effectful      |
 | billingBooks.create                 | POST /billing_books                            | effectful      |
@@ -74,7 +77,7 @@ optional supply_account_no, and a line an optional fuel_code and cpv_code. All o
 reject pre-I/O.
 
 Thirteen invoice types (1.1, 2.1, 2.2, 2.3, 5.1, 5.2, 9.2, 9.3, 10.1, 10.2, 11.1, 11.2, 11.4);
-drafts, POS refunds and
+the draft key (a draft is saved with invoices.drafts.create, which sets it), POS refunds and
 preloaded POS transactions (refund_invoice_id, aade_preloaded, third_party_collection), the
 invoice-level tax mode (taxes_totals), and the line fields the provider defines for invoice
 types this SDK does not issue yet (other_taxes_amount, accommodation_tax and
@@ -252,7 +255,7 @@ rejection is a rejected result (errorCount and rejectionSource only), not an err
   its status text; it is not verified settlement.
 - drafts.delete(invoiceId) deletes a draft; the provider decides whether the invoice is an
   untransmitted draft. acknowledged does not show that the draft's external reference can be
-  used again. Creating, issuing and listing drafts are not available.
+  used again.
 
 The status text of an acknowledgement is validated as present and then dropped, like any
 other provider wording. Use the diagnostics option to read a rejection's detail.
@@ -340,6 +343,52 @@ refusals as an object of field name to messages; each message counts as one issu
 diagnostics: 'provider-issues' each is returned as a title (the field) and a message. The
 merchant id and the authorization code of the request are redacted from that retained text,
 and neither appears in any error.
+
+## Drafts
+
+A draft is an invoice saved with the provider and not issued: it has no number, no
+registration mark and is not sent to the tax authority. The provider's reference documents no
+answer for saving, issuing or listing one; what follows is the behavior observed on the
+provider, and each operation accepts only the answers named here. On `client.invoices.drafts`:
+
+- create(invoice) saves a draft. The input is that of invoices.create without generate_pdf
+  and mark_as_paid, which are refused for a draft (a PDF is asked for when the draft is
+  issued). It is validated exactly as an ordinary create, and the method then adds
+  `draft: true` to the body; a caller-supplied draft key is refused, here and on
+  invoices.create. The result is saved with invoiceId, the provider's id of the draft, or
+  rejected. The provider's answer has the shape of a pending answer and is told apart by its
+  exact status text alone, so any other 2xx answer (a pending status, an issued invoice,
+  another wording) is a protocol error with effect unknown, never a saved draft.
+- issue(invoiceId, input?) issues a draft, addressed by the provider's id. input is optional:
+  pos_device_id, customer_emails (at most 100), email_locale (`el` or `en`), email_subject,
+  email_body and generate_pdf, each optional and sent as given, with placeholders and line
+  breaks untouched. It takes no payment method. Without any field no body is sent, which is
+  the request that was observed; a body with these fields follows the provider's reference and
+  was not observed. The result is observed with the issued invoice (its id must equal the
+  requested one; read my_data_mark and transmission_failure before concluding anything),
+  pending as on create, or rejected. An answer that is neither, such as a bare status, is a
+  protocol error: nothing is assumed to be issued.
+- list({ page? }) returns one page of drafts and iterate({ page? }, { maxPages }) walks them
+  with the rules of invoices.iterate. Each draft is the full-detail projection without code:
+  a draft has no document code. issued_at is the date the provider holds for the draft; it
+  is not an issue time, and a row without one fails the read rather than being given a date.
+  A row is accepted as a draft only in the shape that was observed, with its document code,
+  registration mark and uid present and empty; a row that carries a value in one of them, or
+  lacks one, fails the read with a protocol error. Unknown additional fields of an answer are
+  ignored, as everywhere. Date filters are not offered for drafts. invoices.list and invoices.iterate return issued
+  invoices only and take no status.
+- delete(invoiceId) is described under invoice management above.
+
+create and issue are dispatched at most once and never retried, and nothing follows either:
+saving does not issue, and issuing reads nothing back. After a failure whose effect is
+unknown, read invoices.getStatus by the external reference before repeating a save, and by
+the provider id before repeating an issue. The provider was observed to answer the issue of an
+invoice that is no longer a draft with HTTP 404, which arrives as an HTTP_ERROR with effect
+unknown like any other failure after dispatch.
+
+invoices.getStatus reports a draft as `{ kind: 'draft', identity: 'unavailable' }`, by
+provider id or by external reference: the provider answers with the status alone, so there is
+no record and nothing to compare the reference with.
 
 ## Catering tables and order notes
 
@@ -610,7 +659,8 @@ SDK sends, never what it tolerates on a read.
   diagnostics.
 - Create union: observed, pending, rejected. Every rejected result has referenceState:unknown;
   no conflict inference from English titles. Rejection/not-found never authorizes a new ID.
-- Status lookup returns observed or pending; switch on kind before reading invoice. Pending
+- Status lookup returns observed, pending or draft; switch on kind before reading invoice. A
+  draft status beside any field of an issued invoice is a protocol error. Pending
   carries invoiceId, referenceState:unknown and identity: exact, ascii-case-variant, or
   unavailable when the provider returned only its own invoice id for an external-reference
   request. When the provider returns the full observation with the pending status, it is

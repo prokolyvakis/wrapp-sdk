@@ -496,6 +496,20 @@ export const createSchema = z
       (b2gRequiredKeys.every((key) => v[key] !== undefined) &&
         v.invoice_lines.every((l) => l.cpv_code !== undefined)),
   );
+// A draft takes the request of an ordinary create, without two of its options: what either
+// does to a draft was not observed, and a PDF is asked for when the draft is issued.
+export const draftCreateSchema = createSchema.refine(
+  (v) => v.generate_pdf === undefined && v.mark_as_paid === undefined,
+);
+// The six fields the reference lists for issuing a draft, each under its rule on create.
+export const issueDraftSchema = z.strictObject({
+  pos_device_id: createSchema.shape.pos_device_id,
+  customer_emails: createSchema.shape.customer_emails,
+  email_locale: createSchema.shape.email_locale,
+  email_subject: createSchema.shape.email_subject,
+  email_body: createSchema.shape.email_body,
+  generate_pdf: createSchema.shape.generate_pdf,
+});
 
 export const observationSchema = z.object({
   id: identifier,
@@ -653,6 +667,26 @@ export const pageSchema = z.object({
   total_pages: integer,
   current_page: integer,
 });
+// A draft row has the full-detail shape, as observed. It is not an issued document, so its
+// document code is not carried.
+const draftPageSchema = z.object({
+  ...pageSchema.shape,
+  invoices: z.array(detailsSchema.omit({ code: true })).max(50),
+});
+// What shows a row is a draft and not an issued document, as observed: its document code,
+// registration mark and uid are present and empty. A row without that evidence, or with a
+// value in any of the three, is not accepted as a draft.
+const blank = z.literal('');
+const unissuedPageSchema = z.object({
+  invoices: z.array(z.object({ code: blank, my_data_mark: blank, my_data_uid: blank })),
+});
+export function decodeDraftPage(value: unknown, operation: string) {
+  decode(unissuedPageSchema, value, operation);
+  return decode(draftPageSchema, value, operation);
+}
+export const draftListSchema = z.strictObject({
+  page: z.number().int().min(1).max(1_000_000).optional(),
+});
 export const listSchema = z
   .strictObject({
     start_date: isoDate.optional(),
@@ -721,6 +755,12 @@ export const loginSchema = z.object({
   }),
 });
 export const pendingSchema = z.object({ status: z.literal('pending'), invoice_id: identifier });
+// The observed answer to saving a draft; the reference documents none. It has the shape of
+// the minimal pending answer, so its exact status text is all that tells the two apart.
+export const draftSavedSchema = z.object({
+  status: z.literal('successfully saved as draft'),
+  invoice_id: identifier,
+});
 export const pdfSchema = z.object({ download_url: httpsUrl });
 export const pdfStatusSchema = z.object({ status: nonempty });
 export const webhookPdfSchema = z.object({ invoice_id: identifier, download_url: httpsUrl });
@@ -852,6 +892,20 @@ export function identity(
   throw new WrappError('PROTOCOL_ERROR', 'identity');
 }
 const observationKeys = Object.keys(observationSchema.shape);
+/** Whether an answer carries any field of an issued invoice. */
+export function hasObservation(value: unknown): boolean {
+  return value !== null && typeof value === 'object' && observationKeys.some((key) => key in value);
+}
+/**
+ * Whether a status answer says the invoice is a draft: the status alone, as observed. A
+ * draft status beside any field of an issued invoice is a contradiction and is refused.
+ */
+export function isDraftStatus(value: unknown, operation: string): boolean {
+  if (value === null || typeof value !== 'object' || !('status' in value)) return false;
+  if (value.status !== 'draft') return false;
+  if (hasObservation(value)) throw new WrappError('PROTOCOL_ERROR', operation);
+  return true;
+}
 /**
  * Decodes what create and status return once a rejection envelope has been ruled out: a
  * pending envelope or an issued observation. Pending is decided by the status discriminator
@@ -861,7 +915,7 @@ export function invoiceOutcome(
   value: unknown,
   reference: InvoiceReference,
   operation: string,
-): InvoiceStatusOutcome {
+): Exclude<InvoiceStatusOutcome, { kind: 'draft' }> {
   if (value === null || typeof value !== 'object' || !('status' in value)) {
     const invoice = decode(observationSchema, value, operation);
     return freeze({ kind: 'observed', invoice, identity: identity(reference, invoice) });
@@ -869,7 +923,7 @@ export function invoiceOutcome(
   const pending = decode(pendingSchema, value, operation);
   // One known observation field makes this the enriched form, and then all of it must be
   // valid: malformed evidence is never stripped to fall back on the minimal form.
-  if (observationKeys.some((key) => key in value)) {
+  if (hasObservation(value)) {
     const invoice = decode(observationSchema, value, operation);
     if (invoice.id !== pending.invoice_id) throw new WrappError('PROTOCOL_ERROR', operation);
     return freeze({

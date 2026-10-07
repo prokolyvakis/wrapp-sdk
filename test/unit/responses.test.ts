@@ -927,7 +927,7 @@ describe('pending outcomes', () => {
     ];
     for (const outcome of outcomes) {
       expect(Object.isFrozen(outcome)).toBe(true);
-      if (outcome.kind !== 'rejected' && outcome.invoice)
+      if (outcome.kind !== 'rejected' && outcome.kind !== 'draft' && outcome.invoice)
         expect(Object.isFrozen(outcome.invoice)).toBe(true);
       expect(() => {
         Object.assign(outcome, { kind: 'observed' });
