@@ -86,8 +86,15 @@ export interface InvoiceResource {
    * Failures after dispatch carry effect 'unknown' and are never retried or replayed.
    */
   create(invoice: CreateInvoiceInput, options?: RequestOptions): Promise<CreateOutcome>;
-  /** Effectful GET, dispatched at most once. The returned URL is data, never fetched. */
-  requestPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
+  /**
+   * Effectful GET, dispatched at most once. The returned URL is data, never fetched. `locale`
+   * asks for the document in that language; without it nothing is sent and the provider uses
+   * its default.
+   */
+  requestPdf(
+    invoiceId: string,
+    options?: RequestOptions & { readonly locale?: 'el' | 'en' },
+  ): Promise<PdfOutcome>;
   /**
    * The thermal-printer counterpart of requestPdf, with the same outcomes and the same rules:
    * an effectful GET dispatched at most once, whose returned URL is data and is never fetched.
@@ -146,6 +153,15 @@ export interface InvoiceResource {
   }>;
 }
 
+// The common request options of a call that takes more than those: the rest never reaches
+// the runtime, whose option check is strict.
+function common(config: z.infer<typeof requestSchema>): RequestOptions {
+  return {
+    ...(config.signal === undefined ? {} : { signal: config.signal }),
+    ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }),
+    ...(config.diagnostics === undefined ? {} : { diagnostics: config.diagnostics }),
+  };
+}
 // Both PDF requests answer with the same three envelopes: a rejection, a link to an existing
 // artifact, or a status whose wording is not evidence of anything.
 function pdfOutcome(value: unknown, report: Report, operation: 'pdf' | 'thermalPdf'): PdfOutcome {
@@ -212,11 +228,7 @@ export function invoiceResource(runtime: Runtime): InvoiceResource {
     const valid = input(listSchema, filters, 'list');
     const seen = new Set<string>();
     let page = valid.page ?? 1;
-    const request: RequestOptions = {
-      ...(config.signal === undefined ? {} : { signal: config.signal }),
-      ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }),
-      ...(config.diagnostics === undefined ? {} : { diagnostics: config.diagnostics }),
-    };
+    const request = common(config);
     for (let count = 0; count < config.maxPages; count++, page++) {
       const result = await list(
         {
@@ -290,13 +302,24 @@ export function invoiceResource(runtime: Runtime): InvoiceResource {
         encodeJson(data),
       );
     },
-    requestPdf: async (invoiceId: string, opts?: RequestOptions) => {
+    requestPdf: async (
+      invoiceId: string,
+      opts: RequestOptions & { readonly locale?: 'el' | 'en' } = {},
+    ) => {
       const valid = input(identifier, invoiceId, 'pdf');
+      const config = input(
+        requestSchema.extend({ locale: z.enum(['el', 'en']).optional() }),
+        opts,
+        'pdf',
+      );
       return runtime.run(
         'pdf',
-        '/invoices/' + encodeURIComponent(valid) + '/generate_pdf',
+        '/invoices/' +
+          encodeURIComponent(valid) +
+          '/generate_pdf' +
+          (config.locale === undefined ? '' : '?locale=' + config.locale),
         (value, report) => pdfOutcome(value, report, 'pdf'),
-        opts,
+        common(config),
       );
     },
     requestThermalPdf: async (invoiceId: string, opts?: RequestOptions) => {

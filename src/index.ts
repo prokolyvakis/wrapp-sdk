@@ -18,6 +18,7 @@ export type {
   OpenCateringOrderNote,
   OpenCateringOrderNotesPage,
   OpenCateringTableInput,
+  TransferCateringOrderNotesInput,
 } from './catering-types.js';
 export type {
   ClienteleCorrelationOutcome,
@@ -36,6 +37,7 @@ export type {
 export type { ProviderJson } from './provider-json.js';
 export type {
   BillingBookCreateOutcome,
+  BillingBookNumberOutcome,
   BillingBookReceipt,
   BillingBookResource,
   BranchResource,

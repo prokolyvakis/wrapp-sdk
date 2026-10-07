@@ -24,6 +24,7 @@ export const operations = Object.freeze({
   branchCreate: { method: 'POST', effectful: true },
   branchUpdate: { method: 'PUT', effectful: true },
   billingBookCreate: { method: 'POST', effectful: true },
+  billingBookUpdateNumber: { method: 'PUT', effectful: true },
   clienteleCorrelateByMark: { method: 'POST', effectful: true },
   clienteleCorrelateByFim: { method: 'POST', effectful: true },
   posDevices: { method: 'GET', effectful: false },
@@ -37,6 +38,8 @@ export const operations = Object.freeze({
   cateringTableOpen: { method: 'POST', effectful: true },
   cateringTableClose: { method: 'POST', effectful: true },
   cateringTableDelete: { method: 'DELETE', effectful: true },
+  // A GET that moves order notes between tables.
+  cateringTableTransfer: { method: 'GET', effectful: true },
   openCateringOrderNotes: { method: 'GET', effectful: false },
   // Issues a cancelling 8.6 invoice: a fiscal creation, not a state update.
   cancelCateringOrderNotes: { method: 'POST', effectful: true },

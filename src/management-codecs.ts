@@ -32,6 +32,8 @@ export const billingBookCreateSchema = z.strictObject({
   // Any type code of the provider reference: a book can exist for a type create cannot issue.
   invoice_type_code: z.enum(invoiceTypeCatalogue.map((entry) => entry.code)),
 });
+// The one field the provider lets a book change: a name sent in its place is refused there.
+export const billingBookNumberSchema = z.strictObject({ number: count });
 // The creation answer has no number in the reference, unlike a listed book.
 export const billingBookReceiptSchema = z.object({
   id: identifier,

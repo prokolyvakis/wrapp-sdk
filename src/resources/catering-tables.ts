@@ -3,6 +3,7 @@ import {
   cateringTableOpenSchema,
   cateringTableSchema,
   cateringTableSummariesSchema,
+  cateringTableTransferSchema,
   cateringTableUpdateSchema,
 } from '../catering-codecs.js';
 import type {
@@ -10,6 +11,7 @@ import type {
   CateringTableOutcome,
   CateringTableResource,
   OpenCateringTableInput,
+  TransferCateringOrderNotesInput,
 } from '../catering-types.js';
 import { decode, encodeJson, identifier, input, rejection } from '../codecs.js';
 import { WrappError } from '../errors.js';
@@ -49,6 +51,8 @@ export function cateringTableResource(runtime: Runtime): CateringTableResource {
       ),
     get: async (tableId: string, opts?: RequestOptions) => {
       const valid = input(identifier, tableId, 'cateringTable');
+      // This word is the route of the transfer, which changes state: a read never reaches it.
+      if (valid === 'transfer') throw new WrappError('INVALID_INPUT', 'cateringTable');
       return runtime.run(
         'cateringTable',
         '/catering_tables/' + encodeURIComponent(valid),
@@ -59,7 +63,7 @@ export function cateringTableResource(runtime: Runtime): CateringTableResource {
         opts,
       );
     },
-    create: async (data: Readonly<{ name?: string }>, opts?: RequestOptions) => {
+    create: async (data: Readonly<{ name: string }>, opts?: RequestOptions) => {
       const body = input(cateringTableCreateSchema, data, 'cateringTableCreate');
       return runtime.run(
         'cateringTableCreate',
@@ -96,6 +100,21 @@ export function cateringTableResource(runtime: Runtime): CateringTableResource {
         'cateringTableClose',
         '/catering_tables/' + encodeURIComponent(valid) + '/close',
         (value, report) => written(value, report, 'cateringTableClose', valid),
+        opts,
+      );
+    },
+    transfer: async (data: TransferCateringOrderNotesInput, opts?: RequestOptions) => {
+      const valid = input(cateringTableTransferSchema, data, 'cateringTableTransfer');
+      const query = new URLSearchParams({
+        current_table: valid.current_table,
+        target_table: valid.target_table,
+      });
+      for (const mark of valid.marks ?? []) query.append('marks[]', mark);
+      return runtime.run(
+        'cateringTableTransfer',
+        '/catering_tables/transfer?' + query.toString(),
+        // The provider's answer does not say which of the two tables it is, so no id is expected.
+        (value, report) => written(value, report, 'cateringTableTransfer'),
         opts,
       );
     },

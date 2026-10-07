@@ -170,20 +170,24 @@ already call.
 - `invoices.markAsPaid(invoiceId)` — an effectful GET.
 - `invoices.drafts.delete(invoiceId)` — the only draft operation available.
 - `branches.create(input)` and `branches.update(branchId, patch)`.
-- `billingBooks.create(input)`.
+- `billingBooks.create(input)` and `billingBooks.updateNumber(billingBookId, { number })`.
 - `digitalClienteles.correlateByMark` and `digitalClienteles.correlateByFim`, on a new
   `client.digitalClienteles` resource.
 - `posDevices.list()`, `posDevices.create(device)` and `posDevices.delete(deviceId)`, on a
   new `client.posDevices` resource.
 - `posSessions.abort(invoiceId)`, on a new `client.posSessions` resource.
-- `cateringTables.list`, `get`, `create`, `update`, `open`, `close` and `delete`, on a new
-  `client.cateringTables` resource.
+- `cateringTables.list`, `get`, `create`, `update`, `open`, `close`, `transfer` and `delete`,
+  on a new `client.cateringTables` resource. `create` requires a name, and `transfer` is an
+  effectful GET.
 - `invoices.listOpenCateringOrderNotes({ page? })` and
   `invoices.cancelCateringOrderNotes(input)`. The second issues a cancelling invoice.
 - `digitalTransports.list`, `get`, `create`, `refresh`, `reject`, `confirmDelivery`,
   `confirmReturn` and `transfer`, on a new `client.digitalTransports` resource. A record's
   `my_data_response` is returned as the new `ProviderJson` type: an opaque tree with exact
   number text.
+
+`invoices.requestPdf(invoiceId, options)` also accepts `locale: 'el' | 'en'` in its options.
+A call without it sends the same request as before.
 
 One case needs an edit: code that implements the exported `InvoiceResource` interface itself,
 such as a typed test double, must add the new methods. The same holds for an object typed as
@@ -201,6 +205,7 @@ Additive. `invoices.create` accepts more of the provider's documented request:
   `delivery_address_*` fields and the eight other `b2g_*` fields, `is_delivery_note`,
   `delivery_detail`, `other_correlated_entities`, `receiving_note_purpose`,
   `other_receiving_note_purpose_title`;
+- in `delivery_detail`: the branch codes `from_branch` and `to_branch`;
 - on the counterpart: `supply_account_no`;
 - on a line: `classifications`, `withhold_tax_rate`, `withhold_tax_code`, `withholding_total`,
   `stamp_duty_tax_code`, `stamp_duty_amount`, `deductions`, `deductions_amount`,

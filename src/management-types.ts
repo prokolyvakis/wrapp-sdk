@@ -56,6 +56,13 @@ export interface BillingBookReceipt {
 export type BillingBookCreateOutcome =
   | Readonly<{ kind: 'observed'; billingBook: BillingBookReceipt }>
   | Readonly<{ kind: 'rejected'; errorCount: number; rejectionSource: RejectionSource }>;
+/**
+ * Result of a number update. 'observed' carries the book the provider returned for the
+ * requested id; its number is what the provider reports, and is not compared with the request.
+ */
+export type BillingBookNumberOutcome =
+  | Readonly<{ kind: 'observed'; billingBook: BillingBook }>
+  | Readonly<{ kind: 'rejected'; errorCount: number; rejectionSource: RejectionSource }>;
 /** Branch operations. Writes are dispatched at most once and never retried. */
 export interface BranchResource {
   list(options?: RequestOptions): Promise<readonly Branch[]>;
@@ -66,11 +73,22 @@ export interface BranchResource {
     options?: RequestOptions,
   ): Promise<BranchWriteOutcome>;
 }
-/** Billing-book operations. Creation is dispatched at most once and never retried. */
+/** Billing-book operations. Writes are dispatched at most once and never retried. */
 export interface BillingBookResource {
   list(options?: RequestOptions): Promise<readonly BillingBook[]>;
   create(
     input: CreateBillingBookInput,
     options?: RequestOptions,
   ): Promise<BillingBookCreateOutcome>;
+  /**
+   * Sets the book's number, the one field the provider lets a book change. The provider
+   * issues the next document of the book from it; the SDK chooses and checks no number, so
+   * a value that repeats or skips numbers is the caller's to prevent. After a failure whose
+   * effect is 'unknown', list the books before writing again.
+   */
+  updateNumber(
+    billingBookId: string,
+    input: Readonly<{ number: number }>,
+    options?: RequestOptions,
+  ): Promise<BillingBookNumberOutcome>;
 }

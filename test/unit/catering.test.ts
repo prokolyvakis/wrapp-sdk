@@ -146,7 +146,17 @@ const operations: readonly Operation[] = [
     success: table,
     call: (client, options) => client.cateringTables.create({ name: 'table1' }, options),
     withInput: (client, input) => client.cateringTables.create(input as never),
-    wrongInputs: [{ name: '' }, { name: 5 }, { name: null }, { name: 'a', id: 'x' }, null, 'a', []],
+    wrongInputs: [
+      {},
+      { name: undefined },
+      { name: '' },
+      { name: 5 },
+      { name: null },
+      { name: 'a', id: 'x' },
+      null,
+      'a',
+      [],
+    ],
   },
   {
     name: 'cateringTables.update',
@@ -395,7 +405,7 @@ describe('catering table shapes', () => {
       json({ id: 'table-one', status: 'available', name: 7, total: '9007199254740993.10' }),
     );
     const details = await client.cateringTables.get('table-one');
-    // A table created without a name is given a number by the provider; it is kept as text.
+    // A name that arrives as a JSON number is kept as its exact text.
     expect(details).toEqual({
       id: 'table-one',
       status: 'available',
@@ -446,20 +456,29 @@ describe('catering table shapes', () => {
       expect(only(calls).url.pathname).toBe(path);
     }
   });
-  it('should expose the seven table operations and nothing else', () => {
+  it('should expose the eight table operations and nothing else', () => {
     const { client } = provider(() => login(token));
     expect(Object.keys(client.cateringTables).sort()).toEqual(
-      ['close', 'create', 'delete', 'get', 'list', 'open', 'update'].sort(),
+      ['close', 'create', 'delete', 'get', 'list', 'open', 'transfer', 'update'].sort(),
     );
     expect(Object.isFrozen(client.cateringTables)).toBe(true);
   });
 });
 
 describe('cateringTables.create and open inputs', () => {
-  it('should send an empty JSON object when no name is given, leaving the name to the provider', async () => {
+  it('should refuse a table without a name before any request, since the provider refuses one', async () => {
+    const { client, calls } = answering(() => json(table));
+    expect(await failure(client.cateringTables.create({} as never))).toMatchObject({
+      code: 'INVALID_INPUT',
+      operation: 'cateringTableCreate',
+      effect: 'not-sent',
+    });
+    expect(calls).toHaveLength(0);
+  });
+  it('should send the name alone and keep the name the provider returns, a number included', async () => {
     const { client, calls } = answering(() => json({ ...table, name: 7 }));
-    const outcome = await client.cateringTables.create({});
-    expect(only(calls).init.body).toBe('{}');
+    const outcome = await client.cateringTables.create({ name: '7' });
+    expect(only(calls).init.body).toBe('{"name":"7"}');
     expect(outcome).toMatchObject({ kind: 'observed', table: { name: '7' } });
   });
   it.each([

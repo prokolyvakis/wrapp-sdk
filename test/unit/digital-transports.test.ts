@@ -376,7 +376,7 @@ describe.each(operations)('$name', (op) => {
     ['a status update that is not a timestamp', { ...record, last_status_update_at: 'today' }],
     ['a numeric invoice code', { ...record, invoice_code: 1024 }],
     ['an evidence tree nested 21 levels deep', { ...record, my_data_response: deep(21) }],
-    ['an evidence string of 4097 code units', { ...record, my_data_response: 'x'.repeat(4097) }],
+    ['an evidence string of 65537 code units', { ...record, my_data_response: 'x'.repeat(65_537) }],
   ])('should treat a record with %s as a protocol error', async (_label, broken) => {
     const body =
       op.operation === 'digitalTransports'

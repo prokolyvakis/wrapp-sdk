@@ -58,6 +58,8 @@ observation profile follows the wire:
   with exact text preserved.
 - A unit price with more than 2 fraction digits is accepted and preserved verbatim through
   issuance and read-back; the documented 2-decimal bound is not enforced for unit prices.
+- A quantity with 3 fraction digits is likewise accepted and read back unchanged, as a JSON
+  string; the documented maximum of 2 digits is not enforced for quantities.
 - Empty listing windows return the `total_pages: 0` convention.
 - PDF generation is two-phase as documented: an acknowledgement first, then a time-limited
   URL on a later call.
@@ -84,6 +86,22 @@ observation profile follows the wire:
   10.2 with purpose 5, 10.1 without a correlated mark, and purpose 7 without a title.
 - Delivery-note fields and fuel fields are refused by the tax authority on a 2.1 and accepted
   on a 1.1. A request the authority refuses still appears to use up a number in the series.
+- `from_branch` and `to_branch` of a delivery detail are accepted as JSON integers holding a
+  branch code and are read back as numbers; omitted, they are read back as null. A code that
+  matches no branch was not tried.
+- The billing-book number update is `PUT /billing_books/:id` with `number` alone in the
+  body, answered with the book and its new number. The same request with a name instead of a
+  number is refused and changes nothing; the route does not exist for POST.
+- `generate_pdf` reads `locale` from the query string. An unknown locale is answered with a
+  2xx errors list. Whether each locale has its own artifact was not observed.
+- The catering transfer is a GET with `current_table`, `target_table` and `marks[]` in the
+  query string, answered with a table in the detail shape; the route does not exist for
+  POST. Not observed: which of the two tables is returned, and a transfer without marks.
+- The catering table list applies its status and name filters only when they arrive in the
+  body of the GET request, not in the query string.
+- A catering table created without a name is answered with HTTP 400; a created table is
+  open, and its total is a JSON number.
+- A digital transport's `my_data_response` can be a JSON string holding an XML document.
 
 ## Coverage inventory
 
@@ -99,7 +117,7 @@ Implement incrementally, never advertise entire-API support from a small endpoin
 | Invoice types 1.1, 11.1, 5.1, 5.2, 11.4, 9.2, 9.3, 10.1, 10.2                                                                                                                 | Core; each accepted in the shape observed to be accepted by the provider                  |
 | PDF request + issued/PDF webhook parsing                                                                                                                                      | Core, side-effect rules apply                                                             |
 | Branch create/update, billing-book create                                                                                                                                     | Core; shapes from documentation, unobserved                                               |
-| Billing-book number update                                                                                                                                                    | Blocked: method and body are not established                                              |
+| Billing-book number update                                                                                                                                                    | Core; method, body and answer observed                                                    |
 | Thermal PDF request, issued count                                                                                                                                             | Core; shapes from documentation, unobserved                                               |
 | Delivery-note cancellation, reference assignment, mark-as-paid, draft deletion                                                                                                | Core; shapes from documentation, unobserved                                               |
 | Draft save, issue and listing                                                                                                                                                 | Blocked on undocumented response contracts                                                |
@@ -107,7 +125,9 @@ Implement incrementally, never advertise entire-API support from a small endpoin
 | POS device list/create/delete, POS session abort, invoice POS device, installments and tip fields                                                                             | Core; shapes from documentation, unobserved                                               |
 | Viva payment links, preloaded POS transactions, POS refunds                                                                                                                   | Deferred                                                                                  |
 | Catering table list/get/create/update/open/close/delete, open order-note list, order-note cancellation                                                                        | Core; shapes from documentation, unobserved                                               |
-| Catering table filters and transfer, catering invoice (8.6) creation                                                                                                          | Blocked on provider questions                                                             |
+| Catering order-note transfer                                                                                                                                                  | Core; method, parameters and answer observed                                              |
+| Catering table list filters                                                                                                                                                   | Not offered: the provider reads them only from a GET request body                         |
+| Catering invoice (8.6) creation                                                                                                                                               | Blocked on provider questions                                                             |
 | Digital clientele correlation by mark and by FIM                                                                                                                              | Core; shapes from documentation, unobserved                                               |
 | Digital transport list/get/create/refresh/reject/confirm delivery/confirm return/transfer                                                                                     | Core; shapes from documentation, unobserved; my_data_response returned as opaque evidence |
 | Digital clientele read/create/update/cancel, digital transport imports                                                                                                        | Blocked on provider questions                                                             |
@@ -130,7 +150,7 @@ original numbering is retained for the remainder.
 | V05 | Which rejection outcomes are final, whether later UI repair can issue                                                                                | SDK exposes evidence, not terminality guesses. Mutation retry remains caller-owned.                                                 |
 | V06 | Webhook event IDs/timestamps/retries/order, key scope/rotation and unsigned Event-Type                                                               | No SDK freshness or deduplication guarantee without evidence; integrate durable inbox and read-back externally.                     |
 | V07 | Identifier size limits and remaining field nullability (amount precision is observed)                                                                | Exact serialization and schema fixtures per field; never silently round or coerce.                                                  |
-| V08 | PDF locale parameter placement, approved artifact origins, expiry and redirects                                                                      | Return links as data initially; downloading is outside v1.                                                                          |
+| V08 | Approved PDF artifact origins, expiry and redirects; whether each locale has its own artifact (the locale parameter placement is observed)           | Return links as data initially; downloading is outside v1.                                                                          |
 | V09 | Pagination under concurrent writes and historical completeness (empty shape observed)                                                                | No snapshot/export-completeness promise; callers use overlap and deduplication.                                                     |
 | V11 | Version announcements, deprecation windows, server schema/version headers                                                                            | Establish monitoring and contact; do not invent an API-version header.                                                              |
 | V12 | Destructive/corrective endpoint semantics and console repair                                                                                         | Separate gates before exposing management operations.                                                                               |

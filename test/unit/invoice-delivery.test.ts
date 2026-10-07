@@ -127,11 +127,18 @@ describe('delivery note fields', () => {
       reverse_delivery_note_purpose: 2,
       non_obligated_recipient: false,
       without_digital_transport_tracking: false,
+      from_branch: 0,
+      to_branch: 3,
     };
     const sent = await accepted(delivery(full));
-    expect(Object.keys(full)).toHaveLength(18);
+    expect(Object.keys(full)).toHaveLength(20);
     expect(sent.create.is_delivery_note).toBe(true);
-    expect(sent.create.delivery_detail).toEqual({ ...full, reverse_delivery_note_purpose: '#2' });
+    expect(sent.create.delivery_detail).toEqual({
+      ...full,
+      reverse_delivery_note_purpose: '#2',
+      from_branch: '#0',
+      to_branch: '#3',
+    });
   });
   it('should send the thirteen required fields alone and add no default', async () => {
     expect((await accepted(delivery())).create.delivery_detail).toEqual(detail);
@@ -144,12 +151,8 @@ describe('delivery note fields', () => {
     await refused(delivery({ [key]: 5 }));
     await refused(delivery({ [key]: null }));
   });
-  it.each([
-    ['from_branch', 1],
-    ['to_branch', 2],
-    ['driver', 'Synthetic'],
-  ])('should refuse the delivery detail key %s, which is not available', async (key, value) => {
-    await refused(delivery({ [key]: value }));
+  it('should refuse a delivery detail key the reference does not define', async () => {
+    await refused(delivery({ driver: 'Synthetic' }));
   });
   it.each([null, 'detail', [], [detail]])(
     'should refuse a delivery detail that is not an object (%j)',
@@ -157,6 +160,50 @@ describe('delivery note fields', () => {
       await refused(build({ is_delivery_note: true, delivery_detail: value }));
     },
   );
+});
+
+describe('delivery branch codes', () => {
+  const branchKeys = ['from_branch', 'to_branch'] as const;
+  it.each(branchKeys)(
+    'should send %s alone as an integer token, without the other',
+    async (key) => {
+      const other = key === 'from_branch' ? 'to_branch' : 'from_branch';
+      for (const code of [0, 1, 42, Number.MAX_SAFE_INTEGER]) {
+        const sent = (await accepted(delivery({ [key]: code }))).create.delivery_detail;
+        expect(sent).toEqual({ ...detail, [key]: '#' + String(code) });
+        expect(sent).not.toHaveProperty(other);
+      }
+    },
+  );
+  it('should send both codes as given, equal or different, and look no branch up', async () => {
+    for (const [from, to] of [
+      [0, 0],
+      [1, 2],
+    ]) {
+      const { client, calls } = issuing();
+      await client.invoices.create(delivery({ from_branch: from, to_branch: to }));
+      // The login and the create: no branch list is fetched to check or translate a code.
+      expect(calls.map((call) => call.url.pathname)).toEqual(['/api/v1/login', '/api/v1/invoices']);
+      expect(calls.at(-1)?.init.body).toContain(
+        '"from_branch":' + String(from) + ',"to_branch":' + String(to),
+      );
+    }
+  });
+  it('should treat an explicit undefined as omitted and send no null in its place', async () => {
+    const input = build({
+      is_delivery_note: true,
+      delivery_detail: { ...detail, from_branch: undefined, to_branch: undefined },
+    });
+    expect((await accepted(input)).create.delivery_detail).toEqual(detail);
+  });
+  it.each(branchKeys)('should refuse a %s that is not a nonnegative integer', async (key) => {
+    for (const value of ['0', '1', -1, 1.5, 2 ** 53, Number.NaN, null, true, [0], 'branch-id'])
+      await refused(delivery({ [key]: value }));
+  });
+  it('should have no place for a branch code on an invoice that is not a delivery note', async () => {
+    await refused(build({ from_branch: 0 }));
+    await refused(build({ to_branch: 0 }));
+  });
 });
 
 describe('delivery flag and detail belong together', () => {

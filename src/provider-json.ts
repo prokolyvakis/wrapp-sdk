@@ -9,9 +9,9 @@ import { freeze } from './values.js';
  * values. An object is an ordered list of entries, not a JavaScript object, so no key can
  * collide with an object member. The tree is deeply frozen.
  *
- * The SDK bounds it at 20 levels of nesting, 10 000 nodes and 4096 UTF-16 code units for
- * each string, key and number token; a larger value fails the read. Nothing in it is used to
- * decide whether an operation succeeded.
+ * The SDK bounds it at 20 levels of nesting, 10 000 nodes, 65 536 UTF-16 code units for each
+ * string value and 4096 for each key and number token; a larger value fails the read. Nothing
+ * in it is used to decide whether an operation succeeded.
  */
 export type ProviderJson =
   | Readonly<{ kind: 'null' }>
@@ -26,6 +26,8 @@ export type ProviderJson =
 
 const maxDepth = 20;
 const maxNodes = 10_000;
+// A string value can hold a whole provider document, such as an XML answer.
+const maxString = 65_536;
 const maxText = 4096;
 // The full JSON number grammar: sign, fraction and exponent included.
 const numberSyntax = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
@@ -38,7 +40,8 @@ function node(value: unknown, depth: number, budget: { nodes: number }): Provide
   if (budget.nodes > maxNodes) fail();
   if (value === null) return { kind: 'null' };
   if (typeof value === 'boolean') return { kind: 'boolean', value };
-  if (typeof value === 'string') return value.length > maxText ? fail() : { kind: 'string', value };
+  if (typeof value === 'string')
+    return value.length > maxString ? fail() : { kind: 'string', value };
   if (value instanceof LosslessNumber) {
     const text = value.value;
     return text.length > maxText || !numberSyntax.test(text) ? fail() : { kind: 'number', text };

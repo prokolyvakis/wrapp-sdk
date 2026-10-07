@@ -28,6 +28,7 @@ grounded in documentation, what is observed behavior, and what remains an open q
 | branches.create                     | POST /branches                                 | effectful      |
 | branches.update                     | PUT /branches/:id                              | effectful      |
 | billingBooks.create                 | POST /billing_books                            | effectful      |
+| billingBooks.updateNumber           | PUT /billing_books/:id                         | effectful      |
 | digitalClienteles.correlateByMark   | POST /digital_clienteles/:id/correlate_by_mark | effectful      |
 | digitalClienteles.correlateByFim    | POST /digital_clienteles/:id/correlate_by_fim  | effectful      |
 | posDevices.list                     | GET /pos_devices                               | read           |
@@ -40,6 +41,7 @@ grounded in documentation, what is observed behavior, and what remains an open q
 | cateringTables.update               | PATCH /catering_tables/:id                     | effectful      |
 | cateringTables.open                 | POST /catering_tables/open_table               | effectful      |
 | cateringTables.close                | POST /catering_tables/:id/close                | effectful      |
+| cateringTables.transfer             | GET /catering_tables/transfer                  | effectful      |
 | cateringTables.delete               | DELETE /catering_tables/:id                    | effectful      |
 | invoices.listOpenCateringOrderNotes | GET /invoices/list_open_catering_order_notes   | read           |
 | invoices.cancelCateringOrderNotes   | POST /invoices/cancel_catering_order_note      | effectful      |
@@ -163,8 +165,11 @@ Delivery notes:
   issuer_of_movement, from_address, from_number, from_city, from_zipcode, to_address,
   to_number, to_city and to_zipcode, all required; and optionally
   purpose_of_movement_custom_title, reverse_delivery_note, reverse_delivery_note_purpose,
-  non_obligated_recipient and without_digital_transport_tracking. The provider's from_branch
-  and to_branch are not available and are refused.
+  non_obligated_recipient, without_digital_transport_tracking, from_branch and to_branch.
+- from_branch and to_branch are branch codes, the `code` of a branch and not its id:
+  nonnegative integers, each optional on its own and sent as a JSON integer as given. The SDK
+  checks no code against the tenant's branches and looks none up. An omitted code is not
+  sent, and the provider then records none.
 - purpose_of_movement is a string from '1' to '20' without '6', '15', '16', '17' and '18';
   '19' needs purpose_of_movement_custom_title. reverse_delivery_note: true needs
   reverse_delivery_note_purpose, 1 to 5. non_obligated_recipient and
@@ -213,9 +218,10 @@ SDK never picks a code, and they are never applied to values the provider return
 Decimals are nonnegative canonical decimal strings with at most 18 integer digits; no
 exponents, leading zeros or rounding. Monetary totals and the exchange rate accept at most 2
 fraction digits; quantities and unit prices accept up to 12. A value with more precision is
-rejected, never rounded. The unit-price bound follows observed provider behavior; whether the
-provider limits quantity precision is an open question, so the quantity bound is unchanged.
-These are SDK bounds, not assertions of provider limits (V07 is open). Exact JSON numeric tokens are emitted through a
+rejected, never rounded. The quantity and unit-price bounds follow observed provider
+behavior: a value of either with more than 2 fraction digits is accepted and returned
+unchanged, although the reference states a maximum of 2 digits. These are SDK bounds, not
+assertions of provider limits. Exact JSON numeric tokens are emitted through a
 lossless serializer. Inbound decimals accept bounded nonnegative numeric tokens (including
 exponent notation), preserving their value.
 
@@ -269,6 +275,14 @@ result (errorCount and rejectionSource only).
   invoice_type_code is any of the provider's 52 type codes, since a book can exist for a type
   create does not issue. The result is observed with the book (id, name, series,
   invoice_type_code, and number only when the provider returns it) or rejected.
+- billingBooks.updateNumber(billingBookId, { number }) sets the number of a book, a
+  nonnegative integer. It is the one field the provider lets a book change, so the input
+  takes nothing else. The provider issues the book's next document from this number: the SDK
+  chooses no number, keeps no counter and does not check the value against documents already
+  issued, so repeated or skipped numbers are the caller's to prevent. One PUT, never retried;
+  effect unknown after a dispatched failure. The result is observed with the book as the
+  provider returned it (its number is the provider's, not compared with the request) or
+  rejected. A book with another id is a protocol error.
 
 Three provider behaviors are worth knowing before calling these. Setting default_option true
 removes the default from every other branch. A billing book's number is the counter invoices
@@ -332,20 +346,30 @@ and neither appears in any error.
 Tables, on `client.cateringTables`:
 
 - list() returns every table as a summary: id, status, name and total. The provider's status
-  and name filters are not available yet.
+  and name filters are not offered: it was observed to read them only from the body of the
+  GET request, which a fetch client cannot send.
 - get(tableId) returns one table with its details: the summary fields plus invoices (invoice
   ids) and error_message when the provider sends them.
-- create({ name? }) creates a table; without a name the provider assigns one, and nothing is
-  sent in its place. update(tableId, { name }) renames one.
+- create({ name }) creates a table with that name. The name is required: the provider was
+  observed to answer a create without one with HTTP 400. update(tableId, { name }) renames a
+  table.
 - open({ id?, name? }) opens a table by id, by name, or by both. At least one is required.
   The provider states no rule for both, so both are sent as given and it decides.
 - close(tableId) closes a table. delete(tableId) deletes one; the provider documents deletion
   for an available table.
+- transfer({ current_table, target_table, marks? }) moves order notes from one table to
+  another. marks holds the registration marks of the notes to move, 1 to 100 (the count is an
+  SDK bound). Without marks the provider's reference says every open order note of the
+  current table moves; that case was not observed. An empty list is refused, because a query
+  cannot tell it from an omitted one. The provider serves this as a GET with the input as
+  query parameters (`marks[]` once per mark); the SDK treats it as the write it is.
 
-The five writes are dispatched at most once, never retried, and report effect unknown after a
-dispatched failure. create, update, open and close return observed with the table, or
-rejected; delete returns acknowledged or rejected. An answer for another table than the one
-addressed by id is a protocol error.
+The six writes are dispatched at most once, never retried, and report effect unknown after a
+dispatched failure. create, update, open, close and transfer return observed with the table,
+or rejected; delete returns acknowledged or rejected. An answer for another table than the one
+addressed by id is a protocol error. transfer addresses two tables and the provider's answer
+does not say which one it returns, so its table is returned as it came: read both tables to
+see where the notes are. get refuses the id `transfer`, which names the transfer route.
 
 A table's status is data, returned verbatim. The provider documents available, open, closed
 and alert; another value is returned as received. The SDK never treats a status as a failure
@@ -428,9 +452,10 @@ exponent included, and is never converted to a JavaScript number; the number 1 a
 "1" stay different nodes. An object is a list of entries, not a JavaScript object, so a key
 such as `constructor` is only a key. The tree is deeply frozen.
 
-Bounds, which are SDK policy and not provider limits: 20 levels of nesting, 10 000 nodes, and
-4096 UTF-16 code units for each string, key and number token. A larger value fails the read
-with a protocol error. An absent my_data_response stays absent; an explicit JSON null is a
+Bounds, which are SDK policy and not provider limits: 20 levels of nesting, 10 000 nodes,
+65 536 UTF-16 code units for each string value (one can hold a whole document, such as an XML
+answer of the tax authority), and 4096 for each key and number token. A larger value fails
+the read with a protocol error. An absent my_data_response stays absent; an explicit JSON null is a
 node of kind `null`.
 
 Nothing inside the tree is read by the SDK: an error-shaped or status-shaped value in it does
@@ -610,6 +635,10 @@ SDK sends, never what it tolerates on a read.
   maxPages fail explicitly. No snapshot guarantee, silent truncation or silent deduplication.
 - The PDF URL is data, HTTPS only, never automatically fetched. A status-only PDF response has
   unknown acknowledgement semantics; unsigned prose is not queued/ready evidence.
+- requestPdf(invoiceId, { locale }) asks for the document in `el` or `en` through a `locale`
+  query parameter, beside the common request options. Without a locale no query is sent and
+  the provider uses its default; another value is refused before any request. Whether the
+  two locales are separate artifacts is not established.
 - requestThermalPdf follows the same rules as requestPdf on its own route and operation name:
   one effectful GET, the same available, acknowledged and rejected outcomes, no download, no
   polling. It takes no locale.

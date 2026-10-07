@@ -37,6 +37,16 @@ export type BillingBookCreateOutcome = Readonly<{
 }>;
 
 // @public
+export type BillingBookNumberOutcome = Readonly<{
+    kind: 'observed';
+    billingBook: BillingBook;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
 export interface BillingBookReceipt {
     // (undocumented)
     readonly id: string;
@@ -56,6 +66,9 @@ export interface BillingBookResource {
     create(input: CreateBillingBookInput, options?: RequestOptions): Promise<BillingBookCreateOutcome>;
     // (undocumented)
     list(options?: RequestOptions): Promise<readonly BillingBook[]>;
+    updateNumber(billingBookId: string, input: Readonly<{
+        number: number;
+    }>, options?: RequestOptions): Promise<BillingBookNumberOutcome>;
 }
 
 // @public
@@ -184,13 +197,14 @@ export type CateringTableOutcome = Readonly<{
 export interface CateringTableResource {
     close(tableId: string, options?: RequestOptions): Promise<CateringTableOutcome>;
     create(table: Readonly<{
-        name?: string;
+        name: string;
     }>, options?: RequestOptions): Promise<CateringTableOutcome>;
     delete(tableId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
     // (undocumented)
     get(tableId: string, options?: RequestOptions): Promise<CateringTable>;
     list(options?: RequestOptions): Promise<readonly CateringTableSummary[]>;
     open(table: OpenCateringTableInput, options?: RequestOptions): Promise<CateringTableOutcome>;
+    transfer(input: TransferCateringOrderNotesInput, options?: RequestOptions): Promise<CateringTableOutcome>;
     update(tableId: string, patch: Readonly<{
         name: string;
     }>, options?: RequestOptions): Promise<CateringTableOutcome>;
@@ -443,6 +457,7 @@ export interface DeliveryDetail {
     readonly dispatch_time: string;
     // (undocumented)
     readonly from_address: string;
+    readonly from_branch?: number;
     // (undocumented)
     readonly from_city: string;
     // (undocumented)
@@ -459,6 +474,7 @@ export interface DeliveryDetail {
     readonly reverse_delivery_note_purpose?: number;
     // (undocumented)
     readonly to_address: string;
+    readonly to_branch?: number;
     // (undocumented)
     readonly to_city: string;
     // (undocumented)
@@ -840,7 +856,9 @@ export interface InvoiceResource {
         page?: number;
     }>, options?: RequestOptions): Promise<OpenCateringOrderNotesPage>;
     markAsPaid(invoiceId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
-    requestPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
+    requestPdf(invoiceId: string, options?: RequestOptions & {
+        readonly locale?: 'el' | 'en';
+    }): Promise<PdfOutcome>;
     requestThermalPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
     setExternalId(invoiceId: string, input: Readonly<{
         external_id: string;
@@ -1072,6 +1090,15 @@ export type TenantIdentity = Readonly<{
     kind: 'email' | 'userId';
     value: string;
 }>;
+
+// @public
+export interface TransferCateringOrderNotesInput {
+    // (undocumented)
+    readonly current_table: string;
+    readonly marks?: readonly string[];
+    // (undocumented)
+    readonly target_table: string;
+}
 
 // @public
 export interface TransportLegInput {

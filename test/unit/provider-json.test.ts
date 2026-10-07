@@ -76,10 +76,16 @@ describe('ProviderJson', () => {
     expect(tree(list(9_999)).kind).toBe('array');
     refused(() => tree(list(10_000)));
   });
-  it('should accept text of 4096 code units and refuse 4097, for strings, keys and number tokens', () => {
+  it('should accept a string value of 65536 code units and refuse 65537', () => {
     const text = (length: number) => 'x'.repeat(length);
-    expect(tree('"' + text(4096) + '"').kind).toBe('string');
-    refused(() => tree('"' + text(4097) + '"'));
+    const value = tree('"' + text(65_536) + '"');
+    expect(value.kind === 'string' && value.value.length).toBe(65_536);
+    refused(() => tree('"' + text(65_537) + '"'));
+    // A provider document held as one string, such as an XML answer, is far above 4096.
+    expect(tree('{"my_data_response":"' + text(20_000) + '"}').kind).toBe('object');
+  });
+  it('should accept a key or number token of 4096 code units and refuse 4097', () => {
+    const text = (length: number) => 'x'.repeat(length);
     expect(tree('{"' + text(4096) + '":1}').kind).toBe('object');
     refused(() => tree('{"' + text(4097) + '":1}'));
     expect(tree('1' + '0'.repeat(4095)).kind).toBe('number');

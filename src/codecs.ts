@@ -71,8 +71,8 @@ const inputDecimal = z
     }
   })
   .transform((v) => new LosslessNumber(v));
-// Monetary totals stay at 2 fraction digits; quantities and unit prices may need more (V07 is
-// open).
+// Monetary totals stay at 2 fraction digits. Quantities and unit prices keep the full
+// precision: the provider was observed to accept and return more than 2 digits for both.
 const inputAmount = inputDecimal.refine((v) => /^\d+(\.\d{1,2})?$/.test(v.value));
 // The reference bounds the exchange rate at 2 fraction digits. Excess precision is refused,
 // never rounded.
@@ -243,8 +243,9 @@ const purposeOfMovement = z.enum([
   '19',
   '20',
 ]);
-// The 18 fields of the delivery detail that the reference defines unambiguously. Its two
-// branch fields are not among them and are refused as unknown keys.
+const branchCode = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+// The delivery detail. Its two branch fields are branch codes, sent as JSON integers: the
+// provider was observed to accept and return them so. No code is checked against a branch.
 const deliveryDetailSchema = z
   .strictObject({
     dispatch_date: dispatchDate,
@@ -265,6 +266,8 @@ const deliveryDetailSchema = z
     reverse_delivery_note_purpose: member([1, 2, 3, 4, 5]).optional(),
     non_obligated_recipient: z.boolean().optional(),
     without_digital_transport_tracking: z.boolean().optional(),
+    from_branch: branchCode.optional(),
+    to_branch: branchCode.optional(),
   })
   .refine((v) => v.purpose_of_movement !== '19' || v.purpose_of_movement_custom_title !== undefined)
   .refine((v) => v.reverse_delivery_note !== true || v.reverse_delivery_note_purpose !== undefined)
@@ -275,7 +278,7 @@ const correlatedEntitySchema = z.strictObject({
   entity_type: member([1, 2, 3, 4, 5, 6]),
   vat_number: nonempty,
   country_code: z.string().regex(/^[A-Z]{2}$/),
-  branch_code: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  branch_code: branchCode,
   name: nonempty,
   street: nonempty,
   number: nonempty,
@@ -674,17 +677,14 @@ export const branchSchema = z.object({
   code: z.union([text, integerString]),
 });
 export const branchesSchema = z.array(branchSchema).max(10_000);
-export const booksSchema = z
-  .array(
-    z.object({
-      id: identifier,
-      name: nonempty,
-      series: text,
-      invoice_type_code: nonempty,
-      number: integerString,
-    }),
-  )
-  .max(10_000);
+export const bookSchema = z.object({
+  id: identifier,
+  name: nonempty,
+  series: text,
+  invoice_type_code: nonempty,
+  number: integerString,
+});
+export const booksSchema = z.array(bookSchema).max(10_000);
 export const vatSchema = z.object({
   vat_no: nonempty,
   name: nonempty,

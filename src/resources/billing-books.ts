@@ -1,12 +1,25 @@
-import { booksSchema, decode, encodeJson, input, rejection } from '../codecs.js';
+import {
+  bookSchema,
+  booksSchema,
+  decode,
+  encodeJson,
+  identifier,
+  input,
+  rejection,
+} from '../codecs.js';
 import { WrappError } from '../errors.js';
-import { billingBookCreateSchema, billingBookReceiptSchema } from '../management-codecs.js';
+import {
+  billingBookCreateSchema,
+  billingBookNumberSchema,
+  billingBookReceiptSchema,
+} from '../management-codecs.js';
 import type {
   BillingBookCreateOutcome,
+  BillingBookNumberOutcome,
   BillingBookResource,
   CreateBillingBookInput,
 } from '../management-types.js';
-import { readValue } from '../runtime.js';
+import { readValue, refused } from '../runtime.js';
 import type { Runtime } from '../runtime.js';
 import type { RequestOptions } from '../types.js';
 import { freeze } from '../values.js';
@@ -46,6 +59,31 @@ export function billingBookResource(runtime: Runtime): BillingBookResource {
             kind: 'observed',
             billingBook: decode(billingBookReceiptSchema, value, 'billingBookCreate'),
           });
+        },
+        opts,
+        encodeJson(data),
+      );
+    },
+    updateNumber: async (
+      billingBookId: string,
+      change: Readonly<{ number: number }>,
+      opts?: RequestOptions,
+    ) => {
+      const valid = input(identifier, billingBookId, 'billingBookUpdateNumber');
+      const data = input(billingBookNumberSchema, change, 'billingBookUpdateNumber');
+      return runtime.run(
+        'billingBookUpdateNumber',
+        '/billing_books/' + encodeURIComponent(valid),
+        (value, report): BillingBookNumberOutcome => {
+          const outcome = refused(value, report);
+          if (outcome !== undefined) return outcome;
+          if (value !== null && typeof value === 'object' && 'status' in value)
+            throw new WrappError('PROTOCOL_ERROR', 'billingBookUpdateNumber');
+          const billingBook = decode(bookSchema, value, 'billingBookUpdateNumber');
+          // Another book's record says nothing about this one.
+          if (billingBook.id !== valid)
+            throw new WrappError('PROTOCOL_ERROR', 'billingBookUpdateNumber');
+          return freeze({ kind: 'observed', billingBook });
         },
         opts,
         encodeJson(data),

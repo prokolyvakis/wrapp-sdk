@@ -9,7 +9,7 @@ export interface CateringTableSummary {
    * `closed` and `alert`; another value is returned as received, not refused.
    */
   readonly status: string;
-  /** A table created without a name is given a number by the provider; it is kept as text. */
+  /** Kept as text, also when the provider sends a number. */
   readonly name: string;
   /** Exact numeric text as the provider sent it, for example '140.0'. */
   readonly total: string;
@@ -31,6 +31,16 @@ export interface CateringTable extends CateringTableSummary {
 export type CateringTableOutcome =
   | Readonly<{ kind: 'observed'; table: CateringTable }>
   | Readonly<{ kind: 'rejected'; errorCount: number; rejectionSource: RejectionSource }>;
+/** Which order notes to move from one table to another. */
+export interface TransferCateringOrderNotesInput {
+  readonly current_table: string;
+  readonly target_table: string;
+  /**
+   * Registration marks of the order notes to move: 1 to 100. Omitted, the provider moves
+   * every open order note of the current table. An empty list is refused.
+   */
+  readonly marks?: readonly string[];
+}
 /** At least one of the two. When both are given, both are sent and the provider decides. */
 export type OpenCateringTableInput =
   Readonly<{ id: string; name?: string }> | Readonly<{ id?: string; name: string }>;
@@ -39,11 +49,11 @@ export interface CateringTableResource {
   list(options?: RequestOptions): Promise<readonly CateringTableSummary[]>;
   get(tableId: string, options?: RequestOptions): Promise<CateringTable>;
   /**
-   * Creates a table. Without a name the provider assigns one. Dispatched at most once: after
-   * a failure whose effect is 'unknown', list the tables before creating again.
+   * Creates a table with the given name. Dispatched at most once: after a failure whose
+   * effect is 'unknown', list the tables before creating again.
    */
   create(
-    table: Readonly<{ name?: string }>,
+    table: Readonly<{ name: string }>,
     options?: RequestOptions,
   ): Promise<CateringTableOutcome>;
   /** Renames a table. Dispatched at most once. */
@@ -56,6 +66,16 @@ export interface CateringTableResource {
   open(table: OpenCateringTableInput, options?: RequestOptions): Promise<CateringTableOutcome>;
   /** Closes a table. Dispatched at most once; no invoice is issued or cancelled by the SDK. */
   close(tableId: string, options?: RequestOptions): Promise<CateringTableOutcome>;
+  /**
+   * Moves order notes from one table to another. A GET that changes provider state: it is
+   * dispatched at most once and never retried, and a failure after dispatch has effect
+   * 'unknown'. 'observed' carries the table the provider returned, which can be either of
+   * the two; read both tables to see where the notes are.
+   */
+  transfer(
+    input: TransferCateringOrderNotesInput,
+    options?: RequestOptions,
+  ): Promise<CateringTableOutcome>;
   /** Deletes a table; the provider documents this for an available table. Dispatched at most once. */
   delete(tableId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
 }

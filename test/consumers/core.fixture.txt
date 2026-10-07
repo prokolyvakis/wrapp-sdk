@@ -9,6 +9,9 @@ const written: Record<string, unknown> = {
   'POST /api/v1/branches': { id: 'new-branch', name: 'Branch', code: 2 },
   'PUT /api/v1/branches/new-branch': { id: 'new-branch', name: 'Renamed', code: 2 },
   'POST /api/v1/billing_books': { id: 'new-book', name: 'Book', series: 'S', invoice_type_code: '2.1' },
+  'PUT /api/v1/billing_books/new-book': { id: 'new-book', name: 'Book', series: 'S', invoice_type_code: '2.1', number: 7, branches: [] },
+  'GET /api/v1/invoices/invoice/generate_pdf': { download_url: 'https://example.invalid/pdf' },
+  'GET /api/v1/catering_tables/transfer': { id: 'other', status: 'open', name: 'table2', total: 4.5, invoices: ['note'], error_message: null },
   'POST /api/v1/digital_clienteles/entry/correlate_by_mark': { notice: 'Correlated' },
   'POST /api/v1/digital_clienteles/entry/correlate_by_fim': { errors: 'Refused' },
   'GET /api/v1/catering_tables': [{ id: 'table', status: 'open', name: 'table1', total: '140.0' }],
@@ -80,6 +83,10 @@ const renamed = await client.branches.update('new-branch', { name: 'Renamed' });
 assert.equal(renamed.kind === 'observed' ? renamed.branch.name : renamed.kind, 'Renamed');
 const book = await client.billingBooks.create({ name: 'Book', series: 'S', number: 1, invoice_type_code: '2.1' });
 assert.equal(book.kind === 'observed' ? book.billingBook.number : book.kind, undefined);
+const renumbered = await client.billingBooks.updateNumber('new-book', { number: 7 });
+assert.equal(renumbered.kind === 'observed' ? renumbered.billingBook.number : renumbered.kind, '7');
+const englishPdf = await client.invoices.requestPdf('invoice', { locale: 'en', timeoutMs: 5000 });
+assert.equal(englishPdf.kind === 'available' ? englishPdf.downloadUrl : englishPdf.kind, 'https://example.invalid/pdf');
 assert.equal((await client.digitalClienteles.correlateByMark('entry', { correlate_mark: '400000000000001' })).kind, 'acknowledged');
 const byFim = await client.digitalClienteles.correlateByFim('entry', { correlate_fim_number: 'ABC1', correlate_fim_aa: '1' });
 assert.equal(byFim.kind === 'rejected' ? byFim.errorCount : 0, 1);
@@ -91,7 +98,7 @@ assert.equal((await client.posDevices.delete('device')).kind, 'acknowledged');
 assert.equal((await client.posSessions.abort('invoice')).kind, 'acknowledged');
 const tableStatus: string = (await client.cateringTables.list())[0]?.status ?? '';
 assert.equal(tableStatus, 'open');
-const createdTable = await client.cateringTables.create({});
+const createdTable = await client.cateringTables.create({ name: '7' });
 assert.equal(createdTable.kind === 'observed' ? createdTable.table.name : createdTable.kind, '7');
 const shown = await client.cateringTables.get('table');
 assert.equal(shown.status + String(shown.error_message) + String(shown.invoices?.length), 'alertCheck1');
@@ -99,6 +106,8 @@ const renamedTable = await client.cateringTables.update('table', { name: 'rename
 assert.equal(renamedTable.kind === 'observed' ? renamedTable.table.invoices : null, undefined);
 assert.equal((await client.cateringTables.open({ name: 'table1' })).kind, 'observed');
 assert.equal((await client.cateringTables.close('table')).kind, 'rejected');
+const movedNotes = await client.cateringTables.transfer({ current_table: 'table', target_table: 'other', marks: ['400000000000001'] });
+assert.equal(movedNotes.kind === 'observed' ? movedNotes.table.id + movedNotes.table.total : movedNotes.kind, 'other4.5');
 assert.equal((await client.cateringTables.delete('table')).kind, 'acknowledged');
 const notes = await client.invoices.listOpenCateringOrderNotes({ page: 1 });
 assert.equal(notes.invoices[0]?.issued_at, '2026-05-13T10:00:00.000Z');
@@ -214,6 +223,8 @@ const sender: OtherCorrelatedEntity = { entity_type: 1, vat_number: '000000000',
 const deliveryNote: Pick<CreateInvoiceInput, 'invoice_type_code' | 'is_delivery_note' | 'delivery_detail' | 'other_correlated_entities'> =
   { invoice_type_code: '2.1', is_delivery_note: true, delivery_detail: movement, other_correlated_entities: [sender] };
 assert.equal(deliveryNote.invoice_type_code + String(deliveryNote.delivery_detail?.dispatch_time), '2.102:30');
+const branched: DeliveryDetail = { ...movement, from_branch: 0, to_branch: 1 };
+assert.equal(String(branched.from_branch) + String(branched.to_branch), '01');
 const readBack = undefined as unknown as InvoiceDetails | undefined;
 const dispatchDate: string | null | undefined = readBack?.delivery_details?.dispatch_date;
 const budgetType: string | null | undefined = readBack?.b2g_details?.b2g_budget_type;
@@ -231,9 +242,15 @@ if (false) {
   // @ts-expect-error Type 8.6 is not issued through create.
   const unaccepted: CreateInvoiceInput['invoice_type_code'] = '8.6';
   void unaccepted;
-  // @ts-expect-error The delivery detail has no branch fields yet.
-  const branched: DeliveryDetail = { ...movement, from_branch: 1 };
-  void branched;
+  // @ts-expect-error A delivery branch is a branch code, a number, not a branch id.
+  const byBranchId: DeliveryDetail = { ...movement, from_branch: 'branch' };
+  void byBranchId;
+  // @ts-expect-error The PDF locale is 'el' or 'en'.
+  void client.invoices.requestPdf('invoice', { locale: 'fr' });
+  // @ts-expect-error A catering table is created with a name.
+  void client.cateringTables.create({});
+  // @ts-expect-error Only the number of a billing book can be updated.
+  void client.billingBooks.updateNumber('new-book', { name: 'Renamed' });
   // @ts-expect-error The accommodation-tax fields of type 8.2 are not part of the line type.
   const lodging: InvoiceLine['accommodation_tax'] = undefined;
   void lodging;

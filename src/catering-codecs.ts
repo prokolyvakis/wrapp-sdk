@@ -15,8 +15,7 @@ import {
 const summaryFields = {
   id: identifier,
   status: nonempty,
-  // A table created without a name is given a number by the provider; either JSON form is
-  // kept as its exact text.
+  // Either JSON form of a name is kept as its exact text.
   name: z.union([text, integerString]),
   total: numericText,
 };
@@ -26,12 +25,20 @@ export const cateringTableSchema = z.object({
   invoices: z.array(identifier).max(10_000).exactOptional(),
   error_message: text.nullable().exactOptional(),
 });
-export const cateringTableCreateSchema = z.strictObject({ name: nonempty.optional() });
+// The provider answers a create without a name with HTTP 400, so the name is required here.
+export const cateringTableCreateSchema = z.strictObject({ name: nonempty });
 export const cateringTableUpdateSchema = z.strictObject({ name: nonempty });
 // The reference requires one of the two and states no rule for both: both are sent as given.
 export const cateringTableOpenSchema = z
   .strictObject({ id: identifier.optional(), name: nonempty.optional() })
   .refine((v) => v.id !== undefined || v.name !== undefined);
+// Sent as query parameters. An empty marks list cannot be written in a query and would read
+// as no marks at all, which moves every open note: it is refused, never reinterpreted.
+export const cateringTableTransferSchema = z.strictObject({
+  current_table: identifier,
+  target_table: identifier,
+  marks: z.array(nonempty).min(1).max(100).optional(),
+});
 
 export const openOrderNotesInputSchema = z.strictObject({
   page: z.number().int().min(1).max(1_000_000).optional(),

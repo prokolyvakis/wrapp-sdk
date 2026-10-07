@@ -281,10 +281,7 @@ export interface CreateInvoiceInput {
   /** At most 150 characters. */
   readonly other_receiving_note_purpose_title?: string;
 }
-/**
- * The movement of a delivery note. The provider's two branch fields (`from_branch`,
- * `to_branch`) are not available and are refused.
- */
+/** The movement of a delivery note. */
 export interface DeliveryDetail {
   /** A real calendar date written DD-MM-YYYY. */
   readonly dispatch_date: string;
@@ -314,6 +311,14 @@ export interface DeliveryDetail {
    */
   readonly non_obligated_recipient?: boolean;
   readonly without_digital_transport_tracking?: boolean;
+  /**
+   * The code of the branch the goods leave from, as `Branch.code` gives it: a nonnegative
+   * integer, not a branch id. Sent as given; the SDK looks no branch up. Omitted, nothing is
+   * sent and the provider records none.
+   */
+  readonly from_branch?: number;
+  /** The code of the branch the goods arrive at; same rules as `from_branch`. */
+  readonly to_branch?: number;
 }
 /** Another party related to the invoice, for example a sender when a carrier issues it. */
 export interface OtherCorrelatedEntity {
