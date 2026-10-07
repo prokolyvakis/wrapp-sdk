@@ -6,28 +6,30 @@ grounded in documentation, what is observed behavior, and what remains an open q
 
 ## Supported operations
 
-| Resource                    | Method/path under /api/v1                 | Effect         |
-| --------------------------- | ----------------------------------------- | -------------- |
-| login (internal)            | POST /login                               | authentication |
-| tenant.get                  | GET /tenant_details                       | read           |
-| vat.search                  | GET /vat_search?vat=...&country_code=...  | read           |
-| vat.exemptions              | GET /vat_exemptions                       | read           |
-| branches.list               | GET /branches                             | read           |
-| billingBooks.list           | GET /billing_books                        | read           |
-| invoices.getStatus          | GET /invoices/:id                         | read           |
-| invoices.get                | GET /invoices/:id/find_invoice_by_id      | read           |
-| invoices.list / iterate     | GET /invoices/find_all_invoices           | read           |
-| invoices.create             | POST /invoices                            | effectful      |
-| invoices.requestPdf         | GET /invoices/:id/generate_pdf            | effectful      |
-| invoices.requestThermalPdf  | GET /invoices/:id/generate_thermal_pdf    | effectful      |
-| invoices.issuedCount        | GET /invoices/issued_count                | read           |
-| invoices.cancelDeliveryNote | DELETE /invoices/:id/cancel               | effectful      |
-| invoices.setExternalId      | PUT /invoices/:invoice_id/set_external_id | effectful      |
-| invoices.markAsPaid         | GET /invoices/:invoice_id/mark_as_paid    | effectful      |
-| invoices.drafts.delete      | DELETE /invoices/:invoice_id/delete_draft | effectful      |
-| branches.create             | POST /branches                            | effectful      |
-| branches.update             | PUT /branches/:id                         | effectful      |
-| billingBooks.create         | POST /billing_books                       | effectful      |
+| Resource                          | Method/path under /api/v1                      | Effect         |
+| --------------------------------- | ---------------------------------------------- | -------------- |
+| login (internal)                  | POST /login                                    | authentication |
+| tenant.get                        | GET /tenant_details                            | read           |
+| vat.search                        | GET /vat_search?vat=...&country_code=...       | read           |
+| vat.exemptions                    | GET /vat_exemptions                            | read           |
+| branches.list                     | GET /branches                                  | read           |
+| billingBooks.list                 | GET /billing_books                             | read           |
+| invoices.getStatus                | GET /invoices/:id                              | read           |
+| invoices.get                      | GET /invoices/:id/find_invoice_by_id           | read           |
+| invoices.list / iterate           | GET /invoices/find_all_invoices                | read           |
+| invoices.create                   | POST /invoices                                 | effectful      |
+| invoices.requestPdf               | GET /invoices/:id/generate_pdf                 | effectful      |
+| invoices.requestThermalPdf        | GET /invoices/:id/generate_thermal_pdf         | effectful      |
+| invoices.issuedCount              | GET /invoices/issued_count                     | read           |
+| invoices.cancelDeliveryNote       | DELETE /invoices/:id/cancel                    | effectful      |
+| invoices.setExternalId            | PUT /invoices/:invoice_id/set_external_id      | effectful      |
+| invoices.markAsPaid               | GET /invoices/:invoice_id/mark_as_paid         | effectful      |
+| invoices.drafts.delete            | DELETE /invoices/:invoice_id/delete_draft      | effectful      |
+| branches.create                   | POST /branches                                 | effectful      |
+| branches.update                   | PUT /branches/:id                              | effectful      |
+| billingBooks.create               | POST /billing_books                            | effectful      |
+| digitalClienteles.correlateByMark | POST /digital_clienteles/:id/correlate_by_mark | effectful      |
+| digitalClienteles.correlateByFim  | POST /digital_clienteles/:id/correlate_by_fim  | effectful      |
 
 There is no generic request escape hatch. Origins are explicit staging/production; the
 loopback-only test-origin override is visibly an advanced test capability. An injected fetch
@@ -125,6 +127,26 @@ are numbered from: the SDK sends the value given and neither allocates nor recon
 counters. And the provider stores some types under their family, so a book requested as 1.2
 can come back as 1.1; the returned type is kept as given and is not compared with the request.
 Updating a billing book's number is not available.
+
+## Digital clientele correlations
+
+Two operations correlate an existing digital clientele entry. Each is dispatched at most once
+and never retried, makes no follow-up request, and reports effect unknown after a dispatched
+failure.
+
+- digitalClienteles.correlateByMark(clienteleId, { correlate_mark }) correlates the entry with
+  an invoice by its registration mark.
+- digitalClienteles.correlateByFim(clienteleId, { correlate_fim_number, correlate_fim_aa })
+  correlates it with a fiscal device receipt.
+
+The two bodies are distinct and strict: each field is a nonempty string, and neither
+operation accepts the other's fields. The result is acknowledged when the provider returns
+its notice, or rejected (errorCount and rejectionSource). The provider reports a refusal of
+these two operations as a single string, which counts as one issue. Neither the notice nor
+the refusal is interpreted: a refusal saying a correlation already exists is still a
+rejection, not a finding that the correlation is in place.
+
+Reading, creating, updating and cancelling a digital clientele entry are not available.
 
 ## Returned fields
 

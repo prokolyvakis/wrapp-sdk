@@ -8,6 +8,10 @@
 export { WrappClient } from './client.js';
 export type { InvoiceResource } from './resources/invoices.js';
 export type {
+  ClienteleCorrelationOutcome,
+  DigitalClienteleResource,
+} from './digital-clientele-types.js';
+export type {
   BillingBookCreateOutcome,
   BillingBookReceipt,
   BillingBookResource,

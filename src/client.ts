@@ -6,9 +6,11 @@ import {
   vatInputSchema,
   vatSchema,
 } from './codecs.js';
+import type { DigitalClienteleResource } from './digital-clientele-types.js';
 import type { BillingBookResource, BranchResource } from './management-types.js';
 import { billingBookResource } from './resources/billing-books.js';
 import { branchResource } from './resources/branches.js';
+import { digitalClienteleResource } from './resources/digital-clienteles.js';
 import { invoiceResource } from './resources/invoices.js';
 import type { InvoiceResource } from './resources/invoices.js';
 import { createRuntime, readValue } from './runtime.js';
@@ -30,6 +32,7 @@ export class WrappClient {
     exemptions(options?: RequestOptions): Promise<readonly Readonly<Record<string, string>>[]>;
   }>;
   readonly invoices: Readonly<InvoiceResource>;
+  readonly digitalClienteles: Readonly<DigitalClienteleResource>;
 
   constructor(options: ClientOptions) {
     // One runtime per client: every resource shares its session, deadline and limits, and
@@ -68,6 +71,7 @@ export class WrappClient {
         ),
     });
     this.invoices = Object.freeze(invoiceResource(runtime));
+    this.digitalClienteles = Object.freeze(digitalClienteleResource(runtime));
     Object.freeze(this);
   }
 }

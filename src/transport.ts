@@ -24,6 +24,8 @@ export const operations = Object.freeze({
   branchCreate: { method: 'POST', effectful: true },
   branchUpdate: { method: 'PUT', effectful: true },
   billingBookCreate: { method: 'POST', effectful: true },
+  clienteleCorrelateByMark: { method: 'POST', effectful: true },
+  clienteleCorrelateByFim: { method: 'POST', effectful: true },
 } as const);
 export type Operation = keyof typeof operations;
 export function scope(

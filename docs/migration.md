@@ -146,7 +146,8 @@ The release also adds these type exports: `InvoiceStatusOutcome`, `PendingInvoic
 
 ### New operations
 
-Additive. Each is a new method on an existing resource and changes nothing you already call.
+Additive. Each is a new method, on an existing resource or on the new
+`client.digitalClienteles` resource, and changes nothing you already call.
 
 - `invoices.requestThermalPdf(invoiceId)` — the thermal-printer PDF, with the outcomes of
   `requestPdf`.
@@ -157,6 +158,8 @@ Additive. Each is a new method on an existing resource and changes nothing you a
 - `invoices.drafts.delete(invoiceId)` — the only draft operation available.
 - `branches.create(input)` and `branches.update(branchId, patch)`.
 - `billingBooks.create(input)`.
+- `digitalClienteles.correlateByMark` and `digitalClienteles.correlateByFim`, on a new
+  `client.digitalClienteles` resource.
 
 One case needs an edit: code that implements the exported `InvoiceResource` interface itself,
 such as a typed test double, must add the new methods. The same holds for an object typed as

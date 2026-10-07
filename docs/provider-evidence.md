@@ -86,7 +86,8 @@ Implement incrementally, never advertise entire-API support from a small endpoin
 | Thermal PDF/POS-error callbacks                                                | Core typed events; body shapes from documentation, unobserved |
 | POS devices/sessions and Viva links                                            | Deferred                                                      |
 | Catering tables/order notes                                                    | Deferred                                                      |
-| Digital clienteles/transports                                                  | Deferred                                                      |
+| Digital clientele correlation by mark and by FIM                               | Core; shapes from documentation, unobserved                   |
+| Digital clientele read/create/update/cancel, digital transports                | Deferred                                                      |
 
 Endpoint paths and parameter schemas must be transcribed and tested per implemented operation
 against the linked source. Do not copy the complete vendor document or sample payloads into

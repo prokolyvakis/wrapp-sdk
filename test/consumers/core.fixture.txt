@@ -9,6 +9,8 @@ const written: Record<string, unknown> = {
   'POST /api/v1/branches': { id: 'new-branch', name: 'Branch', code: 2 },
   'PUT /api/v1/branches/new-branch': { id: 'new-branch', name: 'Renamed', code: 2 },
   'POST /api/v1/billing_books': { id: 'new-book', name: 'Book', series: 'S', invoice_type_code: '2.1' },
+  'POST /api/v1/digital_clienteles/entry/correlate_by_mark': { notice: 'Correlated' },
+  'POST /api/v1/digital_clienteles/entry/correlate_by_fim': { errors: 'Refused' },
 };
 const routes: Record<string, unknown> = {
   '/api/v1/login': { data: { type: 'jwt', attributes: { jwt: 'fake.jwt' } } },
@@ -57,6 +59,9 @@ const renamed = await client.branches.update('new-branch', { name: 'Renamed' });
 assert.equal(renamed.kind === 'observed' ? renamed.branch.name : renamed.kind, 'Renamed');
 const book = await client.billingBooks.create({ name: 'Book', series: 'S', number: 1, invoice_type_code: '2.1' });
 assert.equal(book.kind === 'observed' ? book.billingBook.number : book.kind, undefined);
+assert.equal((await client.digitalClienteles.correlateByMark('entry', { correlate_mark: '400000000000001' })).kind, 'acknowledged');
+const byFim = await client.digitalClienteles.correlateByFim('entry', { correlate_fim_number: 'ABC1', correlate_fim_aa: '1' });
+assert.equal(byFim.kind === 'rejected' ? byFim.errorCount : 0, 1);
 const deleted = await client.invoices.drafts.delete('invoice');
 assert.equal(deleted.kind === 'rejected' ? deleted.errorCount : 0, 1);
 const forbiddenPath = '@prokolyvakis/wrapp-sdk/dist/client.js';

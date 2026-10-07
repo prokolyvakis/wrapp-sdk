@@ -128,6 +128,15 @@ export type CancellationOutcome = Readonly<{
 }>;
 
 // @public
+export type ClienteleCorrelationOutcome = Readonly<{
+    kind: 'acknowledged';
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
 export interface ClientOptions {
     readonly advanced?: {
         readonly testBaseUrl?: string;
@@ -261,6 +270,17 @@ export type Decimal = string & {
 
 // @public
 export function decimal(value: string): Decimal;
+
+// @public
+export interface DigitalClienteleResource {
+    correlateByFim(clienteleId: string, input: Readonly<{
+        correlate_fim_number: string;
+        correlate_fim_aa: string;
+    }>, options?: RequestOptions): Promise<ClienteleCorrelationOutcome>;
+    correlateByMark(clienteleId: string, input: Readonly<{
+        correlate_mark: string;
+    }>, options?: RequestOptions): Promise<ClienteleCorrelationOutcome>;
+}
 
 // @public
 export type EffectCertainty = 'not-sent' | 'unknown';
@@ -627,6 +647,8 @@ export class WrappClient {
     readonly billingBooks: Readonly<BillingBookResource>;
     // (undocumented)
     readonly branches: Readonly<BranchResource>;
+    // (undocumented)
+    readonly digitalClienteles: Readonly<DigitalClienteleResource>;
     // (undocumented)
     readonly invoices: Readonly<InvoiceResource>;
     // (undocumented)
