@@ -135,11 +135,16 @@ describe('client runtime', () => {
     );
     expect(Object.getOwnPropertySymbols(client)).toEqual([]);
     expect(Object.isFrozen(client)).toBe(true);
-    for (const resource of Object.values(client)) {
-      expect(Object.isFrozen(resource)).toBe(true);
-      for (const member of Object.values(resource as object))
-        expect(typeof member).toBe('function');
-    }
+    // A member is an operation, or a frozen namespace of operations such as invoices.drafts.
+    const operationsOnly = (holder: object) => {
+      expect(Object.isFrozen(holder)).toBe(true);
+      for (const member of Object.values(holder)) {
+        if (typeof member === 'function') continue;
+        expect(typeof member).toBe('object');
+        operationsOnly(member as object);
+      }
+    };
+    for (const resource of Object.values(client)) operationsOnly(resource as object);
     expect(JSON.stringify(client)).not.toContain(credentials.apiKey);
   });
   it('should share one login across every resource of a client', async () => {

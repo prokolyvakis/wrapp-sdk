@@ -16,6 +16,11 @@ export const operations = Object.freeze({
   pdf: { method: 'GET', effectful: true },
   thermalPdf: { method: 'GET', effectful: true },
   issuedCount: { method: 'GET', effectful: false },
+  cancelDeliveryNote: { method: 'DELETE', effectful: true },
+  setExternalId: { method: 'PUT', effectful: true },
+  // A GET that changes provider state: classified by effect, never by verb.
+  markAsPaid: { method: 'GET', effectful: true },
+  deleteDraft: { method: 'DELETE', effectful: true },
 } as const);
 export type Operation = keyof typeof operations;
 export function scope(

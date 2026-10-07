@@ -6,21 +6,25 @@ grounded in documentation, what is observed behavior, and what remains an open q
 
 ## Supported operations
 
-| Resource                   | Method/path under /api/v1                | Effect         |
-| -------------------------- | ---------------------------------------- | -------------- |
-| login (internal)           | POST /login                              | authentication |
-| tenant.get                 | GET /tenant_details                      | read           |
-| vat.search                 | GET /vat_search?vat=...&country_code=... | read           |
-| vat.exemptions             | GET /vat_exemptions                      | read           |
-| branches.list              | GET /branches                            | read           |
-| billingBooks.list          | GET /billing_books                       | read           |
-| invoices.getStatus         | GET /invoices/:id                        | read           |
-| invoices.get               | GET /invoices/:id/find_invoice_by_id     | read           |
-| invoices.list / iterate    | GET /invoices/find_all_invoices          | read           |
-| invoices.create            | POST /invoices                           | effectful      |
-| invoices.requestPdf        | GET /invoices/:id/generate_pdf           | effectful      |
-| invoices.requestThermalPdf | GET /invoices/:id/generate_thermal_pdf   | effectful      |
-| invoices.issuedCount       | GET /invoices/issued_count               | read           |
+| Resource                    | Method/path under /api/v1                 | Effect         |
+| --------------------------- | ----------------------------------------- | -------------- |
+| login (internal)            | POST /login                               | authentication |
+| tenant.get                  | GET /tenant_details                       | read           |
+| vat.search                  | GET /vat_search?vat=...&country_code=...  | read           |
+| vat.exemptions              | GET /vat_exemptions                       | read           |
+| branches.list               | GET /branches                             | read           |
+| billingBooks.list           | GET /billing_books                        | read           |
+| invoices.getStatus          | GET /invoices/:id                         | read           |
+| invoices.get                | GET /invoices/:id/find_invoice_by_id      | read           |
+| invoices.list / iterate     | GET /invoices/find_all_invoices           | read           |
+| invoices.create             | POST /invoices                            | effectful      |
+| invoices.requestPdf         | GET /invoices/:id/generate_pdf            | effectful      |
+| invoices.requestThermalPdf  | GET /invoices/:id/generate_thermal_pdf    | effectful      |
+| invoices.issuedCount        | GET /invoices/issued_count                | read           |
+| invoices.cancelDeliveryNote | DELETE /invoices/:id/cancel               | effectful      |
+| invoices.setExternalId      | PUT /invoices/:invoice_id/set_external_id | effectful      |
+| invoices.markAsPaid         | GET /invoices/:invoice_id/mark_as_paid    | effectful      |
+| invoices.drafts.delete      | DELETE /invoices/:invoice_id/delete_draft | effectful      |
 
 There is no generic request escape hatch. Origins are explicit staging/production; the
 loopback-only test-origin override is visibly an advanced test capability. An injected fetch
@@ -64,6 +68,34 @@ exponent notation), preserving their value.
 Calendar formats: ISO dates for list input and the tenant charge date, DD-MM-YYYY for the
 status response, and a documented timestamp with numeric offset for full details. No
 local-time coercion.
+
+## Invoice management
+
+Four operations change an existing invoice. Each is dispatched at most once and never retried;
+a failure after dispatch carries effect unknown. Each has its own result, and a provider
+rejection is a rejected result (errorCount and rejectionSource only), not an error.
+
+- cancelDeliveryNote(invoiceId) cancels a delivery note. The provider offers the route for
+  delivery notes only and states that invoices sent through a provider cannot be cancelled;
+  it is not a way to reverse an ordinary invoice. The result is observed with the provider's
+  cancellation record (id, my_data_mark, my_data_uid, my_data_qr_url, series, num,
+  cancelled_by_mark and the two portal links) or rejected. The record's id must equal the
+  requested id. Read cancelled_by_mark before concluding anything: the SDK does not turn the
+  record into a statement that the cancellation completed.
+- setExternalId(invoiceId, { external_id }) assigns an external reference to an invoice that
+  has none. The provider never overwrites a reference, so the assignment is permanent. The
+  reference follows the outbound rules of create.external_id. The result is acknowledged,
+  with invoiceId, the echoed externalId and identity (exact or ascii-case-variant), or
+  rejected with referenceState unknown. A rejection never shows whether the reference is
+  free or which invoice holds it, whatever its wording, and no other reference is tried.
+- markAsPaid(invoiceId) is an effectful GET. acknowledged means the provider answered with
+  its status text; it is not verified settlement.
+- drafts.delete(invoiceId) deletes a draft; the provider decides whether the invoice is an
+  untransmitted draft. acknowledged does not show that the draft's external reference can be
+  used again. Creating, issuing and listing drafts are not available.
+
+The status text of an acknowledgement is validated as present and then dropped, like any
+other provider wording. Use the diagnostics option to read a rejection's detail.
 
 ## Returned fields
 

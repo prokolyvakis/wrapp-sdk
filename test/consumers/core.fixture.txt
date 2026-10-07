@@ -16,6 +16,10 @@ const routes: Record<string, unknown> = {
   '/api/v1/billing_books': [{ id: 'book', name: 'Service', series: 'S', invoice_type_code: '2.1', number: 4 }],
   '/api/v1/invoices/issued_count': { issued_count: 800 },
   '/api/v1/invoices/invoice/generate_thermal_pdf': { download_url: 'https://example.invalid/thermal.pdf' },
+  '/api/v1/invoices/invoice/cancel': { id: 'invoice', my_data_mark: 'mark', my_data_uid: 'uid', my_data_qr_url: 'https://example.invalid/qr', series: 'S', num: 1, cancelled_by_mark: 'cancel-mark', wrapp_invoice_url: 'https://example.invalid/el', wrapp_invoice_url_en: 'https://example.invalid/en' },
+  '/api/v1/invoices/invoice/set_external_id': { status: 'updated', external_id: 'reference' },
+  '/api/v1/invoices/invoice/mark_as_paid': { status: 'paid' },
+  '/api/v1/invoices/invoice/delete_draft': { errors: [{ title: 'Not a draft' }] },
 };
 const client = new sdk.WrappClient({
   environment: 'staging',
@@ -36,6 +40,13 @@ const issued: string = (await client.invoices.issuedCount()).issuedCount;
 assert.equal(issued, '800');
 const thermal = await client.invoices.requestThermalPdf('invoice');
 assert.equal(thermal.kind === 'available' ? thermal.downloadUrl : thermal.kind, 'https://example.invalid/thermal.pdf');
+const cancelled = await client.invoices.cancelDeliveryNote('invoice');
+assert.equal(cancelled.kind === 'observed' ? cancelled.cancellation.cancelled_by_mark : cancelled.kind, 'cancel-mark');
+const assigned = await client.invoices.setExternalId('invoice', { external_id: 'reference' });
+assert.equal(assigned.kind === 'acknowledged' ? assigned.externalId + '/' + assigned.identity : assigned.referenceState, 'reference/exact');
+assert.equal((await client.invoices.markAsPaid('invoice')).kind, 'acknowledged');
+const deleted = await client.invoices.drafts.delete('invoice');
+assert.equal(deleted.kind === 'rejected' ? deleted.errorCount : 0, 1);
 const forbiddenPath = '@prokolyvakis/wrapp-sdk/dist/client.js';
 await assert.rejects(import(forbiddenPath), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
 

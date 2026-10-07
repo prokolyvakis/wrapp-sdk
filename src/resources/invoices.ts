@@ -16,7 +16,18 @@ import {
   rejection,
 } from '../codecs.js';
 import { WrappError } from '../errors.js';
-import { issuedCountSchema } from '../invoice-lifecycle-codecs.js';
+import {
+  acknowledgementSchema,
+  cancellationSchema,
+  externalIdAssignmentSchema,
+  externalIdInputSchema,
+  issuedCountSchema,
+} from '../invoice-lifecycle-codecs.js';
+import type {
+  AcknowledgementOutcome,
+  CancellationOutcome,
+  ExternalIdAssignmentOutcome,
+} from '../invoice-lifecycle-types.js';
 import { readValue, rejected, requestSchema } from '../runtime.js';
 import type { Report, Runtime } from '../runtime.js';
 import { freeze } from '../values.js';
@@ -74,8 +85,65 @@ export interface InvoiceResource {
   requestThermalPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
   /** The tenant's number of issued invoices, as exact integer text. */
   issuedCount(options?: RequestOptions): Promise<Readonly<{ issuedCount: string }>>;
+  /**
+   * Cancels a delivery note. The provider offers this for delivery notes only; it is not a
+   * way to reverse an ordinary invoice, and the provider decides eligibility. Dispatched at
+   * most once; a failure after dispatch carries effect 'unknown' and is never retried.
+   */
+  cancelDeliveryNote(invoiceId: string, options?: RequestOptions): Promise<CancellationOutcome>;
+  /**
+   * Assigns an external reference to an invoice that has none. The provider never overwrites
+   * a reference, so this is permanent. Dispatched at most once and never retried; a
+   * rejection does not show whether the reference is free or held elsewhere.
+   */
+  setExternalId(
+    invoiceId: string,
+    input: Readonly<{ external_id: string }>,
+    options?: RequestOptions,
+  ): Promise<ExternalIdAssignmentOutcome>;
+  /**
+   * Asks the provider to mark an invoice as paid. An effectful GET, dispatched at most once.
+   * The acknowledgement is the provider's answer, not independently verified settlement.
+   */
+  markAsPaid(invoiceId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
+  /** Draft invoices. Only deletion is available. */
+  readonly drafts: Readonly<{
+    /**
+     * Deletes a draft. The provider decides whether the invoice is an untransmitted draft.
+     * Dispatched at most once. An acknowledgement does not show that the draft's external
+     * reference can be used again.
+     */
+    delete(invoiceId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
+  }>;
 }
 
+// A rejection envelope as the result of a management operation, with opt-in diagnostics.
+function refused(value: unknown, report: Report) {
+  const refusal = rejection(value);
+  if (refusal === undefined) return undefined;
+  const outcome = freeze({
+    kind: 'rejected',
+    errorCount: refusal.errorCount,
+    rejectionSource: refusal.source,
+  } as const);
+  report(outcome, value);
+  return outcome;
+}
+function acknowledgement(
+  value: unknown,
+  report: Report,
+  operation: string,
+): AcknowledgementOutcome {
+  const outcome = refused(value, report);
+  if (outcome !== undefined) return outcome;
+  // Only the status is required. Other fields, an echoed id included, are additive and are
+  // dropped; they are never read as evidence of the effect.
+  decode(acknowledgementSchema, value, operation);
+  // An artifact link here would be another operation's answer.
+  if (value !== null && typeof value === 'object' && 'download_url' in value)
+    throw new WrappError('PROTOCOL_ERROR', operation);
+  return freeze({ kind: 'acknowledged' });
+}
 // Both PDF requests answer with the same three envelopes: a rejection, a link to an existing
 // artifact, or a status whose wording is not evidence of anything.
 function pdfOutcome(value: unknown, report: Report, operation: 'pdf' | 'thermalPdf'): PdfOutcome {
@@ -249,5 +317,92 @@ export function invoiceResource(runtime: Runtime): InvoiceResource {
           }),
         opts,
       ),
+    cancelDeliveryNote: async (invoiceId: string, opts?: RequestOptions) => {
+      const valid = input(identifier, invoiceId, 'cancelDeliveryNote');
+      return runtime.run(
+        'cancelDeliveryNote',
+        '/invoices/' + encodeURIComponent(valid) + '/cancel',
+        (value, report): CancellationOutcome => {
+          const outcome = refused(value, report);
+          if (outcome !== undefined) return outcome;
+          // No status envelope is documented for this answer; one is refused, not ignored.
+          if (value !== null && typeof value === 'object' && 'status' in value)
+            throw new WrappError('PROTOCOL_ERROR', 'cancelDeliveryNote');
+          const cancellation = decode(cancellationSchema, value, 'cancelDeliveryNote');
+          if (cancellation.id !== valid)
+            throw new WrappError('PROTOCOL_ERROR', 'cancelDeliveryNote');
+          return freeze({ kind: 'observed', cancellation });
+        },
+        opts,
+      );
+    },
+    setExternalId: async (
+      invoiceId: string,
+      assignment: Readonly<{ external_id: string }>,
+      opts?: RequestOptions,
+    ) => {
+      const valid = input(identifier, invoiceId, 'setExternalId');
+      const data = input(externalIdInputSchema, assignment, 'setExternalId');
+      return runtime.run(
+        'setExternalId',
+        '/invoices/' + encodeURIComponent(valid) + '/set_external_id',
+        (value, report): ExternalIdAssignmentOutcome => {
+          // An error envelope that also echoes the reference cannot say whether the
+          // assignment happened, so it is neither a rejection nor a success.
+          if (
+            value !== null &&
+            typeof value === 'object' &&
+            'external_id' in value &&
+            ('errors' in value || 'error' in value)
+          )
+            throw new WrappError('PROTOCOL_ERROR', 'setExternalId');
+          const refusal = rejection(value);
+          if (refusal !== undefined) {
+            const outcome = freeze({
+              kind: 'rejected',
+              errorCount: refusal.errorCount,
+              rejectionSource: refusal.source,
+              referenceState: 'unknown',
+            } as const);
+            report(outcome, value);
+            return outcome;
+          }
+          const answer = decode(externalIdAssignmentSchema, value, 'setExternalId');
+          if (answer.id !== undefined && answer.id !== valid)
+            throw new WrappError('PROTOCOL_ERROR', 'setExternalId');
+          return freeze({
+            kind: 'acknowledged',
+            invoiceId: valid,
+            externalId: answer.external_id,
+            identity: identity(
+              { kind: 'externalId', value: data.external_id },
+              { id: valid, external_id: answer.external_id },
+            ),
+          });
+        },
+        opts,
+        encodeJson(data),
+      );
+    },
+    markAsPaid: async (invoiceId: string, opts?: RequestOptions) => {
+      const valid = input(identifier, invoiceId, 'markAsPaid');
+      return runtime.run(
+        'markAsPaid',
+        '/invoices/' + encodeURIComponent(valid) + '/mark_as_paid',
+        (value, report) => acknowledgement(value, report, 'markAsPaid'),
+        opts,
+      );
+    },
+    drafts: Object.freeze({
+      delete: async (invoiceId: string, opts?: RequestOptions) => {
+        const valid = input(identifier, invoiceId, 'deleteDraft');
+        return runtime.run(
+          'deleteDraft',
+          '/invoices/' + encodeURIComponent(valid) + '/delete_draft',
+          (value, report) => acknowledgement(value, report, 'deleteDraft'),
+          opts,
+        );
+      },
+    }),
   };
 }

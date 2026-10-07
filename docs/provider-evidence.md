@@ -1,15 +1,24 @@
 # Provider evidence and uncertainty register
 
-Grounded in the provider's public documentation (research 2026-09-21) and subsequently in
-observed provider behavior under authorized testing. This is not provider certification.
+Grounded in the provider's public documentation and, for the original surface, in provider
+behavior observed under authorized testing in September 2026. This is not provider
+certification, and later additions rest on documentation alone.
 
 ## Primary source
 
 Wrapp publishes [HTML documentation](https://wrapp.ai/api/documentation) and a
-[Markdown counterpart](https://wrapp.ai/api/documentation.md). The HTML identifies
-API reference v1.17.0. The downloaded Markdown SHA-256 was
-`1f48c184f8038c7984189fbf6c3751e172c13614bec4a5edc03922ea357b57a6`.
-The download is a temporary research artifact, not vendored or licensed SDK content.
+[Markdown counterpart](https://wrapp.ai/api/documentation.md). Two revisions matter here.
+
+- **v1.17.0**, researched 2026-09-21. The register below, the original SDK surface and every
+  observed provider behavior date from this revision. The downloaded Markdown SHA-256 was
+  `1f48c184f8038c7984189fbf6c3751e172c13614bec4a5edc03922ea357b57a6`.
+- **v1.18.0**, published 2026-09-27 and retrieved 2026-10-07 (Markdown SHA-256
+  `b7de8d53965fc82c74f78ab368f0acdd773b33cbad3ac51caa6b0eebea4e850f`). Everything added since
+  0.1.0 is derived from this revision: the request code sets, pending outcomes, the added
+  read fields, the four webhook events, the invoice type catalogue and the invoice
+  management, thermal PDF and issued-count operations. None of it was observed on the wire.
+
+A download is a temporary research artifact, not vendored or licensed SDK content.
 A document revision is not proof of server-version negotiation or immutable behavior.
 
 ## Load-bearing documented facts
@@ -63,19 +72,20 @@ observation profile follows the wire:
 
 Implement incrementally, never advertise entire-API support from a small endpoint wrapper.
 
-| Family                                                               | Initial disposition                                           |
-| -------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Login, tenant details                                                | Core                                                          |
-| VAT search/exemptions, branch/billing-book reads                     | Core read capabilities                                        |
-| Invoice create/status/full lookup/list                               | Core, supported-field matrix required                         |
-| PDF request + issued/PDF webhook parsing                             | Core, side-effect rules apply                                 |
-| Branch/billing-book writes                                           | Later management tranche                                      |
-| Thermal PDF request, issued count                                    | Core; shapes from documentation, unobserved                   |
-| Draft issue/delete, reference assignment, mark-as-paid, cancellation | Later explicit tranche; no generic escape hatch               |
-| Thermal PDF/POS-error callbacks                                      | Core typed events; body shapes from documentation, unobserved |
-| POS devices/sessions and Viva links                                  | Deferred                                                      |
-| Catering tables/order notes                                          | Deferred                                                      |
-| Digital clienteles/transports                                        | Deferred                                                      |
+| Family                                                                         | Initial disposition                                           |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| Login, tenant details                                                          | Core                                                          |
+| VAT search/exemptions, branch/billing-book reads                               | Core read capabilities                                        |
+| Invoice create/status/full lookup/list                                         | Core, supported-field matrix required                         |
+| PDF request + issued/PDF webhook parsing                                       | Core, side-effect rules apply                                 |
+| Branch/billing-book writes                                                     | Later management tranche                                      |
+| Thermal PDF request, issued count                                              | Core; shapes from documentation, unobserved                   |
+| Delivery-note cancellation, reference assignment, mark-as-paid, draft deletion | Core; shapes from documentation, unobserved                   |
+| Draft save, issue and listing                                                  | Blocked on undocumented response contracts                    |
+| Thermal PDF/POS-error callbacks                                                | Core typed events; body shapes from documentation, unobserved |
+| POS devices/sessions and Viva links                                            | Deferred                                                      |
+| Catering tables/order notes                                                    | Deferred                                                      |
+| Digital clienteles/transports                                                  | Deferred                                                      |
 
 Endpoint paths and parameter schemas must be transcribed and tested per implemented operation
 against the linked source. Do not copy the complete vendor document or sample payloads into

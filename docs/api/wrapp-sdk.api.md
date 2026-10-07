@@ -5,6 +5,15 @@
 ```ts
 
 // @public
+export type AcknowledgementOutcome = Readonly<{
+    kind: 'acknowledged';
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
 export interface BillingBook {
     // (undocumented)
     readonly id: string;
@@ -34,6 +43,37 @@ export type CalendarDate = string & {
 
 // @public
 export function calendarDate(value: string): CalendarDate;
+
+// @public
+export interface CancellationObservation {
+    readonly cancelled_by_mark: string | null;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly my_data_mark: string | null;
+    // (undocumented)
+    readonly my_data_qr_url: string | null;
+    // (undocumented)
+    readonly my_data_uid: string | null;
+    // (undocumented)
+    readonly num: string;
+    // (undocumented)
+    readonly series: string;
+    // (undocumented)
+    readonly wrapp_invoice_url: string;
+    // (undocumented)
+    readonly wrapp_invoice_url_en: string;
+}
+
+// @public
+export type CancellationOutcome = Readonly<{
+    kind: 'observed';
+    cancellation: CancellationObservation;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
 
 // @public
 export interface ClientOptions {
@@ -138,6 +178,19 @@ export type EffectCertainty = 'not-sent' | 'unknown';
 
 // @public
 export type ErrorCode = 'INVALID_INPUT' | 'PROTOCOL_ERROR' | 'HTTP_ERROR' | 'AUTH_ERROR' | 'PROVIDER_REJECTED' | 'NETWORK_ERROR' | 'TIMEOUT' | 'ABORTED' | 'RESPONSE_TOO_LARGE' | 'PAGINATION_LIMIT' | 'WEBHOOK_INVALID';
+
+// @public
+export type ExternalIdAssignmentOutcome = Readonly<{
+    kind: 'acknowledged';
+    invoiceId: string;
+    externalId: string;
+    identity: IdentityEvidence;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+    referenceState: 'unknown';
+}>;
 
 // @public
 export function getProviderDiagnostics(target: unknown): ProviderDiagnostics | undefined;
@@ -300,7 +353,11 @@ export type InvoiceReference = Readonly<{
 
 // @public
 export interface InvoiceResource {
+    cancelDeliveryNote(invoiceId: string, options?: RequestOptions): Promise<CancellationOutcome>;
     create(invoice: CreateInvoiceInput, options?: RequestOptions): Promise<CreateOutcome>;
+    readonly drafts: Readonly<{
+        delete(invoiceId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
+    }>;
     get(reference: InvoiceReference, options?: RequestOptions): Promise<Readonly<{
         invoice: InvoiceDetails;
         identity: IdentityEvidence;
@@ -314,8 +371,12 @@ export interface InvoiceResource {
     }): AsyncIterable<InvoiceDetails>;
     // (undocumented)
     list(filters?: ListInvoicesInput, options?: RequestOptions): Promise<InvoicePage>;
+    markAsPaid(invoiceId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
     requestPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
     requestThermalPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
+    setExternalId(invoiceId: string, input: Readonly<{
+        external_id: string;
+    }>, options?: RequestOptions): Promise<ExternalIdAssignmentOutcome>;
 }
 
 // @public

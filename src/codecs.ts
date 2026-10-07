@@ -10,8 +10,8 @@ import type {
   RejectionSource,
 } from './types.js';
 
-const text = z.string().max(4096);
-const nonempty = text.min(1);
+export const text = z.string().max(4096);
+export const nonempty = text.min(1);
 export const identifier = z
   .string()
   .min(1)
@@ -32,8 +32,9 @@ export const referenceSchema = z.strictObject({
 // A reference the provider returns is free-form text another producer may have stored. It is
 // kept exactly as received: never trimmed, case-folded, percent-decoded or turned from empty
 // into null. The path-safety rules of `identifier` govern only what this SDK sends.
-const returnedExternalReference = text.refine(validUnicode).nullable();
-const httpsUrl = nonempty.refine((v) => {
+export const returnedReference = text.refine(validUnicode);
+const returnedExternalReference = returnedReference.nullable();
+export const httpsUrl = nonempty.refine((v) => {
   try {
     const u = new URL(v);
     return u.protocol === 'https:' && !u.username && !u.password;
