@@ -238,21 +238,23 @@ async function refusesDetails(text: string): Promise<void> {
       .next(),
   ).rejects.toMatchObject({ code: 'PROTOCOL_ERROR' });
 }
-type Place = 'root' | 'line';
+type Place = 'root' | 'line' | 'counterpart';
 function detailWith(at: Place, field: string, token: string): string {
   const base = details();
   const [line] = base.invoice_lines;
   return withToken(
     at === 'root'
       ? { ...base, [field]: placeholder }
-      : { ...base, invoice_lines: [{ ...line, [field]: placeholder }] },
+      : at === 'counterpart'
+        ? { ...base, counterpart: { ...base.counterpart, [field]: placeholder } }
+        : { ...base, invoice_lines: [{ ...line, [field]: placeholder }] },
     token,
   );
 }
 function holder(record: InvoiceDetails, at: Place): object {
   const [line] = record.invoice_lines;
   if (!line) throw new Error('fixture');
-  return at === 'root' ? record : line;
+  return at === 'root' ? record : at === 'counterpart' ? record.counterpart : line;
 }
 // Wire tokens per codec. A code is an integer token kept as exact text; an amount keeps the
 // provider's numeric text in either token form; text is bounded and otherwise untouched.
@@ -264,7 +266,7 @@ interface Sample {
 // The provider returns null for a field it has no value for: a line's `code` is null on
 // almost every record. Null is therefore a value to keep, apart from absence.
 const reportedNull: Sample = { label: 'null', token: 'null', value: null };
-type Codec = 'code' | 'flag' | 'amount' | 'text';
+type Codec = 'code' | 'flag' | 'amount' | 'text' | 'rate';
 const wire: Record<Codec, { valid: readonly Sample[]; invalid: readonly Sample[] }> = {
   code: {
     valid: [
@@ -311,6 +313,23 @@ const wire: Record<Codec, { valid: readonly Sample[]; invalid: readonly Sample[]
       { label: 'a boolean', token: 'true' },
     ],
   },
+  // Provider-observed: the withholding rate arrives as a JSON string, "20" when set and ""
+  // when the line has none. A numeric token is accepted too; either keeps its exact text.
+  rate: {
+    valid: [
+      { label: 'a rate as a string', token: '"20"', value: '20' },
+      { label: 'an empty string', token: '""', value: '' },
+      { label: 'a fractional rate as a string', token: '"7.5"', value: '7.5' },
+      { label: 'a rate as a number', token: '20', value: '20' },
+      reportedNull,
+    ],
+    invalid: [
+      { label: 'non-numeric text', token: '"twenty"' },
+      { label: 'a negative number', token: '-1' },
+      { label: 'a boolean', token: 'true' },
+      { label: 'an array', token: '["20"]' },
+    ],
+  },
   text: {
     valid: [
       { label: 'an empty string', token: '""', value: '' },
@@ -352,6 +371,10 @@ const detailFields = [
   { at: 'line', field: 'stamp_duty_tax_code', codec: 'text' },
   { at: 'line', field: 'stamp_duty_amount', codec: 'amount' },
   { at: 'line', field: 'deductions_amount', codec: 'amount' },
+  { at: 'root', field: 'special_invoice_category', codec: 'code' },
+  { at: 'line', field: 'fuel_code', codec: 'code' },
+  { at: 'line', field: 'withhold_tax_rate', codec: 'rate' },
+  { at: 'counterpart', field: 'supply_account_no', codec: 'text' },
 ] as const;
 describe.each(detailFields)('full-detail $at field $field', ({ at, field, codec }) => {
   it('should stay absent when the provider omits it', async () => {
@@ -470,36 +493,167 @@ describe('documented read shapes', () => {
       });
     }
   });
-  it('should tolerate the nine fields with unresolved output contracts without projecting them', async () => {
-    const base = fullDetails();
-    const [line] = base.invoice_lines;
+  it('should tolerate the two fields with unresolved output contracts without projecting them', async () => {
     const body = {
-      ...base,
+      ...fullDetails(),
       pos_device_id: 'device-one',
       pos_type: 1,
-      b2g_details: { synthetic: true },
-      delivery_details: { synthetic: true },
-      special_invoice_category: 4,
-      counterpart: { name: 'Synthetic Company', supply_account_no: 'account-one' },
-      invoice_lines: [
-        { ...line, withhold_tax_rate: 20, deductions: [{ amount: 1 }], fuel_code: 10 },
-      ],
       future_field: { nested: [1, 2, 3] },
     };
-    for (const record of await detailRecords(JSON.stringify(body))) {
-      for (const key of [
-        'pos_device_id',
-        'pos_type',
-        'b2g_details',
-        'delivery_details',
-        'special_invoice_category',
-        'future_field',
-      ])
+    for (const record of await detailRecords(JSON.stringify(body)))
+      for (const key of ['pos_device_id', 'pos_type', 'future_field'])
         expect(key in record).toBe(false);
-      expect('supply_account_no' in record.counterpart).toBe(false);
-      for (const key of ['withhold_tax_rate', 'deductions', 'fuel_code'])
-        expect(key in holder(record, 'line')).toBe(false);
+  });
+});
+
+// The three structured fields, in the shapes the provider returns for a B2G invoice, a
+// delivery note and a line with deductions. Values are synthetic.
+const deliveryDetails = {
+  dispatch_date: '08-10-2026',
+  dispatch_time: '10:30',
+  vehicle_number: 'ABC1234',
+  purpose_of_movement: '1',
+  purpose_of_movement_custom_title: '',
+  issuer_of_movement: 'Synthetic Carrier',
+  from_address: 'Origin Street',
+  from_number: '1',
+  from_city: 'Origin City',
+  from_zipcode: '10431',
+  from_branch: 0,
+  to_address: 'Destination Street',
+  to_number: '2',
+  to_city: 'Destination City',
+  to_zipcode: '10432',
+  to_branch: null,
+  reverse_delivery_note: false,
+  reverse_delivery_note_purpose: null,
+  non_obligated_recipient: false,
+  without_digital_transport_tracking: true,
+};
+const b2gDetails = {
+  buyer_reference: '',
+  delivery_address_city: 'Synthetic City',
+  delivery_address_street: 'Synthetic Street',
+  delivery_address_street_number: '1',
+  delivery_address_postal_code: '10431',
+  delivery_address_party_name: 'Synthetic Authority',
+  b2g_contracting_authority_id: '1000.E00001.00001',
+  b2g_contract_identifier: '26SYMV000000001',
+  b2g_budget_type: 1,
+  b2g_budget_identifier: 'SYNTHETIC-ADA',
+  b2g_due_date: '06-11-2026',
+  b2g_payment_details: 'Synthetic payment details',
+  bt_70: '',
+};
+function withLine(patch: Record<string, unknown>): string {
+  const base = details();
+  const [line] = base.invoice_lines;
+  return JSON.stringify({ ...base, invoice_lines: [{ ...line, ...patch }] });
+}
+describe('full-detail structured fields', () => {
+  it('should return delivery_details whole, codes as exact text, null and false kept', async () => {
+    const records = await detailRecords(
+      JSON.stringify({ ...details(), delivery_details: { ...deliveryDetails, additive: 1 } }),
+    );
+    expect(records).toHaveLength(3);
+    for (const record of records) {
+      expect(record.delivery_details).toEqual({ ...deliveryDetails, from_branch: '0' });
+      expect(Object.isFrozen(record.delivery_details)).toBe(true);
     }
+  });
+  it('should keep a populated destination branch and reverse purpose as exact text', async () => {
+    const text = JSON.stringify({
+      ...details(),
+      delivery_details: {
+        to_branch: 7,
+        reverse_delivery_note: true,
+        reverse_delivery_note_purpose: 5,
+      },
+    }).replace('"to_branch":7', '"to_branch":9007199254740993');
+    for (const record of await detailRecords(text))
+      expect(record.delivery_details).toEqual({
+        to_branch: '9007199254740993',
+        reverse_delivery_note: true,
+        reverse_delivery_note_purpose: '5',
+      });
+  });
+  it('should return b2g_details whole, the budget type as exact text and the due date as the provider wrote it', async () => {
+    for (const record of await detailRecords(
+      JSON.stringify({ ...details(), b2g_details: { ...b2gDetails, additive: 1 } }),
+    )) {
+      expect(record.b2g_details).toEqual({ ...b2gDetails, b2g_budget_type: '1' });
+      expect(Object.isFrozen(record.b2g_details)).toBe(true);
+    }
+  });
+  it('should return line deductions with exact amounts, and an omitted item field as absent', async () => {
+    const text = withLine({
+      deductions: [
+        { title: 'Synthetic deduction', amount: 5, informational: false },
+        { amount: '2.50' },
+      ],
+    }).replace('"amount":5,', '"amount":5.00,');
+    for (const record of await detailRecords(text)) {
+      const [line] = record.invoice_lines;
+      expect(line?.deductions).toEqual([
+        { title: 'Synthetic deduction', amount: '5.00', informational: false },
+        { amount: '2.50' },
+      ]);
+      expect(Object.isFrozen(line?.deductions)).toBe(true);
+      expect(line?.deductions?.every((item) => Object.isFrozen(item))).toBe(true);
+    }
+  });
+  it('should keep an empty deductions list as empty, apart from an absent one', async () => {
+    for (const record of await detailRecords(withLine({ deductions: [] })))
+      expect(record.invoice_lines[0]?.deductions).toEqual([]);
+    for (const record of await detailRecords(JSON.stringify(details())))
+      expect('deductions' in (record.invoice_lines[0] ?? {})).toBe(false);
+  });
+  it.each(['delivery_details', 'b2g_details'] as const)(
+    'should keep %s absent when omitted and null when the provider says null',
+    async (field) => {
+      for (const record of await detailRecords(JSON.stringify(details())))
+        expect(field in record).toBe(false);
+      for (const record of await detailRecords(JSON.stringify({ ...details(), [field]: null })))
+        expect(record[field]).toBeNull();
+    },
+  );
+  it('should accept a sparse object: every member is optional and may be null', async () => {
+    const sparse = { ...details(), delivery_details: { dispatch_date: null }, b2g_details: {} };
+    for (const record of await detailRecords(JSON.stringify(sparse))) {
+      expect(record.delivery_details).toEqual({ dispatch_date: null });
+      expect(record.b2g_details).toEqual({});
+    }
+  });
+  it.each([
+    ['delivery_details as text', { delivery_details: 'none' }],
+    ['delivery_details as a list', { delivery_details: [deliveryDetails] }],
+    [
+      'a numeric dispatch date',
+      { delivery_details: { ...deliveryDetails, dispatch_date: 8102026 } },
+    ],
+    ['a textual branch', { delivery_details: { ...deliveryDetails, from_branch: 'main' } }],
+    [
+      'a textual tracking flag',
+      { delivery_details: { ...deliveryDetails, non_obligated_recipient: 'false' } },
+    ],
+    ['b2g_details as text', { b2g_details: 'none' }],
+    ['a textual budget type', { b2g_details: { ...b2gDetails, b2g_budget_type: 'regular' } }],
+    [
+      'a numeric authority id',
+      { b2g_details: { ...b2gDetails, b2g_contracting_authority_id: 1000 } },
+    ],
+  ])('should reject %s', async (_label, patch) => {
+    await refusesDetails(JSON.stringify({ ...details(), ...patch }));
+  });
+  it.each([
+    ['deductions as text', { deductions: 'none' }],
+    ['a deduction without an amount', { deductions: [{ title: 'Synthetic deduction' }] }],
+    ['a non-numeric deduction amount', { deductions: [{ amount: 'five' }] }],
+    ['a numeric deduction title', { deductions: [{ title: 5, amount: 1 }] }],
+    ['a textual informational flag', { deductions: [{ amount: 1, informational: 'no' }] }],
+    ['a deduction that is not an object', { deductions: [5] }],
+  ])('should reject %s on a line', async (_label, patch) => {
+    await refusesDetails(withLine(patch));
   });
 });
 

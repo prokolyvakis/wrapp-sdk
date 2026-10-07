@@ -550,9 +550,62 @@ export const detailsSchema = z.object({
   notes: text.nullable().exactOptional(),
   withholding_total_amount: numericText.nullable().exactOptional(),
   total_stamp_duty_amount: numericText.nullable().exactOptional(),
+  special_invoice_category: integerString.nullable().exactOptional(),
+  // Provider-observed shapes of the two structured fields, present only on a delivery note
+  // and on a B2G invoice. Every member is optional and nullable; dates are the provider's
+  // DD-MM-YYYY text, returned as written.
+  delivery_details: z
+    .object({
+      dispatch_date: text.nullable().exactOptional(),
+      dispatch_time: text.nullable().exactOptional(),
+      vehicle_number: text.nullable().exactOptional(),
+      purpose_of_movement: text.nullable().exactOptional(),
+      purpose_of_movement_custom_title: text.nullable().exactOptional(),
+      issuer_of_movement: text.nullable().exactOptional(),
+      from_address: text.nullable().exactOptional(),
+      from_number: text.nullable().exactOptional(),
+      from_city: text.nullable().exactOptional(),
+      from_zipcode: text.nullable().exactOptional(),
+      from_branch: integerString.nullable().exactOptional(),
+      to_address: text.nullable().exactOptional(),
+      to_number: text.nullable().exactOptional(),
+      to_city: text.nullable().exactOptional(),
+      to_zipcode: text.nullable().exactOptional(),
+      to_branch: integerString.nullable().exactOptional(),
+      reverse_delivery_note: z.boolean().nullable().exactOptional(),
+      reverse_delivery_note_purpose: integerString.nullable().exactOptional(),
+      non_obligated_recipient: z.boolean().nullable().exactOptional(),
+      without_digital_transport_tracking: z.boolean().nullable().exactOptional(),
+    })
+    .nullable()
+    .exactOptional(),
+  b2g_details: z
+    .object({
+      buyer_reference: text.nullable().exactOptional(),
+      delivery_address_city: text.nullable().exactOptional(),
+      delivery_address_street: text.nullable().exactOptional(),
+      delivery_address_street_number: text.nullable().exactOptional(),
+      delivery_address_postal_code: text.nullable().exactOptional(),
+      delivery_address_party_name: text.nullable().exactOptional(),
+      b2g_contracting_authority_id: text.nullable().exactOptional(),
+      b2g_contract_identifier: text.nullable().exactOptional(),
+      b2g_budget_type: integerString.nullable().exactOptional(),
+      b2g_budget_identifier: text.nullable().exactOptional(),
+      b2g_due_date: text.nullable().exactOptional(),
+      b2g_payment_details: text.nullable().exactOptional(),
+      bt_70: text.nullable().exactOptional(),
+    })
+    .nullable()
+    .exactOptional(),
   // Provider-observed: the wire carries vat: "" for counterparts without a VAT number, and
-  // an empty name on a record that has no counterpart at all.
-  counterpart: z.object({ ...counterpartFields, name: text, vat: text.optional() }),
+  // an empty name on a record that has no counterpart at all. The supply account is present
+  // on a fuel invoice only.
+  counterpart: z.object({
+    ...counterpartFields,
+    name: text,
+    vat: text.optional(),
+    supply_account_no: text.nullable().exactOptional(),
+  }),
   // A list returns every invoice of the tenant, including types create() does not issue.
   // Provider-observed on such records: an empty line name, and null for the VAT rate and
   // for either classification field. One such record must not fail the whole read.
@@ -570,6 +623,11 @@ export const detailsSchema = z.object({
         vat_rate: integer.nullable(),
         vat_total: numericText,
         subtotal: numericText,
+        // Provider-observed: a JSON string, "20" when set and "" when the line has none.
+        withhold_tax_rate: z
+          .union([numericText, z.literal('')])
+          .nullable()
+          .exactOptional(),
         withhold_tax_code: text.nullable().exactOptional(),
         withholding_total: numericText.nullable().exactOptional(),
         classification_category: text.nullable(),
@@ -577,6 +635,18 @@ export const detailsSchema = z.object({
         stamp_duty_tax_code: text.nullable().exactOptional(),
         stamp_duty_amount: numericText.nullable().exactOptional(),
         deductions_amount: numericText.nullable().exactOptional(),
+        deductions: z
+          .array(
+            z.object({
+              title: text.nullable().exactOptional(),
+              amount: numericText,
+              informational: z.boolean().nullable().exactOptional(),
+            }),
+          )
+          .max(1000)
+          .nullable()
+          .exactOptional(),
+        fuel_code: integerString.nullable().exactOptional(),
       }),
     )
     .min(1)

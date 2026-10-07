@@ -132,6 +132,10 @@ attention:
   `null` is not an unexpected type: the provider returns null for a field it has no value
   for, and the SDK returns that null, so each of these fields is typed `T | null` and may
   also be absent.
+- `InvoiceDetails` also returns `special_invoice_category`, `delivery_details`,
+  `b2g_details` and `counterpart.supply_account_no`, and on each line `withhold_tax_rate`,
+  `deductions` and `fuel_code`. Additive. The new types are `InvoiceDeliveryDetails` and
+  `InvoiceB2gDetails`.
 - A read returns every invoice of the tenant, including types this SDK does not issue. On
   some of those a line has no VAT rate or classification. `vat_rate`,
   `classification_category` and `classification_type` on a returned line are therefore

@@ -446,10 +446,27 @@ of those the provider returns a line with an empty name, or with null for vat_ra
 classification_category or classification_type, and a counterpart with an empty name. These
 are returned as they came; a line's vat_rate and its two classification fields can be null.
 
-Nine documented fields are not returned, because the provider reference does not establish
-their populated shape: the line fields withhold_tax_rate, deductions and fuel_code; the record
-fields pos_device_id, pos_type, b2g_details, delivery_details and special_invoice_category; and
-counterpart.supply_account_no. They are tolerated on the wire and left out of the result.
+Seven more fields are returned in the shapes observed on the provider's wire, each absent or
+null as above:
+
+- special_invoice_category, and per line fuel_code: provider codes as exact decimal text.
+- per line withhold_tax_rate: the exact text of the rate, '20' when set and an empty string
+  when the line has none.
+- per line deductions: a list of `{ title?, amount, informational? }` with amount as exact
+  text; an empty list when the line has none.
+- counterpart.supply_account_no: text, present on a fuel invoice.
+- delivery_details, on a delivery note: dispatch_date (the provider's DD-MM-YYYY text),
+  dispatch_time, vehicle_number, purpose_of_movement, purpose_of_movement_custom_title,
+  issuer_of_movement, the from_ and to_ address, number, city and zipcode, from_branch and
+  to_branch (exact text, or null), reverse_delivery_note, reverse_delivery_note_purpose,
+  non_obligated_recipient and without_digital_transport_tracking.
+- b2g_details, on a B2G invoice, under the provider's own key names: buyer_reference, the five
+  delivery_address_ fields, b2g_contracting_authority_id, b2g_contract_identifier,
+  b2g_budget_type (exact text), b2g_budget_identifier, b2g_due_date (DD-MM-YYYY text, where
+  the request takes YYYY-MM-DD), b2g_payment_details and bt_70.
+
+Two documented fields are not returned, because their populated shape is not established:
+pos_device_id and pos_type. They are tolerated on the wire and left out of the result.
 
 ## Webhook events
 

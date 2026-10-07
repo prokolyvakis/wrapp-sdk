@@ -63,15 +63,19 @@ observation profile follows the wire:
   URL on a later call.
 - Additive response fields were observed on the wire, including authentication_code,
   payment_method, branch, delivery/fuel flags, withholding and stamp-duty fields, and
-  deductions. Their presence was observed; their value types and nullability were not
-  recorded. The SDK now decodes most of them from the shapes in reference v1.18.0
-  (documentation-derived, not re-observed); deductions and the line withholding rate stay
-  ignored until their populated shape is established.
+  deductions. Their value types and nullability were recorded in a later observation, listed
+  in the next two points, and the SDK decodes them from those observed shapes.
 - On full-detail records a line's `code` was null on almost every observed record, and its
   `quantity_type` can be null. On records of types this SDK does not issue, a line can have
   an empty `name` and null `vat_rate`, `classification_category` and `classification_type`,
   and the counterpart `name` can be empty. All are accepted and returned as they came; a
   read that refused null failed on almost every real record.
+- Populated shapes of seven full-detail fields: `special_invoice_category` and a line's
+  `fuel_code` are JSON numbers; a line's `withhold_tax_rate` is a JSON string, empty when
+  unset; a line's `deductions` items are `{title, amount, informational}`;
+  `counterpart.supply_account_no` is a string on a fuel invoice; `delivery_details` and
+  `b2g_details` are objects whose dates are written DD-MM-YYYY. On records without the
+  feature these keys are absent, not null.
 
 ## Coverage inventory
 

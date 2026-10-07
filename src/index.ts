@@ -81,6 +81,8 @@ export type {
   PendingInvoiceOutcome,
   PendingIdentityEvidence,
   InvoiceObservation,
+  InvoiceB2gDetails,
+  InvoiceDeliveryDetails,
   InvoiceDetails,
   InvoiceLine,
   LineClassification,

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import * as sdk from '@prokolyvakis/wrapp-sdk';
-import type { CreateInvoiceInput, CreateOutcome, CreatePosDeviceInput, DeliveryDetail, InvoiceLine, OtherCorrelatedEntity, InvoiceStatusOutcome, LineClassification, LineDeduction, ProviderJson, VerifiedWebhook } from '@prokolyvakis/wrapp-sdk';
+import type { CreateInvoiceInput, CreateOutcome, CreatePosDeviceInput, DeliveryDetail, InvoiceDetails, InvoiceLine, InvoiceStatusOutcome, LineClassification, LineDeduction, OtherCorrelatedEntity, ProviderJson, VerifiedWebhook } from '@prokolyvakis/wrapp-sdk';
 
 assert.deepEqual(Object.keys(sdk).sort(), ['WrappClient', 'WrappError', 'calendarDate', 'decimal', 'getProviderDiagnostics', 'verifyWebhook'].sort());
 assert.equal(sdk.decimal('9007199254740993.12'), '9007199254740993.12');
@@ -214,6 +214,12 @@ const sender: OtherCorrelatedEntity = { entity_type: 1, vat_number: '000000000',
 const deliveryNote: Pick<CreateInvoiceInput, 'invoice_type_code' | 'is_delivery_note' | 'delivery_detail' | 'other_correlated_entities'> =
   { invoice_type_code: '2.1', is_delivery_note: true, delivery_detail: movement, other_correlated_entities: [sender] };
 assert.equal(deliveryNote.invoice_type_code + String(deliveryNote.delivery_detail?.dispatch_time), '2.102:30');
+const readBack = undefined as unknown as InvoiceDetails | undefined;
+const dispatchDate: string | null | undefined = readBack?.delivery_details?.dispatch_date;
+const budgetType: string | null | undefined = readBack?.b2g_details?.b2g_budget_type;
+const withheld: string | null | undefined = readBack?.invoice_lines[0]?.withhold_tax_rate;
+const deductedAmount: string | undefined = readBack?.invoice_lines[0]?.deductions?.[0]?.amount;
+assert.equal([dispatchDate, budgetType, withheld, deductedAmount].every((value) => value === undefined), true);
 const softpos: CreatePosDeviceInput = { pos_type: 'worldline_softpos', terminal_id: '16000002', merchant_id: 'merchant@example.invalid' };
 const pos: Pick<CreateInvoiceInput, 'pos_device_id' | 'installments' | 'tip_amount'> = { pos_device_id: 'device', installments: false, tip_amount: sdk.decimal('2.00') };
 assert.equal(softpos.pos_type + String(pos.installments), 'worldline_softposfalse');

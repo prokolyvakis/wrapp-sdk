@@ -560,7 +560,82 @@ export function getProviderDiagnostics(target: unknown): ProviderDiagnostics | u
 export type IdentityEvidence = 'exact' | 'ascii-case-variant';
 
 // @public
+export interface InvoiceB2gDetails {
+    // (undocumented)
+    readonly b2g_budget_identifier?: string | null;
+    // (undocumented)
+    readonly b2g_budget_type?: string | null;
+    // (undocumented)
+    readonly b2g_contract_identifier?: string | null;
+    // (undocumented)
+    readonly b2g_contracting_authority_id?: string | null;
+    // (undocumented)
+    readonly b2g_due_date?: string | null;
+    // (undocumented)
+    readonly b2g_payment_details?: string | null;
+    // (undocumented)
+    readonly bt_70?: string | null;
+    // (undocumented)
+    readonly buyer_reference?: string | null;
+    // (undocumented)
+    readonly delivery_address_city?: string | null;
+    // (undocumented)
+    readonly delivery_address_party_name?: string | null;
+    // (undocumented)
+    readonly delivery_address_postal_code?: string | null;
+    // (undocumented)
+    readonly delivery_address_street?: string | null;
+    // (undocumented)
+    readonly delivery_address_street_number?: string | null;
+}
+
+// @public
+export interface InvoiceDeliveryDetails {
+    // (undocumented)
+    readonly dispatch_date?: string | null;
+    // (undocumented)
+    readonly dispatch_time?: string | null;
+    // (undocumented)
+    readonly from_address?: string | null;
+    // (undocumented)
+    readonly from_branch?: string | null;
+    // (undocumented)
+    readonly from_city?: string | null;
+    // (undocumented)
+    readonly from_number?: string | null;
+    // (undocumented)
+    readonly from_zipcode?: string | null;
+    // (undocumented)
+    readonly issuer_of_movement?: string | null;
+    // (undocumented)
+    readonly non_obligated_recipient?: boolean | null;
+    // (undocumented)
+    readonly purpose_of_movement?: string | null;
+    // (undocumented)
+    readonly purpose_of_movement_custom_title?: string | null;
+    // (undocumented)
+    readonly reverse_delivery_note?: boolean | null;
+    // (undocumented)
+    readonly reverse_delivery_note_purpose?: string | null;
+    // (undocumented)
+    readonly to_address?: string | null;
+    // (undocumented)
+    readonly to_branch?: string | null;
+    // (undocumented)
+    readonly to_city?: string | null;
+    // (undocumented)
+    readonly to_number?: string | null;
+    // (undocumented)
+    readonly to_zipcode?: string | null;
+    // (undocumented)
+    readonly vehicle_number?: string | null;
+    // (undocumented)
+    readonly without_digital_transport_tracking?: boolean | null;
+}
+
+// @public
 export interface InvoiceDetails {
+    readonly b2g_details?: InvoiceB2gDetails | null;
     // (undocumented)
     readonly billing_book_id: string;
     readonly branch?: string | null;
@@ -569,6 +644,7 @@ export interface InvoiceDetails {
     // (undocumented)
     readonly counterpart: Readonly<{
         name: string;
+        supply_account_no?: string | null;
         country_code?: string | undefined;
         vat?: string | undefined;
         city?: string | undefined;
@@ -579,6 +655,7 @@ export interface InvoiceDetails {
     }>;
     // (undocumented)
     readonly currency: string;
+    readonly delivery_details?: InvoiceDeliveryDetails | null;
     // (undocumented)
     readonly exchange_rate?: string | null;
     readonly external_id: string | null;
@@ -598,6 +675,7 @@ export interface InvoiceDetails {
         vat_rate: number | null;
         vat_total: string;
         subtotal: string;
+        withhold_tax_rate?: string | null;
         withhold_tax_code?: string | null;
         withholding_total?: string | null;
         classification_category: string | null;
@@ -605,6 +683,12 @@ export interface InvoiceDetails {
         stamp_duty_tax_code?: string | null;
         stamp_duty_amount?: string | null;
         deductions_amount?: string | null;
+        deductions?: readonly Readonly<{
+            title?: string | null;
+            amount: string;
+            informational?: boolean | null;
+        }>[] | null;
+        fuel_code?: string | null;
     }>[];
     // (undocumented)
     readonly invoice_type_code: string;
@@ -620,6 +704,7 @@ export interface InvoiceDetails {
     // (undocumented)
     readonly payable_total_amount: string;
     readonly payment_method?: string | null;
+    readonly special_invoice_category?: string | null;
     // (undocumented)
     readonly third_party_collection?: boolean | null;
     // (undocumented)

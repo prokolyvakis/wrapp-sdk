@@ -419,9 +419,17 @@ export interface InvoiceDetails {
   readonly notes?: string | null;
   readonly withholding_total_amount?: string | null;
   readonly total_stamp_duty_amount?: string | null;
+  /** Provider code as exact text; an unfamiliar code is kept, not interpreted. */
+  readonly special_invoice_category?: string | null;
+  /** Present on a delivery note. */
+  readonly delivery_details?: InvoiceDeliveryDetails | null;
+  /** Present on a B2G invoice. */
+  readonly b2g_details?: InvoiceB2gDetails | null;
   readonly counterpart: Readonly<{
     /** Empty on a record that has no counterpart. */
     name: string;
+    /** Present on a fuel invoice. */
+    supply_account_no?: string | null;
     country_code?: string | undefined;
     vat?: string | undefined;
     city?: string | undefined;
@@ -447,6 +455,8 @@ export interface InvoiceDetails {
     vat_rate: number | null;
     vat_total: string;
     subtotal: string;
+    /** Exact text of the rate: '20' when set, '' when the line has none. */
+    withhold_tax_rate?: string | null;
     withhold_tax_code?: string | null;
     withholding_total?: string | null;
     classification_category: string | null;
@@ -454,7 +464,64 @@ export interface InvoiceDetails {
     stamp_duty_tax_code?: string | null;
     stamp_duty_amount?: string | null;
     deductions_amount?: string | null;
+    /** Empty when the line has none; an omitted item field stays absent. */
+    deductions?:
+      | readonly Readonly<{
+          title?: string | null;
+          amount: string;
+          informational?: boolean | null;
+        }>[]
+      | null;
+    /** Provider fuel code as exact text, on a line of a fuel invoice. */
+    fuel_code?: string | null;
   }>[];
+}
+/**
+ * The movement of a delivery note as the provider returns it. Every member is absent when
+ * omitted and null when the provider reports no value. Codes and branch numbers are exact
+ * text; the dispatch date is the provider's DD-MM-YYYY text, returned as written.
+ */
+export interface InvoiceDeliveryDetails {
+  readonly dispatch_date?: string | null;
+  readonly dispatch_time?: string | null;
+  readonly vehicle_number?: string | null;
+  readonly purpose_of_movement?: string | null;
+  readonly purpose_of_movement_custom_title?: string | null;
+  readonly issuer_of_movement?: string | null;
+  readonly from_address?: string | null;
+  readonly from_number?: string | null;
+  readonly from_city?: string | null;
+  readonly from_zipcode?: string | null;
+  readonly from_branch?: string | null;
+  readonly to_address?: string | null;
+  readonly to_number?: string | null;
+  readonly to_city?: string | null;
+  readonly to_zipcode?: string | null;
+  readonly to_branch?: string | null;
+  readonly reverse_delivery_note?: boolean | null;
+  readonly reverse_delivery_note_purpose?: string | null;
+  readonly non_obligated_recipient?: boolean | null;
+  readonly without_digital_transport_tracking?: boolean | null;
+}
+/**
+ * The B2G fields of an invoice as the provider returns them, under its own key names (for
+ * example `bt_70`, where the request field is `b2g_bt_70`). The budget type is exact text and
+ * the due date is the provider's DD-MM-YYYY text, where the request takes YYYY-MM-DD.
+ */
+export interface InvoiceB2gDetails {
+  readonly buyer_reference?: string | null;
+  readonly delivery_address_city?: string | null;
+  readonly delivery_address_street?: string | null;
+  readonly delivery_address_street_number?: string | null;
+  readonly delivery_address_postal_code?: string | null;
+  readonly delivery_address_party_name?: string | null;
+  readonly b2g_contracting_authority_id?: string | null;
+  readonly b2g_contract_identifier?: string | null;
+  readonly b2g_budget_type?: string | null;
+  readonly b2g_budget_identifier?: string | null;
+  readonly b2g_due_date?: string | null;
+  readonly b2g_payment_details?: string | null;
+  readonly bt_70?: string | null;
 }
 /** One validated result page. No snapshot guarantee exists under concurrent writes. */
 export interface InvoicePage {
