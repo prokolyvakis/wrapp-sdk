@@ -87,7 +87,8 @@ Implement incrementally, never advertise entire-API support from a small endpoin
 | Thermal PDF/POS-error callbacks                                                                                                                  | Core typed events; body shapes from documentation, unobserved |
 | POS device list/create/delete, POS session abort, invoice POS device, installments and tip fields                                                | Core; shapes from documentation, unobserved                   |
 | Viva payment links, preloaded POS transactions, POS refunds                                                                                      | Deferred                                                      |
-| Catering tables/order notes                                                                                                                      | Deferred                                                      |
+| Catering table list/get/create/update/open/close/delete, open order-note list, order-note cancellation                                           | Core; shapes from documentation, unobserved                   |
+| Catering table filters and transfer, catering invoice (8.6) creation                                                                             | Blocked on provider questions                                 |
 | Digital clientele correlation by mark and by FIM                                                                                                 | Core; shapes from documentation, unobserved                   |
 | Digital clientele read/create/update/cancel, digital transports                                                                                  | Deferred                                                      |
 

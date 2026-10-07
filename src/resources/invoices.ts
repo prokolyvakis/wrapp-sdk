@@ -15,6 +15,17 @@ import {
   referenceSchema,
   rejection,
 } from '../codecs.js';
+import {
+  openOrderNotesInputSchema,
+  openOrderNotesPageSchema,
+  orderNoteCancellationInputSchema,
+  orderNoteCancellationSchema,
+} from '../catering-codecs.js';
+import type {
+  CancelCateringOrderNotesInput,
+  CateringOrderNoteCancellationOutcome,
+  OpenCateringOrderNotesPage,
+} from '../catering-types.js';
 import { WrappError } from '../errors.js';
 import {
   cancellationSchema,
@@ -105,6 +116,25 @@ export interface InvoiceResource {
    * The acknowledgement is the provider's answer, not independently verified settlement.
    */
   markAsPaid(invoiceId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
+  /**
+   * One page of open catering order notes, as summaries. This is its own page shape, with up
+   * to 20 records and no total count, not a page of full invoice records.
+   */
+  listOpenCateringOrderNotes(
+    input?: Readonly<{ page?: number }>,
+    options?: RequestOptions,
+  ): Promise<OpenCateringOrderNotesPage>;
+  /**
+   * Cancels catering order notes. The provider does this by issuing a new invoice of type
+   * 8.6, so this is a fiscal creation, dispatched at most once and never retried. The request
+   * carries no external reference: after a failure whose effect is 'unknown', read the open
+   * order notes before deciding anything, and never repeat the call blindly. Nothing follows
+   * the dispatch: no table is closed and no replacement is issued.
+   */
+  cancelCateringOrderNotes(
+    input: CancelCateringOrderNotesInput,
+    options?: RequestOptions,
+  ): Promise<CateringOrderNoteCancellationOutcome>;
   /** Draft invoices. Only deletion is available. */
   readonly drafts: Readonly<{
     /**
@@ -363,6 +393,48 @@ export function invoiceResource(runtime: Runtime): InvoiceResource {
         '/invoices/' + encodeURIComponent(valid) + '/mark_as_paid',
         (value, report) => acknowledgement(value, report, 'markAsPaid'),
         opts,
+      );
+    },
+    listOpenCateringOrderNotes: async (
+      filters: Readonly<{ page?: number }> = {},
+      opts?: RequestOptions,
+    ) => {
+      const valid = input(openOrderNotesInputSchema, filters, 'openCateringOrderNotes');
+      return runtime.run(
+        'openCateringOrderNotes',
+        '/invoices/list_open_catering_order_notes' +
+          (valid.page === undefined ? '' : '?page=' + String(valid.page)),
+        (v, report) =>
+          decode(openOrderNotesPageSchema, readValue(v, report), 'openCateringOrderNotes'),
+        opts,
+      );
+    },
+    cancelCateringOrderNotes: async (
+      cancellation: CancelCateringOrderNotesInput,
+      opts?: RequestOptions,
+    ) => {
+      const data = input(
+        orderNoteCancellationInputSchema,
+        cancellation,
+        'cancelCateringOrderNotes',
+      );
+      return runtime.run(
+        'cancelCateringOrderNotes',
+        '/invoices/cancel_catering_order_note',
+        (value, report): CateringOrderNoteCancellationOutcome => {
+          const outcome = refused(value, report);
+          if (outcome !== undefined) return outcome;
+          // The documented answer is the receipt alone. A pending or other status here is
+          // not a documented answer of this operation and is not guessed at.
+          if (value !== null && typeof value === 'object' && 'status' in value)
+            throw new WrappError('PROTOCOL_ERROR', 'cancelCateringOrderNotes');
+          return freeze({
+            kind: 'observed',
+            receipt: decode(orderNoteCancellationSchema, value, 'cancelCateringOrderNotes'),
+          });
+        },
+        opts,
+        encodeJson(data),
       );
     },
     drafts: Object.freeze({

@@ -11,6 +11,15 @@ const written: Record<string, unknown> = {
   'POST /api/v1/billing_books': { id: 'new-book', name: 'Book', series: 'S', invoice_type_code: '2.1' },
   'POST /api/v1/digital_clienteles/entry/correlate_by_mark': { notice: 'Correlated' },
   'POST /api/v1/digital_clienteles/entry/correlate_by_fim': { errors: 'Refused' },
+  'GET /api/v1/catering_tables': [{ id: 'table', status: 'open', name: 'table1', total: '140.0' }],
+  'POST /api/v1/catering_tables': { id: 'table', status: 'available', name: 7, total: '0.0', invoices: [], error_message: null },
+  'GET /api/v1/catering_tables/table': { id: 'table', status: 'alert', name: 'table1', total: '0.0', invoices: ['invoice'], error_message: 'Check' },
+  'PATCH /api/v1/catering_tables/table': { id: 'table', status: 'available', name: 'renamed', total: '0.0' },
+  'POST /api/v1/catering_tables/open_table': { id: 'table', status: 'open', name: 'table1', total: '0.0' },
+  'POST /api/v1/catering_tables/table/close': { errors: [{ title: 'Refused' }] },
+  'DELETE /api/v1/catering_tables/table': { status: 'Catering table deleted' },
+  'GET /api/v1/invoices/list_open_catering_order_notes': { invoices: [{ id: 'note', my_data_mark: '400000000000001', issued_at: '2026-05-13T10:00:00.000Z', catering_table_id: 'table' }], total_pages: 1, current_page: 1 },
+  'POST /api/v1/invoices/cancel_catering_order_note': { id: 'cancelling', my_data_mark: 'mark', my_data_uid: 'uid', my_data_qr_url: 'https://example.invalid/qr', series: 'a', num: 1, wrapp_invoice_url: 'https://example.invalid/el', wrapp_invoice_url_en: 'https://example.invalid/en' },
   'GET /api/v1/pos_devices': [{ id: 'device', name: 'Front desk', terminal_id: '16000001', merchant_id: null }],
   'POST /api/v1/pos_devices': { errors: { 'pos_devices.name': ['Taken'], authorization_code: ['Wrong', 'Used'] } },
   'DELETE /api/v1/pos_devices/device': { status: 'POS device deleted' },
@@ -72,6 +81,21 @@ const device = await client.posDevices.create({ pos_type: 'epay', name: 'Front d
 assert.equal(device.kind === 'observed' ? device.device.id : device.errorCount, 3);
 assert.equal((await client.posDevices.delete('device')).kind, 'acknowledged');
 assert.equal((await client.posSessions.abort('invoice')).kind, 'acknowledged');
+const tableStatus: string = (await client.cateringTables.list())[0]?.status ?? '';
+assert.equal(tableStatus, 'open');
+const createdTable = await client.cateringTables.create({});
+assert.equal(createdTable.kind === 'observed' ? createdTable.table.name : createdTable.kind, '7');
+const shown = await client.cateringTables.get('table');
+assert.equal(shown.status + String(shown.error_message) + String(shown.invoices?.length), 'alertCheck1');
+const renamedTable = await client.cateringTables.update('table', { name: 'renamed' });
+assert.equal(renamedTable.kind === 'observed' ? renamedTable.table.invoices : null, undefined);
+assert.equal((await client.cateringTables.open({ name: 'table1' })).kind, 'observed');
+assert.equal((await client.cateringTables.close('table')).kind, 'rejected');
+assert.equal((await client.cateringTables.delete('table')).kind, 'acknowledged');
+const notes = await client.invoices.listOpenCateringOrderNotes({ page: 1 });
+assert.equal(notes.invoices[0]?.issued_at, '2026-05-13T10:00:00.000Z');
+const cancelling = await client.invoices.cancelCateringOrderNotes({ billing_book_id: 'book', correlated_invoices: ['400000000000001'] });
+assert.equal(cancelling.kind === 'observed' ? cancelling.receipt.num : cancelling.kind, '1');
 const deleted = await client.invoices.drafts.delete('invoice');
 assert.equal(deleted.kind === 'rejected' ? deleted.errorCount : 0, 1);
 const forbiddenPath = '@prokolyvakis/wrapp-sdk/dist/client.js';
@@ -146,6 +170,10 @@ const softpos: CreatePosDeviceInput = { pos_type: 'worldline_softpos', terminal_
 const pos: Pick<CreateInvoiceInput, 'pos_device_id' | 'installments' | 'tip_amount'> = { pos_device_id: 'device', installments: false, tip_amount: sdk.decimal('2.00') };
 assert.equal(softpos.pos_type + String(pos.installments), 'worldline_softposfalse');
 if (false) {
+  // @ts-expect-error A table is opened by id, by name or by both, never by neither.
+  void client.cateringTables.open({});
+  // @ts-expect-error The order-note page reports no total count.
+  void notes.total_count;
   // @ts-expect-error A Viva device takes a merchant id, not an authorization code.
   const wrongCredential: CreatePosDeviceInput = { pos_type: 'viva', name: 'Desk', terminal_id: '1', authorization_code: 'x' };
   void wrongCredential;

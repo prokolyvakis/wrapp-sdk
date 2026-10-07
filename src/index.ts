@@ -8,6 +8,18 @@
 export { WrappClient } from './client.js';
 export type { InvoiceResource } from './resources/invoices.js';
 export type {
+  CancelCateringOrderNotesInput,
+  CateringOrderNoteCancellation,
+  CateringOrderNoteCancellationOutcome,
+  CateringTable,
+  CateringTableOutcome,
+  CateringTableResource,
+  CateringTableSummary,
+  OpenCateringOrderNote,
+  OpenCateringOrderNotesPage,
+  OpenCateringTableInput,
+} from './catering-types.js';
+export type {
   ClienteleCorrelationOutcome,
   DigitalClienteleResource,
 } from './digital-clientele-types.js';

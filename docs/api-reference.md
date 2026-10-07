@@ -6,34 +6,43 @@ grounded in documentation, what is observed behavior, and what remains an open q
 
 ## Supported operations
 
-| Resource                          | Method/path under /api/v1                      | Effect         |
-| --------------------------------- | ---------------------------------------------- | -------------- |
-| login (internal)                  | POST /login                                    | authentication |
-| tenant.get                        | GET /tenant_details                            | read           |
-| vat.search                        | GET /vat_search?vat=...&country_code=...       | read           |
-| vat.exemptions                    | GET /vat_exemptions                            | read           |
-| branches.list                     | GET /branches                                  | read           |
-| billingBooks.list                 | GET /billing_books                             | read           |
-| invoices.getStatus                | GET /invoices/:id                              | read           |
-| invoices.get                      | GET /invoices/:id/find_invoice_by_id           | read           |
-| invoices.list / iterate           | GET /invoices/find_all_invoices                | read           |
-| invoices.create                   | POST /invoices                                 | effectful      |
-| invoices.requestPdf               | GET /invoices/:id/generate_pdf                 | effectful      |
-| invoices.requestThermalPdf        | GET /invoices/:id/generate_thermal_pdf         | effectful      |
-| invoices.issuedCount              | GET /invoices/issued_count                     | read           |
-| invoices.cancelDeliveryNote       | DELETE /invoices/:id/cancel                    | effectful      |
-| invoices.setExternalId            | PUT /invoices/:invoice_id/set_external_id      | effectful      |
-| invoices.markAsPaid               | GET /invoices/:invoice_id/mark_as_paid         | effectful      |
-| invoices.drafts.delete            | DELETE /invoices/:invoice_id/delete_draft      | effectful      |
-| branches.create                   | POST /branches                                 | effectful      |
-| branches.update                   | PUT /branches/:id                              | effectful      |
-| billingBooks.create               | POST /billing_books                            | effectful      |
-| digitalClienteles.correlateByMark | POST /digital_clienteles/:id/correlate_by_mark | effectful      |
-| digitalClienteles.correlateByFim  | POST /digital_clienteles/:id/correlate_by_fim  | effectful      |
-| posDevices.list                   | GET /pos_devices                               | read           |
-| posDevices.create                 | POST /pos_devices                              | effectful      |
-| posDevices.delete                 | DELETE /pos_devices/:id                        | effectful      |
-| posSessions.abort                 | POST /pos_sessions/:id/abort_session           | effectful      |
+| Resource                            | Method/path under /api/v1                      | Effect         |
+| ----------------------------------- | ---------------------------------------------- | -------------- |
+| login (internal)                    | POST /login                                    | authentication |
+| tenant.get                          | GET /tenant_details                            | read           |
+| vat.search                          | GET /vat_search?vat=...&country_code=...       | read           |
+| vat.exemptions                      | GET /vat_exemptions                            | read           |
+| branches.list                       | GET /branches                                  | read           |
+| billingBooks.list                   | GET /billing_books                             | read           |
+| invoices.getStatus                  | GET /invoices/:id                              | read           |
+| invoices.get                        | GET /invoices/:id/find_invoice_by_id           | read           |
+| invoices.list / iterate             | GET /invoices/find_all_invoices                | read           |
+| invoices.create                     | POST /invoices                                 | effectful      |
+| invoices.requestPdf                 | GET /invoices/:id/generate_pdf                 | effectful      |
+| invoices.requestThermalPdf          | GET /invoices/:id/generate_thermal_pdf         | effectful      |
+| invoices.issuedCount                | GET /invoices/issued_count                     | read           |
+| invoices.cancelDeliveryNote         | DELETE /invoices/:id/cancel                    | effectful      |
+| invoices.setExternalId              | PUT /invoices/:invoice_id/set_external_id      | effectful      |
+| invoices.markAsPaid                 | GET /invoices/:invoice_id/mark_as_paid         | effectful      |
+| invoices.drafts.delete              | DELETE /invoices/:invoice_id/delete_draft      | effectful      |
+| branches.create                     | POST /branches                                 | effectful      |
+| branches.update                     | PUT /branches/:id                              | effectful      |
+| billingBooks.create                 | POST /billing_books                            | effectful      |
+| digitalClienteles.correlateByMark   | POST /digital_clienteles/:id/correlate_by_mark | effectful      |
+| digitalClienteles.correlateByFim    | POST /digital_clienteles/:id/correlate_by_fim  | effectful      |
+| posDevices.list                     | GET /pos_devices                               | read           |
+| posDevices.create                   | POST /pos_devices                              | effectful      |
+| posDevices.delete                   | DELETE /pos_devices/:id                        | effectful      |
+| posSessions.abort                   | POST /pos_sessions/:id/abort_session           | effectful      |
+| cateringTables.list                 | GET /catering_tables                           | read           |
+| cateringTables.get                  | GET /catering_tables/:id                       | read           |
+| cateringTables.create               | POST /catering_tables                          | effectful      |
+| cateringTables.update               | PATCH /catering_tables/:id                     | effectful      |
+| cateringTables.open                 | POST /catering_tables/open_table               | effectful      |
+| cateringTables.close                | POST /catering_tables/:id/close                | effectful      |
+| cateringTables.delete               | DELETE /catering_tables/:id                    | effectful      |
+| invoices.listOpenCateringOrderNotes | GET /invoices/list_open_catering_order_notes   | read           |
+| invoices.cancelCateringOrderNotes   | POST /invoices/cancel_catering_order_note      | effectful      |
 
 There is no generic request escape hatch. Origins are explicit staging/production; the
 loopback-only test-origin override is visibly an advanced test capability. An injected fetch
@@ -224,6 +233,54 @@ refusals as an object of field name to messages; each message counts as one issu
 diagnostics: 'provider-issues' each is returned as a title (the field) and a message. The
 merchant id and the authorization code of the request are redacted from that retained text,
 and neither appears in any error.
+
+## Catering tables and order notes
+
+Tables, on `client.cateringTables`:
+
+- list() returns every table as a summary: id, status, name and total. The provider's status
+  and name filters are not available yet.
+- get(tableId) returns one table with its details: the summary fields plus invoices (invoice
+  ids) and error_message when the provider sends them.
+- create({ name? }) creates a table; without a name the provider assigns one, and nothing is
+  sent in its place. update(tableId, { name }) renames one.
+- open({ id?, name? }) opens a table by id, by name, or by both. At least one is required.
+  The provider states no rule for both, so both are sent as given and it decides.
+- close(tableId) closes a table. delete(tableId) deletes one; the provider documents deletion
+  for an available table.
+
+The five writes are dispatched at most once, never retried, and report effect unknown after a
+dispatched failure. create, update, open and close return observed with the table, or
+rejected; delete returns acknowledged or rejected. An answer for another table than the one
+addressed by id is a protocol error.
+
+A table's status is data, returned verbatim. The provider documents available, open, closed
+and alert; another value is returned as received. The SDK never treats a status as a failure
+and never acts on one: closing a table does not issue or cancel anything through the SDK.
+error_message is likewise the provider's text about the table, returned as data. total is
+exact numeric text, and a table the provider named with a number has that number as text.
+
+Order notes, on `client.invoices`:
+
+- listOpenCateringOrderNotes({ page? }) returns one page of open order notes as summaries
+  (id, my_data_mark, issued_at, catering_table_id) with total_pages and current_page. It is
+  its own page shape: up to 20 records, no total count, and not full invoice records.
+  issued_at is the provider's timestamp text, verbatim.
+- cancelCateringOrderNotes({ billing_book_id, correlated_invoices, catering_table_id? })
+  cancels order notes by their registration marks (1 to 100). The provider does this by
+  issuing a new invoice of type 8.6, so it is a fiscal creation: dispatched at most once,
+  never retried, effect unknown after a dispatched failure. The result is observed with the
+  receipt of that invoice (id, marks, series, num and portal links; no issue date and no
+  external reference, because the provider documents none), or rejected.
+  catering_table_id is optional: without it the provider resolves the table from the marks.
+
+The cancellation request has no external reference, so the SDK's usual reconciliation handle
+does not exist for it. After an unknown outcome, read the open order notes before deciding
+anything; do not repeat the call blindly. Nothing follows the dispatch: no table is closed and
+no replacement document is issued.
+
+Moving invoices between tables, and creating order notes or other 8.6 invoices through
+invoices.create, are not available.
 
 ## Returned fields
 

@@ -96,6 +96,13 @@ export type CalendarDate = string & {
 // @public
 export function calendarDate(value: string): CalendarDate;
 
+// @public (undocumented)
+export interface CancelCateringOrderNotesInput {
+    readonly billing_book_id: string;
+    readonly catering_table_id?: string;
+    readonly correlated_invoices: readonly string[];
+}
+
 // @public
 export interface CancellationObservation {
     readonly cancelled_by_mark: string | null;
@@ -126,6 +133,77 @@ export type CancellationOutcome = Readonly<{
     errorCount: number;
     rejectionSource: RejectionSource;
 }>;
+
+// @public
+export interface CateringOrderNoteCancellation {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly my_data_mark: string | null;
+    // (undocumented)
+    readonly my_data_qr_url: string | null;
+    // (undocumented)
+    readonly my_data_uid: string | null;
+    // (undocumented)
+    readonly num: string;
+    // (undocumented)
+    readonly series: string;
+    // (undocumented)
+    readonly wrapp_invoice_url: string;
+    // (undocumented)
+    readonly wrapp_invoice_url_en: string;
+}
+
+// @public (undocumented)
+export type CateringOrderNoteCancellationOutcome = Readonly<{
+    kind: 'observed';
+    receipt: CateringOrderNoteCancellation;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
+export interface CateringTable extends CateringTableSummary {
+    readonly error_message?: string | null;
+    readonly invoices?: readonly string[];
+}
+
+// @public
+export type CateringTableOutcome = Readonly<{
+    kind: 'observed';
+    table: CateringTable;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public (undocumented)
+export interface CateringTableResource {
+    close(tableId: string, options?: RequestOptions): Promise<CateringTableOutcome>;
+    create(table: Readonly<{
+        name?: string;
+    }>, options?: RequestOptions): Promise<CateringTableOutcome>;
+    delete(tableId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
+    // (undocumented)
+    get(tableId: string, options?: RequestOptions): Promise<CateringTable>;
+    list(options?: RequestOptions): Promise<readonly CateringTableSummary[]>;
+    open(table: OpenCateringTableInput, options?: RequestOptions): Promise<CateringTableOutcome>;
+    update(tableId: string, patch: Readonly<{
+        name: string;
+    }>, options?: RequestOptions): Promise<CateringTableOutcome>;
+}
+
+// @public
+export interface CateringTableSummary {
+    // (undocumented)
+    readonly id: string;
+    readonly name: string;
+    readonly status: string;
+    readonly total: string;
+}
 
 // @public
 export type ClienteleCorrelationOutcome = Readonly<{
@@ -512,6 +590,7 @@ export type InvoiceReference = Readonly<{
 
 // @public
 export interface InvoiceResource {
+    cancelCateringOrderNotes(input: CancelCateringOrderNotesInput, options?: RequestOptions): Promise<CateringOrderNoteCancellationOutcome>;
     cancelDeliveryNote(invoiceId: string, options?: RequestOptions): Promise<CancellationOutcome>;
     create(invoice: CreateInvoiceInput, options?: RequestOptions): Promise<CreateOutcome>;
     readonly drafts: Readonly<{
@@ -530,6 +609,9 @@ export interface InvoiceResource {
     }): AsyncIterable<InvoiceDetails>;
     // (undocumented)
     list(filters?: ListInvoicesInput, options?: RequestOptions): Promise<InvoicePage>;
+    listOpenCateringOrderNotes(input?: Readonly<{
+        page?: number;
+    }>, options?: RequestOptions): Promise<OpenCateringOrderNotesPage>;
     markAsPaid(invoiceId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
     requestPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
     requestThermalPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
@@ -572,6 +654,36 @@ export interface ListInvoicesInput {
     // (undocumented)
     readonly start_date?: CalendarDate;
 }
+
+// @public
+export interface OpenCateringOrderNote {
+    // (undocumented)
+    readonly catering_table_id: string | null;
+    // (undocumented)
+    readonly id: string;
+    readonly issued_at: string;
+    // (undocumented)
+    readonly my_data_mark: string | null;
+}
+
+// @public
+export interface OpenCateringOrderNotesPage {
+    // (undocumented)
+    readonly current_page: number;
+    // (undocumented)
+    readonly invoices: readonly OpenCateringOrderNote[];
+    // (undocumented)
+    readonly total_pages: number;
+}
+
+// @public
+export type OpenCateringTableInput = Readonly<{
+    id: string;
+    name?: string;
+}> | Readonly<{
+    id?: string;
+    name: string;
+}>;
 
 // @public
 export type PdfOutcome = Readonly<{
@@ -751,6 +863,8 @@ export class WrappClient {
     readonly billingBooks: Readonly<BillingBookResource>;
     // (undocumented)
     readonly branches: Readonly<BranchResource>;
+    // (undocumented)
+    readonly cateringTables: Readonly<CateringTableResource>;
     // (undocumented)
     readonly digitalClienteles: Readonly<DigitalClienteleResource>;
     // (undocumented)

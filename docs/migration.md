@@ -147,8 +147,8 @@ The release also adds these type exports: `InvoiceStatusOutcome`, `PendingInvoic
 ### New operations
 
 Additive. Each is a new method, on an existing resource or on one of the new
-`client.digitalClienteles`, `client.posDevices` and `client.posSessions` resources, and
-changes nothing you already call.
+`client.digitalClienteles`, `client.posDevices`, `client.posSessions` and
+`client.cateringTables` resources, and changes nothing you already call.
 
 - `invoices.requestThermalPdf(invoiceId)` — the thermal-printer PDF, with the outcomes of
   `requestPdf`.
@@ -164,6 +164,10 @@ changes nothing you already call.
 - `posDevices.list()`, `posDevices.create(device)` and `posDevices.delete(deviceId)`, on a
   new `client.posDevices` resource.
 - `posSessions.abort(invoiceId)`, on a new `client.posSessions` resource.
+- `cateringTables.list`, `get`, `create`, `update`, `open`, `close` and `delete`, on a new
+  `client.cateringTables` resource.
+- `invoices.listOpenCateringOrderNotes({ page? })` and
+  `invoices.cancelCateringOrderNotes(input)`. The second issues a cancelling invoice.
 
 One case needs an edit: code that implements the exported `InvoiceResource` interface itself,
 such as a typed test double, must add the new methods. The same holds for an object typed as

@@ -30,6 +30,16 @@ export const operations = Object.freeze({
   posDeviceCreate: { method: 'POST', effectful: true },
   posDeviceDelete: { method: 'DELETE', effectful: true },
   posSessionAbort: { method: 'POST', effectful: true },
+  cateringTables: { method: 'GET', effectful: false },
+  cateringTable: { method: 'GET', effectful: false },
+  cateringTableCreate: { method: 'POST', effectful: true },
+  cateringTableUpdate: { method: 'PATCH', effectful: true },
+  cateringTableOpen: { method: 'POST', effectful: true },
+  cateringTableClose: { method: 'POST', effectful: true },
+  cateringTableDelete: { method: 'DELETE', effectful: true },
+  openCateringOrderNotes: { method: 'GET', effectful: false },
+  // Issues a cancelling 8.6 invoice: a fiscal creation, not a state update.
+  cancelCateringOrderNotes: { method: 'POST', effectful: true },
 } as const);
 export type Operation = keyof typeof operations;
 export function scope(
