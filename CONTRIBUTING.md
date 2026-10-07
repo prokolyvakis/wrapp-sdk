@@ -34,6 +34,11 @@ review compatibility.
 - `npm run check:consumers` — compiles and runs the packed tarball under TypeScript 5.8 and
   6.0 in NodeNext and bundler modes. Source checks are not a substitute for this proof.
 - `npm run secrets:check` — offline Gitleaks scan of history, index and working files.
+- `npm run verify:release` — everything above in CI order, preceded by the pinned scanner
+  install, stopping at the first failure. It publishes nothing. It is what `prepublishOnly`
+  runs, so `npm publish` cannot proceed past a failing gate. npm itself still allows
+  `npm publish --ignore-scripts`, which skips `prepublishOnly`; never use it. The reviewed
+  release PR and the protected `npm` environment are the controls a package script cannot be.
 
 Hooks are local convenience; CI repeats every gate because hooks can be bypassed. No provider
 requests, credentials or publishing are required for any check. No fix-up edits are performed
@@ -71,10 +76,15 @@ breaking is behavioral, not just structural: see [docs/compatibility.md](docs/co
 
 release-please is the sole version and changelog owner: pushes to main maintain a release
 PR from the Conventional Commit history; merging that PR creates the tag and GitHub release,
-and the publish job then runs the full gates (via prepublishOnly) and publishes to npm with
-provenance through trusted publishing — no npm token exists anywhere. The publish job runs
-in the protected `npm` environment; keep a required reviewer on it. Do not add
+and the publish job then runs the full gates (prepublishOnly runs `verify:release`) and
+publishes to npm with provenance through trusted publishing — no npm token exists anywhere.
+The publish job checks out the full history, because the secret scan refuses a shallow one,
+and runs in the protected `npm` environment; keep a required reviewer on it. Do not add
 semantic-release or Changesets alongside release-please.
+
+To rehearse a release locally, run `npm run verify:release` or `npm run prepublishOnly`. Never
+use `npm publish` or `npm publish --dry-run` as a check. Do not attach the sequence to
+`prepare` or `prepack`: the package and consumer gates call `npm pack` themselves.
 
 One operational note: CI does not start automatically on release-please's PRs (a GitHub
 token limitation) — approve the queued workflow run, or close and reopen the PR to trigger

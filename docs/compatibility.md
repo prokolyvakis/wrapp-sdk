@@ -107,8 +107,11 @@ A generated API diff is review input, not an automatic SemVer oracle.
 
 Publication runs only through the release workflow: a reviewed release-please PR, the
 protected npm environment, trusted publishing over OIDC (no stored npm credential), and
-npm provenance from the public repository. prepublishOnly runs the full check and packaging
-gates on every publish path, including a manual bootstrap publish.
+npm provenance from the public repository. prepublishOnly runs `verify:release` for every
+`npm publish` that runs lifecycle scripts, a manual one included: the pinned scanner install,
+the full-history secret scan, and the quality, package and packed-consumer gates, in the order
+CI runs them. `npm publish --ignore-scripts` would skip it; that npm-level bypass is why the
+protected environment and the reviewed release PR remain the binding controls.
 
 ## Sources
 

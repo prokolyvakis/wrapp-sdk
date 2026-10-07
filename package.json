@@ -57,7 +57,8 @@
     "commitlint": "commitlint",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run build",
     "check:package": "npm run check:api && publint --strict && attw --pack --profile esm-only",
-    "prepublishOnly": "npm run check && npm run check:package"
+    "verify:release": "npm run secrets:install && npm run secrets:check && npm run check && npm run check:package && npm run check:consumers",
+    "prepublishOnly": "npm run verify:release"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",
