@@ -248,6 +248,64 @@ export interface CreateInvoiceInput {
   readonly b2g_due_date?: CalendarDate;
   readonly b2g_buyer_reference?: string;
   readonly b2g_bt_70?: string;
+  /**
+   * Marks the invoice as a delivery note. `true` needs `delivery_detail`, and
+   * `delivery_detail` needs `true`. The provider then tracks the movement as a digital
+   * transport unless the detail says otherwise.
+   */
+  readonly is_delivery_note?: boolean;
+  readonly delivery_detail?: DeliveryDetail;
+  readonly other_correlated_entities?: readonly OtherCorrelatedEntity[];
+}
+/**
+ * The movement of a delivery note. The provider's two branch fields (`from_branch`,
+ * `to_branch`) are not available and are refused.
+ */
+export interface DeliveryDetail {
+  /** A real calendar date written DD-MM-YYYY. */
+  readonly dispatch_date: string;
+  /** HH:MM, from 00:00 to 23:59. */
+  readonly dispatch_time: string;
+  readonly vehicle_number: string;
+  /** One of '1' to '20' without '6', '15', '16', '17' and '18', as a string. */
+  readonly purpose_of_movement: string;
+  /** Required when `purpose_of_movement` is '19'. */
+  readonly purpose_of_movement_custom_title?: string;
+  readonly issuer_of_movement: string;
+  readonly from_address: string;
+  readonly from_number: string;
+  readonly from_city: string;
+  readonly from_zipcode: string;
+  readonly to_address: string;
+  readonly to_number: string;
+  readonly to_city: string;
+  readonly to_zipcode: string;
+  readonly reverse_delivery_note?: boolean;
+  /** One of 1 to 5. Required when `reverse_delivery_note` is true. */
+  readonly reverse_delivery_note_purpose?: number;
+  /**
+   * The two flags below change how the provider tracks the transport and cannot both be
+   * true. With `without_digital_transport_tracking` the provider marks the delivery note
+   * completed on issue.
+   */
+  readonly non_obligated_recipient?: boolean;
+  readonly without_digital_transport_tracking?: boolean;
+}
+/** Another party related to the invoice, for example a sender when a carrier issues it. */
+export interface OtherCorrelatedEntity {
+  /** One of 1 to 6. */
+  readonly entity_type: number;
+  /** The tax id, as text. */
+  readonly vat_number: string;
+  /** Two uppercase letters. */
+  readonly country_code: string;
+  /** A nonnegative integer. */
+  readonly branch_code: number;
+  readonly name: string;
+  readonly street: string;
+  readonly number: string;
+  readonly postal_code: string;
+  readonly city: string;
 }
 /** An issued invoice as observed via status lookup, creation or a verified webhook. */
 export interface InvoiceObservation {

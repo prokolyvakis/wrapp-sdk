@@ -592,7 +592,6 @@ describe.each(['2.1', '2.2', '2.3', '11.2'] as const)('invoice type %s profile',
   it('should refuse fields of profiles this SDK does not issue yet', async () => {
     for (const [key, value] of [
       ['draft', true],
-      ['is_delivery_note', true],
       ['taxes_totals', []],
       ['refund_invoice_id', 'invoice-one'],
       ['aade_preloaded', true],

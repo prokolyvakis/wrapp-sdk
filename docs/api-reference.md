@@ -71,7 +71,7 @@ fuel_invoice, and the fourteen B2G fields described below. The counterpart also 
 optional supply_account_no, and a line an optional fuel_code and cpv_code. All other fields
 reject pre-I/O.
 
-Invoice types 2.1/2.2/2.3/11.2 only; draft/delivery features, POS refunds and
+Invoice types 2.1/2.2/2.3/11.2 only; drafts, POS refunds and
 preloaded POS transactions (refund_invoice_id, aade_preloaded, third_party_collection), the
 invoice-level tax mode (taxes_totals), and the line fields the provider defines for invoice
 types this SDK does not issue yet (other_taxes_amount, accommodation_tax and
@@ -149,7 +149,35 @@ B2G (public sector) fields on an invoice:
 - Without b2g: true none of these fields is required. If they are supplied anyway they are
   still validated and are sent as given, as the provider's own request example does.
 - The delivery_address_* fields are the B2G invoice's own address. They are unrelated to a
-  delivery note, whose delivery_detail object is not available.
+  delivery note and do not stand in for its delivery_detail.
+
+Delivery notes:
+
+- is_delivery_note: true marks any supported invoice as a delivery note and needs
+  delivery_detail; delivery_detail needs is_delivery_note: true. One without the other is
+  refused, and no default stands in for either.
+- delivery_detail takes dispatch_date (a real calendar date written DD-MM-YYYY),
+  dispatch_time (HH:MM, 00:00 to 23:59), vehicle_number, purpose_of_movement,
+  issuer_of_movement, from_address, from_number, from_city, from_zipcode, to_address,
+  to_number, to_city and to_zipcode, all required; and optionally
+  purpose_of_movement_custom_title, reverse_delivery_note, reverse_delivery_note_purpose,
+  non_obligated_recipient and without_digital_transport_tracking. The provider's from_branch
+  and to_branch are not available and are refused.
+- purpose_of_movement is a string from '1' to '20' without '6', '15', '16', '17' and '18';
+  '19' needs purpose_of_movement_custom_title. reverse_delivery_note: true needs
+  reverse_delivery_note_purpose, 1 to 5. non_obligated_recipient and
+  without_digital_transport_tracking cannot both be true; both change how the provider
+  tracks the transport, and with the second it marks the delivery note completed on issue.
+- other_correlated_entities is a list of parties, each with entity_type (1 to 6), vat_number
+  (text), country_code, branch_code (a nonnegative integer), name, street, number,
+  postal_code and city, all required.
+
+Delivery-note and quantity-receipt invoice types (9.2, 9.3, 10.1, 10.2) are not accepted. The
+provider states rules for them in field notes and shows no request for any of them, so their
+whole profile is not known; [invoice-capabilities.md](invoice-capabilities.md) says what is
+and is not established. The fields receiving_note_purpose and
+other_receiving_note_purpose_title belong to 10.1 and 10.2 only and are refused. A delivery
+note is issued here on a supported type, with is_delivery_note: true.
 
 These presence rules are the ones the provider's reference states. They only require a field
 to be there: the SDK never sums deductions, derives a total, or compares a total with its

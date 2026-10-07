@@ -75,6 +75,8 @@ export type {
   IdentityEvidence,
   CreateInvoiceInput,
   CreateOutcome,
+  DeliveryDetail,
+  OtherCorrelatedEntity,
   InvoiceStatusOutcome,
   PendingInvoiceOutcome,
   PendingIdentityEvidence,

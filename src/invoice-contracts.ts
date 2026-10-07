@@ -1,24 +1,42 @@
 import type { CreateInvoiceInput } from './types.js';
 
-/** Which counterpart fields a supported profile requires before any request is made. */
-export type CounterpartRule = 'business-identity' | 'name-only';
+/**
+ * Which counterpart fields a profile requires before any request is made.
+ * 'name-and-address' is the rule the reference states for type 9.2: the name and the address,
+ * without a tax id.
+ */
+export type CounterpartRule = 'business-identity' | 'name-only' | 'name-and-address';
+/**
+ * The rules the reference states for one invoice type, beyond the general request rules.
+ * Each is a presence or exact-value rule quoted from the reference; none is a calculation.
+ * - zeroTotals: vat_total_amount, total_amount and payable_total_amount "need to be 0";
+ * - deliveryNote: is_delivery_note is "mandatory", and with it the delivery detail;
+ * - categoryThreeLines: every line keeps vat_rate 24, vat_total 0, subtotal 0 and the scalar
+ *   classification_category 'category3'. A classifications array would override that
+ *   category, and the reference documents none for the type, so one is refused;
+ * - receivingNote: receiving_note_purpose is "mandatory"; a 'correlated' note also needs the
+ *   mark of the delivery note being received, and only it accepts purpose 5. The reference
+ *   ties the delivery fields to delivery notes and says nothing of them for a receipt note,
+ *   so they are refused there.
+ */
+export interface TypeRules {
+  readonly zeroTotals?: true;
+  readonly deliveryNote?: true;
+  readonly categoryThreeLines?: true;
+  readonly receivingNote?: 'correlated' | 'uncorrelated';
+}
 /**
  * Why a code the provider lists is not accepted by create:
- * - 'delivery-note-profile': the reference documents delivery fields and zero-total rules for
- *   the type; they are not implemented yet;
- * - 'receipt-note-profile': the reference documents quantity-receipt rules for the type
- *   (purpose code, correlated marks, zero totals); they are not implemented yet;
+ * - 'field-notes-only': the reference states rules for the type in field notes but shows no
+ *   request for it, so its whole profile is not known. The stated rules are implemented and
+ *   tested as a prepared profile; the type is not accepted until a request is evidenced;
  * - 'catering-profile': the reference's catering examples conflict with its general rules;
  * - 'partly-documented': the reference gives some rule or an example specific to the type,
  *   but not its complete profile;
  * - 'listed-only': the reference lists the code without any type-specific rule.
  */
 export type UnsupportedReason =
-  | 'delivery-note-profile'
-  | 'receipt-note-profile'
-  | 'catering-profile'
-  | 'partly-documented'
-  | 'listed-only';
+  'field-notes-only' | 'catering-profile' | 'partly-documented' | 'listed-only';
 export type InvoiceTypeContract =
   | Readonly<{ code: string; supported: true; counterpart: CounterpartRule }>
   | Readonly<{ code: string; supported: false; reason: UnsupportedReason }>;
@@ -54,10 +72,10 @@ export const invoiceTypeCatalogue: readonly InvoiceTypeContract[] = Object.freez
   open('8.4', 'partly-documented'),
   open('8.5', 'partly-documented'),
   open('8.6', 'catering-profile'),
-  open('9.2', 'delivery-note-profile'),
-  open('9.3', 'delivery-note-profile'),
-  open('10.1', 'receipt-note-profile'),
-  open('10.2', 'receipt-note-profile'),
+  open('9.2', 'field-notes-only'),
+  open('9.3', 'field-notes-only'),
+  open('10.1', 'field-notes-only'),
+  open('10.2', 'field-notes-only'),
   open('11.1', 'partly-documented'),
   { code: '11.2', supported: true, counterpart: 'name-only' },
   open('11.3'),
@@ -102,8 +120,47 @@ export const catalogueMatchesInputType: Same<
  */
 export const thirdPartyCollectionTypes: readonly string[] = ['8.4', '8.5'];
 
-export function counterpartRule(code: (typeof supportedInvoiceTypeCodes)[number]): CounterpartRule {
+/**
+ * Profiles prepared for types create() does not accept. Each holds exactly the rules the
+ * reference states for its type; where it states nothing, the general rule applies, which is
+ * why three of them keep the full counterpart rule. No operation uses these: they exist so
+ * that the stated rules are executable and tested, and accepting a type later is a reviewed
+ * decision about evidence, not new code.
+ */
+export const preparedInvoiceTypeCodes = ['9.2', '9.3', '10.1', '10.2'] as const;
+export const preparedTypeProfiles: Readonly<
+  Record<
+    (typeof preparedInvoiceTypeCodes)[number],
+    Readonly<{ counterpart: CounterpartRule; rules: TypeRules }>
+  >
+> = Object.freeze({
+  '9.2': { counterpart: 'name-and-address', rules: { zeroTotals: true, deliveryNote: true } },
+  '9.3': {
+    counterpart: 'business-identity',
+    rules: { zeroTotals: true, deliveryNote: true, categoryThreeLines: true },
+  },
+  '10.1': {
+    counterpart: 'business-identity',
+    rules: { zeroTotals: true, receivingNote: 'correlated' },
+  },
+  '10.2': {
+    counterpart: 'business-identity',
+    rules: { zeroTotals: true, receivingNote: 'uncorrelated' },
+  },
+});
+
+const noRules: TypeRules = Object.freeze({});
+/** The counterpart rule and type rules of a code: a supported one, or a prepared one. */
+export function typeProfile(code: string): Readonly<{
+  counterpart: CounterpartRule;
+  rules: TypeRules;
+}> {
+  if (Object.hasOwn(preparedTypeProfiles, code))
+    return preparedTypeProfiles[code as (typeof preparedInvoiceTypeCodes)[number]];
   const contract = invoiceTypeCatalogue.find((entry) => entry.code === code);
   // Unreachable for a validated code; a business profile is the stricter fallback.
-  return contract?.supported === true ? contract.counterpart : 'business-identity';
+  return {
+    counterpart: contract?.supported === true ? contract.counterpart : 'business-identity',
+    rules: noRules,
+  };
 }

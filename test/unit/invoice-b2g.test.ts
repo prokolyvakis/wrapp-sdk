@@ -199,8 +199,9 @@ describe('invoices that are not B2G', () => {
     await refused(build({ b2g_due_date: '2026-02-30' }, [{}]));
     await refused(build({ delivery_address_city: '' }, [{}]));
   });
-  it('should keep the delivery-note object apart: delivery_detail is still not accepted', async () => {
-    await refused(b2g({ delivery_detail: { to_city: 'Synthetic City' } }));
+  it('should keep the delivery-note object apart: the B2G address is not a delivery detail', async () => {
+    // The flag still needs the delivery detail, whatever B2G address is present.
     await refused(b2g({ is_delivery_note: true }));
+    await refused(b2g({ delivery_detail: { to_city: 'Synthetic City' } }));
   });
 });

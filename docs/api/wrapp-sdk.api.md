@@ -342,6 +342,8 @@ export interface CreateInvoiceInput {
     // (undocumented)
     readonly delivery_address_street_number?: string;
     // (undocumented)
+    readonly delivery_detail?: DeliveryDetail;
+    // (undocumented)
     readonly email_body?: string;
     // (undocumented)
     readonly email_locale?: 'el' | 'en';
@@ -356,6 +358,7 @@ export interface CreateInvoiceInput {
     // (undocumented)
     readonly invoice_lines: readonly InvoiceLine[];
     readonly invoice_type_code: '2.1' | '2.2' | '2.3' | '11.2';
+    readonly is_delivery_note?: boolean;
     // (undocumented)
     readonly mark_as_paid?: boolean;
     // (undocumented)
@@ -363,6 +366,8 @@ export interface CreateInvoiceInput {
     // (undocumented)
     readonly notes?: string;
     readonly num?: number;
+    // (undocumented)
+    readonly other_correlated_entities?: readonly OtherCorrelatedEntity[];
     readonly other_taxes_amount?: Decimal;
     // (undocumented)
     readonly payable_total_amount: Decimal;
@@ -428,6 +433,40 @@ export interface DeliveredPackaging {
     readonly other_packaging_title?: string;
     readonly packaging_type: number;
     readonly quantity: number;
+}
+
+// @public
+export interface DeliveryDetail {
+    readonly dispatch_date: string;
+    readonly dispatch_time: string;
+    // (undocumented)
+    readonly from_address: string;
+    // (undocumented)
+    readonly from_city: string;
+    // (undocumented)
+    readonly from_number: string;
+    // (undocumented)
+    readonly from_zipcode: string;
+    // (undocumented)
+    readonly issuer_of_movement: string;
+    readonly non_obligated_recipient?: boolean;
+    readonly purpose_of_movement: string;
+    readonly purpose_of_movement_custom_title?: string;
+    // (undocumented)
+    readonly reverse_delivery_note?: boolean;
+    readonly reverse_delivery_note_purpose?: number;
+    // (undocumented)
+    readonly to_address: string;
+    // (undocumented)
+    readonly to_city: string;
+    // (undocumented)
+    readonly to_number: string;
+    // (undocumented)
+    readonly to_zipcode: string;
+    // (undocumented)
+    readonly vehicle_number: string;
+    // (undocumented)
+    readonly without_digital_transport_tracking?: boolean;
 }
 
 // @public
@@ -786,6 +825,24 @@ export type OpenCateringTableInput = Readonly<{
     id?: string;
     name: string;
 }>;
+
+// @public
+export interface OtherCorrelatedEntity {
+    readonly branch_code: number;
+    // (undocumented)
+    readonly city: string;
+    readonly country_code: string;
+    readonly entity_type: number;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly number: string;
+    // (undocumented)
+    readonly postal_code: string;
+    // (undocumented)
+    readonly street: string;
+    readonly vat_number: string;
+}
 
 // @public
 export type PdfOutcome = Readonly<{

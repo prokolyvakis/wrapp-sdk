@@ -188,7 +188,8 @@ four invoice types:
   `special_invoice_category`, `other_taxes_amount`, `withholding_total_amount`,
   `total_stamp_duty_amount`, `stamp_duty_amount`, `deductions_total_amount`, `fees_amount`,
   `pos_device_id`, `installments`, `tip_amount`, `fuel_invoice`, `b2g`, the five
-  `delivery_address_*` fields and the eight other `b2g_*` fields;
+  `delivery_address_*` fields and the eight other `b2g_*` fields, `is_delivery_note`,
+  `delivery_detail`, `other_correlated_entities`;
 - on the counterpart: `supply_account_no`;
 - on a line: `classifications`, `withhold_tax_rate`, `withhold_tax_code`, `withholding_total`,
   `stamp_duty_tax_code`, `stamp_duty_amount`, `deductions`, `deductions_amount`,

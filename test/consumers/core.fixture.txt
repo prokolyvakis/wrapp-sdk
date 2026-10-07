@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import * as sdk from '@prokolyvakis/wrapp-sdk';
-import type { CreateInvoiceInput, CreateOutcome, CreatePosDeviceInput, InvoiceLine, InvoiceStatusOutcome, LineClassification, LineDeduction, ProviderJson, VerifiedWebhook } from '@prokolyvakis/wrapp-sdk';
+import type { CreateInvoiceInput, CreateOutcome, CreatePosDeviceInput, DeliveryDetail, InvoiceLine, OtherCorrelatedEntity, InvoiceStatusOutcome, LineClassification, LineDeduction, ProviderJson, VerifiedWebhook } from '@prokolyvakis/wrapp-sdk';
 
 assert.deepEqual(Object.keys(sdk).sort(), ['WrappClient', 'WrappError', 'calendarDate', 'decimal', 'getProviderDiagnostics', 'verifyWebhook'].sort());
 assert.equal(sdk.decimal('9007199254740993.12'), '9007199254740993.12');
@@ -207,10 +207,26 @@ const publicSector: Pick<CreateInvoiceInput, 'b2g' | 'b2g_budget_type' | 'b2g_du
   { b2g: true, b2g_budget_type: 1, b2g_due_date: sdk.calendarDate('2026-01-31'), delivery_address_city: 'City' };
 const cpvLine: Pick<InvoiceLine, 'cpv_code'> = { cpv_code: '72000000-5' };
 assert.equal(String(publicSector.b2g_due_date) + String(cpvLine.cpv_code), '2026-01-3172000000-5');
+const movement: DeliveryDetail = { dispatch_date: '21-03-2026', dispatch_time: '02:30', vehicle_number: 'ABC1234', purpose_of_movement: '1',
+  issuer_of_movement: 'Carrier', from_address: 'Origin', from_number: '1', from_city: 'City', from_zipcode: '11111',
+  to_address: 'Destination', to_number: '2', to_city: 'City', to_zipcode: '22222', without_digital_transport_tracking: false };
+const sender: OtherCorrelatedEntity = { entity_type: 1, vat_number: '000000000', country_code: 'GR', branch_code: 0, name: 'Sender', street: 'Street', number: '1', postal_code: '11111', city: 'City' };
+const deliveryNote: Pick<CreateInvoiceInput, 'invoice_type_code' | 'is_delivery_note' | 'delivery_detail' | 'other_correlated_entities'> =
+  { invoice_type_code: '2.1', is_delivery_note: true, delivery_detail: movement, other_correlated_entities: [sender] };
+assert.equal(deliveryNote.invoice_type_code + String(deliveryNote.delivery_detail?.dispatch_time), '2.102:30');
 const softpos: CreatePosDeviceInput = { pos_type: 'worldline_softpos', terminal_id: '16000002', merchant_id: 'merchant@example.invalid' };
 const pos: Pick<CreateInvoiceInput, 'pos_device_id' | 'installments' | 'tip_amount'> = { pos_device_id: 'device', installments: false, tip_amount: sdk.decimal('2.00') };
 assert.equal(softpos.pos_type + String(pos.installments), 'worldline_softposfalse');
 if (false) {
+  // @ts-expect-error Type 9.3 is not accepted: a delivery note is a supported type with the flag.
+  const unaccepted: CreateInvoiceInput['invoice_type_code'] = '9.3';
+  void unaccepted;
+  // @ts-expect-error The receipt purpose belongs to types that are not accepted.
+  const purpose: CreateInvoiceInput['receiving_note_purpose'] = 1;
+  void purpose;
+  // @ts-expect-error The delivery detail has no branch fields yet.
+  const branched: DeliveryDetail = { ...movement, from_branch: 1 };
+  void branched;
   // @ts-expect-error The accommodation-tax fields of type 8.2 are not part of the line type.
   const lodging: InvoiceLine['accommodation_tax'] = undefined;
   void lodging;

@@ -37,10 +37,9 @@ const explanation = {
   'business-identity':
     'Counterpart name, country code, VAT number, city, street, number and postal code required',
   'name-only': 'Counterpart name required; the other counterpart fields optional',
-  'delivery-note-profile':
-    'The reference documents delivery fields and zero-total rules for this type; not implemented yet',
-  'receipt-note-profile':
-    'The reference documents quantity-receipt rules for this type; not implemented yet',
+  'name-and-address': 'Counterpart name, city, street, number and postal code required',
+  'field-notes-only':
+    'The reference states rules for this type in field notes but shows no request for it; not accepted until one is evidenced',
   'catering-profile':
     'The reference shows catering examples that conflict with its general field rules; open provider question',
   'partly-documented':
@@ -73,8 +72,7 @@ describe('invoice type catalogue', () => {
     expect(Object.fromEntries(reasons)).toEqual({
       'partly-documented': ['1.1', '1.5', '8.2', '8.4', '8.5', '11.1'],
       'catering-profile': ['8.6'],
-      'delivery-note-profile': ['9.2', '9.3'],
-      'receipt-note-profile': ['10.1', '10.2'],
+      'field-notes-only': ['9.2', '9.3', '10.1', '10.2'],
       'listed-only': reference.filter(
         (code) =>
           ![
