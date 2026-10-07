@@ -211,6 +211,9 @@ const softpos: CreatePosDeviceInput = { pos_type: 'worldline_softpos', terminal_
 const pos: Pick<CreateInvoiceInput, 'pos_device_id' | 'installments' | 'tip_amount'> = { pos_device_id: 'device', installments: false, tip_amount: sdk.decimal('2.00') };
 assert.equal(softpos.pos_type + String(pos.installments), 'worldline_softposfalse');
 if (false) {
+  // @ts-expect-error The accommodation-tax fields of type 8.2 are not part of the line type.
+  const lodging: InvoiceLine['accommodation_tax'] = undefined;
+  void lodging;
   // @ts-expect-error A due date is a validated calendar date, not any string.
   const dueDate: CreateInvoiceInput['b2g_due_date'] = '2026-01-31';
   void dueDate;

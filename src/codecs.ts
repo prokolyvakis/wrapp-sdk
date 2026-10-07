@@ -178,6 +178,44 @@ const lineFields = {
   ]).optional(),
   cpv_code: nonempty.optional(),
 };
+// Line fields the reference defines for invoice types create() does not issue yet: the
+// accommodation-tax fields of type 8.2 and the detail type of type 1.5. Each codec is complete
+// and tested on its own. create() knows the fields and refuses each on any other type, so they
+// are refused today and become usable only when their type is promoted.
+export const profileLineFields = {
+  other_taxes_amount: inputAmount,
+  accommodation_tax: inputAmount,
+  // The codes the reference lists for this request field, not its general other-tax table.
+  other_taxes_percent_category: z.enum([
+    '6',
+    '7',
+    '8',
+    '9',
+    '10',
+    '17',
+    '20',
+    '21',
+    '22',
+    '23',
+    '24',
+    '25',
+    '26',
+    '27',
+    '28',
+    '29',
+    '30',
+  ]),
+  invoice_detail_type: member([1, 2]),
+};
+export const profileLineFieldTypes: Readonly<
+  Record<keyof typeof profileLineFields, readonly string[]>
+> = {
+  other_taxes_amount: ['8.2'],
+  accommodation_tax: ['8.2'],
+  other_taxes_percent_category: ['8.2'],
+  invoice_detail_type: ['1.5'],
+};
+const profileLineKeys = Object.keys(profileLineFields) as (keyof typeof profileLineFields)[];
 // The invoice fields the reference marks "required for B2G". These address fields belong to
 // the B2G invoice itself and are unrelated to the delivery-note object.
 const b2gRequiredFields = {
@@ -197,7 +235,13 @@ const b2gRequiredKeys = Object.keys(b2gRequiredFields) as (keyof typeof b2gRequi
 // Presence rules the reference states for one line. They require a field to be there; they
 // never compute or compare an amount.
 const lineSchema = z
-  .strictObject(lineFields)
+  .strictObject({
+    ...lineFields,
+    other_taxes_amount: profileLineFields.other_taxes_amount.optional(),
+    accommodation_tax: profileLineFields.accommodation_tax.optional(),
+    other_taxes_percent_category: profileLineFields.other_taxes_percent_category.optional(),
+    invoice_detail_type: profileLineFields.invoice_detail_type.optional(),
+  })
   .refine((v) => v.vat_rate !== 0 || v.vat_exemption_code !== undefined)
   // The array replaces the scalar pair. Both forms may be sent: the provider documents that
   // the array then overrides, so nothing is merged or dropped here.
@@ -326,6 +370,13 @@ export const createSchema = z
   // The provider refuses a fuel code on an invoice not sent as a fuel invoice.
   .refine((v) => v.fuel_invoice === true || v.invoice_lines.every((l) => l.fuel_code === undefined))
   .refine((v) => fuelChargeWithinOtherLines(v.invoice_lines))
+  .refine((v) =>
+    v.invoice_lines.every((l) =>
+      profileLineKeys.every(
+        (key) => l[key] === undefined || profileLineFieldTypes[key].includes(v.invoice_type_code),
+      ),
+    ),
+  )
   // Presence only: no authority, contract or budget is looked up or checked for meaning.
   .refine(
     (v) =>

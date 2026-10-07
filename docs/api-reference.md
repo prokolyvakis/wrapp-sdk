@@ -72,8 +72,11 @@ optional supply_account_no, and a line an optional fuel_code and cpv_code. All o
 reject pre-I/O.
 
 Invoice types 2.1/2.2/2.3/11.2 only; draft/delivery features, POS refunds and
-preloaded POS transactions (refund_invoice_id, aade_preloaded, third_party_collection) and the
-invoice-level tax mode (taxes_totals) are not supported. All 52 provider type codes and the status of each are listed in
+preloaded POS transactions (refund_invoice_id, aade_preloaded, third_party_collection), the
+invoice-level tax mode (taxes_totals), and the line fields the provider defines for invoice
+types this SDK does not issue yet (other_taxes_amount, accommodation_tax and
+other_taxes_percent_category for type 8.2, invoice_detail_type for type 1.5) are not
+supported. All 52 provider type codes and the status of each are listed in
 [invoice-capabilities.md](invoice-capabilities.md). Counterpart: name required; country_code, vat, city, street, number, postal_code
 also required for B2B service types 2.x; optional for retail 11.2. Email optional.
 
