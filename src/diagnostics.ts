@@ -47,9 +47,22 @@ function own(value: unknown, key: string): unknown {
     ? (value as Record<string, unknown>)[key]
     : undefined;
 }
+// Some operations report `errors` as an object of field name to messages. Each message
+// becomes one issue, titled with its field.
+function fieldIssues(errors: unknown): unknown[] {
+  // Only a plain JSON object: a parsed number is an object too and is not a field map.
+  if (errors === null || typeof errors !== 'object') return [];
+  if (Object.getPrototypeOf(errors) !== Object.prototype) return [];
+  return Object.entries(errors).flatMap(([title, messages]: [string, unknown]) =>
+    (Array.isArray(messages) ? (messages as unknown[]) : [messages]).map((message) => ({
+      title,
+      message,
+    })),
+  );
+}
 /**
- * Retains the issues of a provider error body for `target`: every entry of `errors[]` and the
- * single `error` string, when present. A body without a recognizable issue retains nothing.
+ * Retains the issues of a provider error body for `target`: every entry of `errors[]`, every
+ * message of a field-keyed `errors` object, and the single `error` string, when present. A body without a recognizable issue retains nothing.
  *
  * Each exact occurrence of an active credential inside a retained text is replaced first, and
  * the bounds are applied to the result, so no fragment of a credential can survive a cut.
@@ -73,7 +86,7 @@ export function attach(target: object, body: unknown, secrets: readonly string[]
   const errors = own(body, 'errors');
   const single = own(body, 'error');
   const entries: readonly unknown[] = [
-    ...(Array.isArray(errors) ? (errors as unknown[]) : []),
+    ...(Array.isArray(errors) ? (errors as unknown[]) : fieldIssues(errors)),
     ...(typeof single === 'string' ? [{ message: single }] : []),
   ];
   const providerStatus = bounded(own(body, 'status'), maxCode, false);

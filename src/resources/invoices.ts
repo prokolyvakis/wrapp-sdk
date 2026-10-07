@@ -17,7 +17,6 @@ import {
 } from '../codecs.js';
 import { WrappError } from '../errors.js';
 import {
-  acknowledgementSchema,
   cancellationSchema,
   externalIdAssignmentSchema,
   externalIdInputSchema,
@@ -28,7 +27,7 @@ import type {
   CancellationOutcome,
   ExternalIdAssignmentOutcome,
 } from '../invoice-lifecycle-types.js';
-import { readValue, rejected, requestSchema } from '../runtime.js';
+import { acknowledgement, readValue, refused, rejected, requestSchema } from '../runtime.js';
 import type { Report, Runtime } from '../runtime.js';
 import { freeze } from '../values.js';
 import type {
@@ -117,33 +116,6 @@ export interface InvoiceResource {
   }>;
 }
 
-// A rejection envelope as the result of a management operation, with opt-in diagnostics.
-function refused(value: unknown, report: Report) {
-  const refusal = rejection(value);
-  if (refusal === undefined) return undefined;
-  const outcome = freeze({
-    kind: 'rejected',
-    errorCount: refusal.errorCount,
-    rejectionSource: refusal.source,
-  } as const);
-  report(outcome, value);
-  return outcome;
-}
-function acknowledgement(
-  value: unknown,
-  report: Report,
-  operation: string,
-): AcknowledgementOutcome {
-  const outcome = refused(value, report);
-  if (outcome !== undefined) return outcome;
-  // Only the status is required. Other fields, an echoed id included, are additive and are
-  // dropped; they are never read as evidence of the effect.
-  decode(acknowledgementSchema, value, operation);
-  // An artifact link here would be another operation's answer.
-  if (value !== null && typeof value === 'object' && 'download_url' in value)
-    throw new WrappError('PROTOCOL_ERROR', operation);
-  return freeze({ kind: 'acknowledged' });
-}
 // Both PDF requests answer with the same three envelopes: a rejection, a link to an existing
 // artifact, or a status whose wording is not evidence of anything.
 function pdfOutcome(value: unknown, report: Report, operation: 'pdf' | 'thermalPdf'): PdfOutcome {

@@ -26,7 +26,8 @@ export type CancellationOutcome =
   | Readonly<{ kind: 'observed'; cancellation: CancellationObservation }>
   | Readonly<{ kind: 'rejected'; errorCount: number; rejectionSource: RejectionSource }>;
 /**
- * The provider answered a management request with a status text. The text is not retained
+ * The provider answered a management request with a status or message text. The text is not
+ * retained
  * and is not evidence of the effect: an acknowledged mark-as-paid is not verified settlement,
  * and an acknowledged draft deletion does not show that its external reference can be reused.
  */

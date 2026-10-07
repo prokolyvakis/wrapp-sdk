@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import * as sdk from '@prokolyvakis/wrapp-sdk';
-import type { CreateInvoiceInput, CreateOutcome, InvoiceLine, InvoiceStatusOutcome, LineClassification, LineDeduction, VerifiedWebhook } from '@prokolyvakis/wrapp-sdk';
+import type { CreateInvoiceInput, CreateOutcome, CreatePosDeviceInput, InvoiceLine, InvoiceStatusOutcome, LineClassification, LineDeduction, VerifiedWebhook } from '@prokolyvakis/wrapp-sdk';
 
 assert.deepEqual(Object.keys(sdk).sort(), ['WrappClient', 'WrappError', 'calendarDate', 'decimal', 'getProviderDiagnostics', 'verifyWebhook'].sort());
 assert.equal(sdk.decimal('9007199254740993.12'), '9007199254740993.12');
@@ -11,6 +11,10 @@ const written: Record<string, unknown> = {
   'POST /api/v1/billing_books': { id: 'new-book', name: 'Book', series: 'S', invoice_type_code: '2.1' },
   'POST /api/v1/digital_clienteles/entry/correlate_by_mark': { notice: 'Correlated' },
   'POST /api/v1/digital_clienteles/entry/correlate_by_fim': { errors: 'Refused' },
+  'GET /api/v1/pos_devices': [{ id: 'device', name: 'Front desk', terminal_id: '16000001', merchant_id: null }],
+  'POST /api/v1/pos_devices': { errors: { 'pos_devices.name': ['Taken'], authorization_code: ['Wrong', 'Used'] } },
+  'DELETE /api/v1/pos_devices/device': { status: 'POS device deleted' },
+  'POST /api/v1/pos_sessions/invoice/abort_session': { message: 'Session aborted successfully' },
 };
 const routes: Record<string, unknown> = {
   '/api/v1/login': { data: { type: 'jwt', attributes: { jwt: 'fake.jwt' } } },
@@ -62,6 +66,12 @@ assert.equal(book.kind === 'observed' ? book.billingBook.number : book.kind, und
 assert.equal((await client.digitalClienteles.correlateByMark('entry', { correlate_mark: '400000000000001' })).kind, 'acknowledged');
 const byFim = await client.digitalClienteles.correlateByFim('entry', { correlate_fim_number: 'ABC1', correlate_fim_aa: '1' });
 assert.equal(byFim.kind === 'rejected' ? byFim.errorCount : 0, 1);
+const merchantId: string | null | undefined = (await client.posDevices.list())[0]?.merchant_id;
+assert.equal(merchantId, null);
+const device = await client.posDevices.create({ pos_type: 'epay', name: 'Front desk', terminal_id: '16000001', authorization_code: 'synthetic-code' });
+assert.equal(device.kind === 'observed' ? device.device.id : device.errorCount, 3);
+assert.equal((await client.posDevices.delete('device')).kind, 'acknowledged');
+assert.equal((await client.posSessions.abort('invoice')).kind, 'acknowledged');
 const deleted = await client.invoices.drafts.delete('invoice');
 assert.equal(deleted.kind === 'rejected' ? deleted.errorCount : 0, 1);
 const forbiddenPath = '@prokolyvakis/wrapp-sdk/dist/client.js';
@@ -132,7 +142,16 @@ const general: Pick<CreateInvoiceInput, 'email_subject' | 'num' | 'self_pricing'
   { email_subject: 'Invoice $INVOICE_CODE', num: 11, self_pricing: false, fees_amount: sdk.decimal('3.00'), deductions_total_amount: sdk.decimal('1.00') };
 assert.equal(arrayClassified.classifications?.length, 1);
 assert.equal(general.num, 11);
+const softpos: CreatePosDeviceInput = { pos_type: 'worldline_softpos', terminal_id: '16000002', merchant_id: 'merchant@example.invalid' };
+const pos: Pick<CreateInvoiceInput, 'pos_device_id' | 'installments' | 'tip_amount'> = { pos_device_id: 'device', installments: false, tip_amount: sdk.decimal('2.00') };
+assert.equal(softpos.pos_type + String(pos.installments), 'worldline_softposfalse');
 if (false) {
+  // @ts-expect-error A Viva device takes a merchant id, not an authorization code.
+  const wrongCredential: CreatePosDeviceInput = { pos_type: 'viva', name: 'Desk', terminal_id: '1', authorization_code: 'x' };
+  void wrongCredential;
+  // @ts-expect-error No crediting profile is supported, so there is no refund reference.
+  const refund: CreateInvoiceInput['refund_invoice_id'] = 'invoice';
+  void refund;
   // @ts-expect-error 2 is the only documented fee record type.
   const feeType: InvoiceLine['rec_type'] = 1;
   void feeType;

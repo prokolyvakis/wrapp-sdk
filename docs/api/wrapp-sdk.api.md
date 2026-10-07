@@ -235,6 +235,7 @@ export interface CreateInvoiceInput {
     readonly fees_amount?: Decimal;
     // (undocumented)
     readonly generate_pdf?: boolean;
+    readonly installments?: boolean;
     // (undocumented)
     readonly invoice_lines: readonly InvoiceLine[];
     readonly invoice_type_code: '2.1' | '2.2' | '2.3' | '11.2';
@@ -252,10 +253,12 @@ export interface CreateInvoiceInput {
     readonly payment_details?: string;
     // (undocumented)
     readonly payment_method_type: number;
+    readonly pos_device_id?: string;
     readonly self_pricing?: boolean;
     readonly special_invoice_category?: number;
     // (undocumented)
     readonly stamp_duty_amount?: Decimal;
+    readonly tip_amount?: Decimal;
     // (undocumented)
     readonly total_amount: Decimal;
     readonly total_stamp_duty_amount?: Decimal;
@@ -275,6 +278,24 @@ export type CreateOutcome = Readonly<{
     errorCount: number;
     rejectionSource: RejectionSource;
     referenceState: 'unknown';
+}>;
+
+// @public
+export type CreatePosDeviceInput = Readonly<{
+    pos_type: 'viva';
+    name: string;
+    terminal_id: string;
+    merchant_id: string;
+}> | Readonly<{
+    pos_type: 'worldline_softpos';
+    name?: string;
+    terminal_id: string;
+    merchant_id: string;
+}> | Readonly<{
+    pos_type: PosAuthorizationCodeType;
+    name: string;
+    terminal_id: string;
+    authorization_code: string;
 }>;
 
 // @public
@@ -582,6 +603,42 @@ export interface PendingInvoiceOutcome {
 }
 
 // @public
+export type PosAuthorizationCodeType = 'epay' | 'worldline' | 'nbg' | 'cosmote' | 'jcc' | 'attica' | 'pancreta' | 'tora' | 'pbt' | 'mypos' | 'nexi-mellon' | 'nexi' | 'nbg_edps';
+
+// @public
+export interface PosDevice {
+    // (undocumented)
+    readonly id: string;
+    readonly merchant_id?: string | null;
+    // (undocumented)
+    readonly name: string;
+    readonly terminal_id?: string | null;
+}
+
+// @public
+export type PosDeviceCreateOutcome = Readonly<{
+    kind: 'observed';
+    device: PosDevice;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public (undocumented)
+export interface PosDeviceResource {
+    create(device: CreatePosDeviceInput, options?: RequestOptions): Promise<PosDeviceCreateOutcome>;
+    delete(deviceId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
+    // (undocumented)
+    list(options?: RequestOptions): Promise<readonly PosDevice[]>;
+}
+
+// @public (undocumented)
+export interface PosSessionResource {
+    abort(invoiceId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
+}
+
+// @public
 export interface ProviderDiagnostics {
     readonly issues: readonly ProviderIssue[];
     readonly providerStatus?: string;
@@ -698,6 +755,10 @@ export class WrappClient {
     readonly digitalClienteles: Readonly<DigitalClienteleResource>;
     // (undocumented)
     readonly invoices: Readonly<InvoiceResource>;
+    // (undocumented)
+    readonly posDevices: Readonly<PosDeviceResource>;
+    // (undocumented)
+    readonly posSessions: Readonly<PosSessionResource>;
     // (undocumented)
     readonly tenant: Readonly<{
         get(options?: RequestOptions): Promise<TenantDetails>;

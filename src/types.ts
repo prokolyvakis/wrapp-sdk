@@ -200,6 +200,15 @@ export interface CreateInvoiceInput {
   readonly deductions_total_amount?: Decimal;
   /** Required when any line sets `rec_type` or `fees_category`. */
   readonly fees_amount?: Decimal;
+  /**
+   * The registered POS device for an issuance tied to a POS transaction. Not required for a
+   * card payment as such, and never looked up by the SDK.
+   */
+  readonly pos_device_id?: string;
+  /** `true` needs `pos_device_id`. The provider documents installments for Viva terminals only. */
+  readonly installments?: boolean;
+  /** At most 2 fraction digits. */
+  readonly tip_amount?: Decimal;
 }
 /** An issued invoice as observed via status lookup, creation or a verified webhook. */
 export interface InvoiceObservation {

@@ -8,11 +8,14 @@ import {
 } from './codecs.js';
 import type { DigitalClienteleResource } from './digital-clientele-types.js';
 import type { BillingBookResource, BranchResource } from './management-types.js';
+import type { PosDeviceResource, PosSessionResource } from './pos-types.js';
 import { billingBookResource } from './resources/billing-books.js';
 import { branchResource } from './resources/branches.js';
 import { digitalClienteleResource } from './resources/digital-clienteles.js';
 import { invoiceResource } from './resources/invoices.js';
 import type { InvoiceResource } from './resources/invoices.js';
+import { posDeviceResource } from './resources/pos-devices.js';
+import { posSessionResource } from './resources/pos-sessions.js';
 import { createRuntime, readValue } from './runtime.js';
 import type { ClientOptions, RequestOptions, TenantDetails, VatDetails } from './types.js';
 
@@ -33,6 +36,8 @@ export class WrappClient {
   }>;
   readonly invoices: Readonly<InvoiceResource>;
   readonly digitalClienteles: Readonly<DigitalClienteleResource>;
+  readonly posDevices: Readonly<PosDeviceResource>;
+  readonly posSessions: Readonly<PosSessionResource>;
 
   constructor(options: ClientOptions) {
     // One runtime per client: every resource shares its session, deadline and limits, and
@@ -72,6 +77,8 @@ export class WrappClient {
     });
     this.invoices = Object.freeze(invoiceResource(runtime));
     this.digitalClienteles = Object.freeze(digitalClienteleResource(runtime));
+    this.posDevices = Object.freeze(posDeviceResource(runtime));
+    this.posSessions = Object.freeze(posSessionResource(runtime));
     Object.freeze(this);
   }
 }

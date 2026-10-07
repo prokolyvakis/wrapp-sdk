@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { LosslessNumber, parse, stringify } from 'lossless-json';
 import { WrappError } from './errors.js';
-import { counterpartRule, supportedInvoiceTypeCodes } from './invoice-contracts.js';
+import {
+  counterpartRule,
+  supportedInvoiceTypeCodes,
+  thirdPartyCollectionTypes,
+} from './invoice-contracts.js';
 import { calendarDate, decimal, freeze, isCalendarDate } from './values.js';
 import type {
   IdentityEvidence,
@@ -213,6 +217,10 @@ export const createSchema = z
     stamp_duty_amount: inputAmount.optional(),
     deductions_total_amount: inputAmount.optional(),
     fees_amount: inputAmount.optional(),
+    pos_device_id: identifier.optional(),
+    installments: z.boolean().optional(),
+    tip_amount: inputAmount.optional(),
+    third_party_collection: z.boolean().optional(),
   })
   .refine((v) => (v.currency === undefined) === (v.exchange_rate === undefined))
   // Per-profile refinement, kept apart from the field validation above: a business profile
@@ -242,6 +250,14 @@ export const createSchema = z
     (v) =>
       v.fees_amount !== undefined ||
       v.invoice_lines.every((l) => l.rec_type === undefined && l.fees_category === undefined),
+  )
+  // Whether the device is a terminal that offers installments is the provider's to decide;
+  // no device is looked up here.
+  .refine((v) => v.installments !== true || v.pos_device_id !== undefined)
+  .refine(
+    (v) =>
+      v.third_party_collection === undefined ||
+      thirdPartyCollectionTypes.includes(v.invoice_type_code),
   );
 
 export const observationSchema = z.object({

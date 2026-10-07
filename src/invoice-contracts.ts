@@ -96,6 +96,12 @@ export const catalogueMatchesInputType: Same<
   SupportedCode
 > = true;
 
+/**
+ * The reference accepts third_party_collection on these types only. create() knows the field
+ * so that promoting either type enables it; neither is issued yet, so it is refused today.
+ */
+export const thirdPartyCollectionTypes: readonly string[] = ['8.4', '8.5'];
+
 export function counterpartRule(code: (typeof supportedInvoiceTypeCodes)[number]): CounterpartRule {
   const contract = invoiceTypeCatalogue.find((entry) => entry.code === code);
   // Unreachable for a validated code; a business profile is the stricter fallback.

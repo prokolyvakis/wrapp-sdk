@@ -26,6 +26,10 @@ export const operations = Object.freeze({
   billingBookCreate: { method: 'POST', effectful: true },
   clienteleCorrelateByMark: { method: 'POST', effectful: true },
   clienteleCorrelateByFim: { method: 'POST', effectful: true },
+  posDevices: { method: 'GET', effectful: false },
+  posDeviceCreate: { method: 'POST', effectful: true },
+  posDeviceDelete: { method: 'DELETE', effectful: true },
+  posSessionAbort: { method: 'POST', effectful: true },
 } as const);
 export type Operation = keyof typeof operations;
 export function scope(

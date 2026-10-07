@@ -131,7 +131,16 @@ describe('client runtime', () => {
   it('should freeze the client and every resource, and expose nothing but resources', () => {
     const { client } = provider(() => login());
     expect(Object.keys(client).sort()).toEqual(
-      ['billingBooks', 'branches', 'digitalClienteles', 'invoices', 'tenant', 'vat'].sort(),
+      [
+        'billingBooks',
+        'branches',
+        'digitalClienteles',
+        'invoices',
+        'posDevices',
+        'posSessions',
+        'tenant',
+        'vat',
+      ].sort(),
     );
     expect(Object.getOwnPropertySymbols(client)).toEqual([]);
     expect(Object.isFrozen(client)).toBe(true);

@@ -596,7 +596,9 @@ describe.each(['2.1', '2.2', '2.3', '11.2'] as const)('invoice type %s profile',
       ['b2g', true],
       ['fuel_invoice', true],
       ['taxes_totals', []],
-      ['pos_device_id', 'device-one'],
+      ['refund_invoice_id', 'invoice-one'],
+      ['aade_preloaded', true],
+      ['third_party_collection', true],
     ] as const)
       await refused({ ...place('create', key, value), invoice_type_code: type });
   });

@@ -74,4 +74,5 @@ Supported profiles are documentation-derived and covered by regression tests; th
 provider-certified. Three more input rules apply to every supported type and are described in
 the [API reference](api-reference.md): the request code sets for VAT rate, quantity type and
 VAT exemption; the exact-decimal amount rules; and the fields that are rejected because their
-profile is not implemented (drafts, delivery notes, B2G, fuel, invoice-level taxes, POS).
+profile is not implemented (drafts, delivery notes, B2G, fuel, invoice-level taxes, POS
+refunds and preloaded POS transactions).

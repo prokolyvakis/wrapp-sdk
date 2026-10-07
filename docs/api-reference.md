@@ -30,6 +30,10 @@ grounded in documentation, what is observed behavior, and what remains an open q
 | billingBooks.create               | POST /billing_books                            | effectful      |
 | digitalClienteles.correlateByMark | POST /digital_clienteles/:id/correlate_by_mark | effectful      |
 | digitalClienteles.correlateByFim  | POST /digital_clienteles/:id/correlate_by_fim  | effectful      |
+| posDevices.list                   | GET /pos_devices                               | read           |
+| posDevices.create                 | POST /pos_devices                              | effectful      |
+| posDevices.delete                 | DELETE /pos_devices/:id                        | effectful      |
+| posSessions.abort                 | POST /pos_sessions/:id/abort_session           | effectful      |
 
 There is no generic request escape hatch. Origins are explicit staging/production; the
 loopback-only test-origin override is visibly an advanced test capability. An injected fetch
@@ -45,9 +49,11 @@ Optional: branch, payment_details, notes, currency with exchange_rate, correlate
 customer_emails, email_locale, email_subject, email_body, generate_pdf, mark_as_paid, num,
 self_pricing, special_invoice_category, and the invoice-level totals other_taxes_amount,
 withholding_total_amount, total_stamp_duty_amount, stamp_duty_amount, deductions_total_amount
-and fees_amount. All other fields reject pre-I/O.
+and fees_amount, and the POS fields pos_device_id, installments and tip_amount. All other
+fields reject pre-I/O.
 
-Invoice types 2.1/2.2/2.3/11.2 only; draft/POS/B2G/delivery/fuel features and the
+Invoice types 2.1/2.2/2.3/11.2 only; draft/B2G/delivery/fuel features, POS refunds and
+preloaded POS transactions (refund_invoice_id, aade_preloaded, third_party_collection) and the
 invoice-level tax mode (taxes_totals) are not supported. All 52 provider type codes and the status of each are listed in
 [invoice-capabilities.md](invoice-capabilities.md). Counterpart: name required; country_code, vat, city, street, number, postal_code
 also required for B2B service types 2.x; optional for retail 11.2. Email optional.
@@ -81,6 +87,15 @@ General invoice and line fields, each sent exactly as given:
 - self_pricing: true needs expenses_vat_classification on every line.
 - rec_type marks a fee line and accepts only 2. fees_category is a positive integer. A line
   with either needs fees_amount on the invoice.
+
+POS fields on an invoice:
+
+- pos_device_id names a registered device (see "POS devices and sessions") for an issuance
+  tied to a POS transaction. It is not required for a card payment as such, and the SDK
+  never looks the device up.
+- installments: true needs pos_device_id. The provider documents installments for Viva
+  terminals only and is the one to refuse another terminal; false is sent as given.
+- tip_amount is an exact amount with at most 2 fraction digits.
 
 These presence rules are the ones the provider's reference states. They only require a field
 to be there: the SDK never sums deductions, derives a total, or compares a total with its
@@ -179,6 +194,36 @@ the refusal is interpreted: a refusal saying a correlation already exists is sti
 rejection, not a finding that the correlation is in place.
 
 Reading, creating, updating and cancelling a digital clientele entry are not available.
+
+## POS devices and sessions
+
+- posDevices.list() returns the registered devices: id and name, with terminal_id and
+  merchant_id when the provider sends them (absent and null are kept apart).
+- posDevices.create(device) registers a device. The input is one of three strict shapes,
+  chosen by pos_type: `viva` takes name, terminal_id and merchant_id; `worldline_softpos`
+  takes terminal_id and merchant_id (the merchant's email address) and an optional name;
+  each of `epay`, `worldline`, `nbg`, `cosmote`, `jcc`, `attica`, `pancreta`, `tora`, `pbt`,
+  `mypos`, `nexi-mellon`, `nexi` and `nbg_edps` takes name, terminal_id and
+  authorization_code. The other credential, both credentials, or an unknown type is refused
+  before any request. The result is observed with the returned device, or rejected.
+- posDevices.delete(deviceId) deletes a device permanently; the provider refuses one that has
+  a successful transaction. The result is acknowledged or rejected.
+- posSessions.abort(invoiceId) aborts the pending POS session of an invoice. The id is the
+  invoice's id, not a device or session id. The provider documents it for Viva terminals
+  only. The result is acknowledged or rejected.
+
+The three writes are dispatched at most once and never retried, and report effect unknown
+after a dispatched failure. That includes registration: for Worldline SoftPOS the provider
+reuses an existing account and enables an already attached terminal, answering 200 instead
+of 201 with the same body, but that is its behavior, not permission for the SDK to repeat a
+call. After an unknown outcome, list the devices before registering again.
+
+A refusal that arrives with an HTTP error status (the provider documents 422 for a device
+with transactions) is a thrown HTTP_ERROR, like any non-2xx answer. Registration reports its
+refusals as an object of field name to messages; each message counts as one issue, and with
+diagnostics: 'provider-issues' each is returned as a title (the field) and a message. The
+merchant id and the authorization code of the request are redacted from that retained text,
+and neither appears in any error.
 
 ## Returned fields
 
@@ -284,7 +329,8 @@ SDK sends, never what it tolerates on a read.
   the request options, then call getProviderDiagnostics with the returned rejected result or
   the thrown WrappError. It returns providerStatus (when present), issues (each with any of
   code, title, message), truncated and sensitive:true, deeply frozen, or undefined when
-  nothing was retained. Both errors[] and a single error string are decoded when present.
+  nothing was retained. errors[], a field-keyed errors object (one issue per message,
+  titled with its field) and a single error string are decoded when present.
   Bounds: 100 issues, 4096 UTF-16 code units per title or message, 256 per code or status (an
   overlong code or status is omitted, not shortened), 64 KiB of UTF-8 in total; truncated
   reports any loss and errorCount is never adjusted. Exact occurrences of the active API key

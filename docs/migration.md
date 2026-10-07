@@ -146,8 +146,9 @@ The release also adds these type exports: `InvoiceStatusOutcome`, `PendingInvoic
 
 ### New operations
 
-Additive. Each is a new method, on an existing resource or on the new
-`client.digitalClienteles` resource, and changes nothing you already call.
+Additive. Each is a new method, on an existing resource or on one of the new
+`client.digitalClienteles`, `client.posDevices` and `client.posSessions` resources, and
+changes nothing you already call.
 
 - `invoices.requestThermalPdf(invoiceId)` — the thermal-printer PDF, with the outcomes of
   `requestPdf`.
@@ -160,6 +161,9 @@ Additive. Each is a new method, on an existing resource or on the new
 - `billingBooks.create(input)`.
 - `digitalClienteles.correlateByMark` and `digitalClienteles.correlateByFim`, on a new
   `client.digitalClienteles` resource.
+- `posDevices.list()`, `posDevices.create(device)` and `posDevices.delete(deviceId)`, on a
+  new `client.posDevices` resource.
+- `posSessions.abort(invoiceId)`, on a new `client.posSessions` resource.
 
 One case needs an edit: code that implements the exported `InvoiceResource` interface itself,
 such as a typed test double, must add the new methods. The same holds for an object typed as
@@ -173,7 +177,8 @@ four invoice types:
 
 - on the invoice: `email_subject`, `email_body`, `num`, `self_pricing`,
   `special_invoice_category`, `other_taxes_amount`, `withholding_total_amount`,
-  `total_stamp_duty_amount`, `stamp_duty_amount`, `deductions_total_amount`, `fees_amount`;
+  `total_stamp_duty_amount`, `stamp_duty_amount`, `deductions_total_amount`, `fees_amount`,
+  `pos_device_id`, `installments`, `tip_amount`;
 - on a line: `classifications`, `withhold_tax_rate`, `withhold_tax_code`, `withholding_total`,
   `stamp_duty_tax_code`, `stamp_duty_amount`, `deductions`, `deductions_amount`,
   `expenses_vat_classification`, `expense`, `rec_type`, `fees_category`.

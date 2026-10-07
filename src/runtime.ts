@@ -1,11 +1,14 @@
 import { z } from 'zod';
 import { Session } from './auth.js';
-import { input, rejection } from './codecs.js';
+import { decode, input, rejection } from './codecs.js';
 import { attach, transfer } from './diagnostics.js';
 import { WrappError } from './errors.js';
+import { acknowledgementSchema } from './invoice-lifecycle-codecs.js';
+import type { AcknowledgementOutcome } from './invoice-lifecycle-types.js';
 import { operations, assertActive, scope, Transport } from './transport.js';
 import type { Operation } from './transport.js';
 import type { ClientOptions, RequestOptions } from './types.js';
+import { freeze } from './values.js';
 
 const limit = z.number().int().min(1).max(120_000);
 const optionsSchema = z.strictObject({
@@ -47,6 +50,34 @@ export function readValue(value: unknown, report: Report): unknown {
     throw new WrappError('PROTOCOL_ERROR', 'decode');
   return value;
 }
+/** A rejection envelope as the result of a management operation, with opt-in diagnostics. */
+export function refused(value: unknown, report: Report) {
+  const refusal = rejection(value);
+  if (refusal === undefined) return undefined;
+  const outcome = freeze({
+    kind: 'rejected',
+    errorCount: refusal.errorCount,
+    rejectionSource: refusal.source,
+  } as const);
+  report(outcome, value);
+  return outcome;
+}
+/** For operations whose documented success is a status text and nothing else. */
+export function acknowledgement(
+  value: unknown,
+  report: Report,
+  operation: string,
+): AcknowledgementOutcome {
+  const outcome = refused(value, report);
+  if (outcome !== undefined) return outcome;
+  // Only the status is required. Other fields, an echoed id included, are additive and are
+  // dropped; they are never read as evidence of the effect.
+  decode(acknowledgementSchema, value, operation);
+  // An artifact link here would be another operation's answer.
+  if (value !== null && typeof value === 'object' && 'download_url' in value)
+    throw new WrappError('PROTOCOL_ERROR', operation);
+  return freeze({ kind: 'acknowledged' });
+}
 /**
  * The one capability a resource module receives: run a registered operation on a path
  * relative to the client's fixed origin. It exposes no credential, no session and no way to
@@ -60,6 +91,8 @@ export interface Runtime {
     decoder: (value: unknown, report: Report) => T,
     options?: RequestOptions,
     body?: string,
+    /** Request values to redact from retained provider text, beside the credentials. */
+    redact?: readonly string[],
   ): Promise<T>;
 }
 // Resource code passes paths it has already encoded. A path that is not a plain relative
@@ -122,6 +155,7 @@ export function createRuntime(options: ClientOptions): Runtime {
       decoder: (value: unknown, report: Report) => T,
       requestOptions: RequestOptions = {},
       body?: string,
+      redact: readonly string[] = [],
     ): Promise<T> {
       const request = input(requestSchema, requestOptions, operation);
       if (!isRoute(path)) throw new WrappError('INVALID_INPUT', operation);
@@ -133,7 +167,7 @@ export function createRuntime(options: ClientOptions): Runtime {
       let token: string | undefined;
       const optedIn = request.diagnostics !== undefined;
       const report: Report = (target, value) => {
-        if (optedIn) attach(target, value, [apiKey, token ?? '']);
+        if (optedIn) attach(target, value, [apiKey, token ?? '', ...redact]);
       };
       try {
         assertActive(deadline.signal, operation, 'not-sent');

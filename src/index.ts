@@ -27,6 +27,14 @@ export type {
   CancellationOutcome,
   ExternalIdAssignmentOutcome,
 } from './invoice-lifecycle-types.js';
+export type {
+  CreatePosDeviceInput,
+  PosAuthorizationCodeType,
+  PosDevice,
+  PosDeviceCreateOutcome,
+  PosDeviceResource,
+  PosSessionResource,
+} from './pos-types.js';
 export { getProviderDiagnostics } from './diagnostics.js';
 export type { ProviderDiagnostics, ProviderIssue } from './diagnostics.js';
 export { WrappError } from './errors.js';
