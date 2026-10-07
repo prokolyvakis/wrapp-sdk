@@ -14,6 +14,8 @@ const routes: Record<string, unknown> = {
   '/api/v1/vat_exemptions': [{ '1': 'Synthetic exemption' }],
   '/api/v1/branches': [{ id: 'branch', name: 'Main', code: 0 }],
   '/api/v1/billing_books': [{ id: 'book', name: 'Service', series: 'S', invoice_type_code: '2.1', number: 4 }],
+  '/api/v1/invoices/issued_count': { issued_count: 800 },
+  '/api/v1/invoices/invoice/generate_thermal_pdf': { download_url: 'https://example.invalid/thermal.pdf' },
 };
 const client = new sdk.WrappClient({
   environment: 'staging',
@@ -30,6 +32,10 @@ const bookNumber: string = (await client.billingBooks.list())[0]?.number ?? '';
 assert.equal(bookNumber, '4');
 assert.equal((await client.vat.search({ vat: 'synthetic', country_code: 'GR' })).vat_no, 'synthetic');
 assert.equal((await client.vat.exemptions())[0]?.['1'], 'Synthetic exemption');
+const issued: string = (await client.invoices.issuedCount()).issuedCount;
+assert.equal(issued, '800');
+const thermal = await client.invoices.requestThermalPdf('invoice');
+assert.equal(thermal.kind === 'available' ? thermal.downloadUrl : thermal.kind, 'https://example.invalid/thermal.pdf');
 const forbiddenPath = '@prokolyvakis/wrapp-sdk/dist/client.js';
 await assert.rejects(import(forbiddenPath), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
 

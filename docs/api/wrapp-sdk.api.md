@@ -306,12 +306,16 @@ export interface InvoiceResource {
         identity: IdentityEvidence;
     }>>;
     getStatus(reference: InvoiceReference, options?: RequestOptions): Promise<InvoiceStatusOutcome>;
+    issuedCount(options?: RequestOptions): Promise<Readonly<{
+        issuedCount: string;
+    }>>;
     iterate(filters: ListInvoicesInput, options: RequestOptions & {
         readonly maxPages: number;
     }): AsyncIterable<InvoiceDetails>;
     // (undocumented)
     list(filters?: ListInvoicesInput, options?: RequestOptions): Promise<InvoicePage>;
     requestPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
+    requestThermalPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
 }
 
 // @public

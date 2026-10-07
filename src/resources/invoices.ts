@@ -16,8 +16,9 @@ import {
   rejection,
 } from '../codecs.js';
 import { WrappError } from '../errors.js';
+import { issuedCountSchema } from '../invoice-lifecycle-codecs.js';
 import { readValue, rejected, requestSchema } from '../runtime.js';
-import type { Runtime } from '../runtime.js';
+import type { Report, Runtime } from '../runtime.js';
 import { freeze } from '../values.js';
 import type {
   CreateInvoiceInput,
@@ -66,6 +67,37 @@ export interface InvoiceResource {
   create(invoice: CreateInvoiceInput, options?: RequestOptions): Promise<CreateOutcome>;
   /** Effectful GET, dispatched at most once. The returned URL is data, never fetched. */
   requestPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
+  /**
+   * The thermal-printer counterpart of requestPdf, with the same outcomes and the same rules:
+   * an effectful GET dispatched at most once, whose returned URL is data and is never fetched.
+   */
+  requestThermalPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
+  /** The tenant's number of issued invoices, as exact integer text. */
+  issuedCount(options?: RequestOptions): Promise<Readonly<{ issuedCount: string }>>;
+}
+
+// Both PDF requests answer with the same three envelopes: a rejection, a link to an existing
+// artifact, or a status whose wording is not evidence of anything.
+function pdfOutcome(value: unknown, report: Report, operation: 'pdf' | 'thermalPdf'): PdfOutcome {
+  const refusal = rejection(value);
+  if (refusal !== undefined) {
+    const outcome = freeze({
+      kind: 'rejected',
+      errorCount: refusal.errorCount,
+      rejectionSource: refusal.source,
+    } as const);
+    report(outcome, value);
+    return outcome;
+  }
+  if (value !== null && typeof value === 'object' && 'download_url' in value) {
+    if ('status' in value) throw new WrappError('PROTOCOL_ERROR', operation);
+    return freeze({
+      kind: 'available',
+      downloadUrl: decode(pdfSchema, value, operation).download_url,
+    });
+  }
+  decode(pdfStatusSchema, value, operation);
+  return freeze({ kind: 'acknowledged', status: 'unknown' });
 }
 
 export function invoiceResource(runtime: Runtime): InvoiceResource {
@@ -193,29 +225,29 @@ export function invoiceResource(runtime: Runtime): InvoiceResource {
       return runtime.run(
         'pdf',
         '/invoices/' + encodeURIComponent(valid) + '/generate_pdf',
-        (value, report): PdfOutcome => {
-          const refusal = rejection(value);
-          if (refusal !== undefined) {
-            const outcome = freeze({
-              kind: 'rejected',
-              errorCount: refusal.errorCount,
-              rejectionSource: refusal.source,
-            } as const);
-            report(outcome, value);
-            return outcome;
-          }
-          if (value !== null && typeof value === 'object' && 'download_url' in value) {
-            if ('status' in value) throw new WrappError('PROTOCOL_ERROR', 'pdf');
-            return freeze({
-              kind: 'available',
-              downloadUrl: decode(pdfSchema, value, 'pdf').download_url,
-            });
-          }
-          decode(pdfStatusSchema, value, 'pdf');
-          return freeze({ kind: 'acknowledged', status: 'unknown' });
-        },
+        (value, report) => pdfOutcome(value, report, 'pdf'),
         opts,
       );
     },
+    requestThermalPdf: async (invoiceId: string, opts?: RequestOptions) => {
+      const valid = input(identifier, invoiceId, 'thermalPdf');
+      return runtime.run(
+        'thermalPdf',
+        '/invoices/' + encodeURIComponent(valid) + '/generate_thermal_pdf',
+        (value, report) => pdfOutcome(value, report, 'thermalPdf'),
+        opts,
+      );
+    },
+    issuedCount: (opts?: RequestOptions) =>
+      runtime.run(
+        'issuedCount',
+        '/invoices/issued_count',
+        (value, report) =>
+          freeze({
+            issuedCount: decode(issuedCountSchema, readValue(value, report), 'issuedCount')
+              .issued_count,
+          }),
+        opts,
+      ),
   };
 }

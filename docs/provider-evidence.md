@@ -63,18 +63,19 @@ observation profile follows the wire:
 
 Implement incrementally, never advertise entire-API support from a small endpoint wrapper.
 
-| Family                                                                             | Initial disposition                                           |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Login, tenant details                                                              | Core                                                          |
-| VAT search/exemptions, branch/billing-book reads                                   | Core read capabilities                                        |
-| Invoice create/status/full lookup/list                                             | Core, supported-field matrix required                         |
-| PDF request + issued/PDF webhook parsing                                           | Core, side-effect rules apply                                 |
-| Branch/billing-book writes                                                         | Later management tranche                                      |
-| Draft issue/delete, reference assignment, mark-as-paid, cancellation, issued count | Later explicit tranche; no generic escape hatch               |
-| Thermal PDF/POS-error callbacks                                                    | Core typed events; body shapes from documentation, unobserved |
-| POS devices/sessions and Viva links                                                | Deferred                                                      |
-| Catering tables/order notes                                                        | Deferred                                                      |
-| Digital clienteles/transports                                                      | Deferred                                                      |
+| Family                                                               | Initial disposition                                           |
+| -------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Login, tenant details                                                | Core                                                          |
+| VAT search/exemptions, branch/billing-book reads                     | Core read capabilities                                        |
+| Invoice create/status/full lookup/list                               | Core, supported-field matrix required                         |
+| PDF request + issued/PDF webhook parsing                             | Core, side-effect rules apply                                 |
+| Branch/billing-book writes                                           | Later management tranche                                      |
+| Thermal PDF request, issued count                                    | Core; shapes from documentation, unobserved                   |
+| Draft issue/delete, reference assignment, mark-as-paid, cancellation | Later explicit tranche; no generic escape hatch               |
+| Thermal PDF/POS-error callbacks                                      | Core typed events; body shapes from documentation, unobserved |
+| POS devices/sessions and Viva links                                  | Deferred                                                      |
+| Catering tables/order notes                                          | Deferred                                                      |
+| Digital clienteles/transports                                        | Deferred                                                      |
 
 Endpoint paths and parameter schemas must be transcribed and tested per implemented operation
 against the linked source. Do not copy the complete vendor document or sample payloads into

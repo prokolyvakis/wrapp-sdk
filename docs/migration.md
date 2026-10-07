@@ -143,3 +143,14 @@ with `Object.keys`, add `getProviderDiagnostics`.
 
 The release also adds these type exports: `InvoiceStatusOutcome`, `PendingInvoiceOutcome`,
 `PendingIdentityEvidence`, `ProviderDiagnostics` and `ProviderIssue`.
+
+### New operations
+
+Additive. Each is a new method on an existing resource and changes nothing you already call.
+
+- `invoices.requestThermalPdf(invoiceId)` — the thermal-printer PDF, with the outcomes of
+  `requestPdf`.
+- `invoices.issuedCount()` — the number of issued invoices, as exact integer text.
+
+One case needs an edit: code that implements the exported `InvoiceResource` interface itself,
+such as a typed test double, must add the new methods.

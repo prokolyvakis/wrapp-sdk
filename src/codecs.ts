@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { LosslessNumber, parse, stringify } from 'lossless-json';
 import { WrappError } from './errors.js';
+import { counterpartRule, supportedInvoiceTypeCodes } from './invoice-contracts.js';
 import { calendarDate, decimal, freeze, isCalendarDate } from './values.js';
 import type {
   IdentityEvidence,
@@ -44,7 +45,9 @@ const token = z.instanceof(LosslessNumber);
 export const integer = token
   .refine((v) => /^\d{1,16}$/.test(v.value) && Number.isSafeInteger(Number(v.value)))
   .transform((v) => Number(v.value));
-const integerString = token.refine((v) => /^\d{1,30}$/.test(v.value)).transform((v) => v.value);
+export const integerString = token
+  .refine((v) => /^\d{1,30}$/.test(v.value))
+  .transform((v) => v.value);
 const numericGrammar = /^(0|[1-9]\d{0,29})(\.\d{1,12})?([eE][+-]?\d{1,2})?$/;
 // The provider serializes some numeric fields as JSON strings (observed on the wire: line
 // quantity "1.0" beside numeric unit_price); both token forms keep their exact text.
@@ -128,7 +131,7 @@ export const createSchema = z
   .strictObject({
     external_id: identifier,
     billing_book_id: identifier,
-    invoice_type_code: z.enum(['2.1', '2.2', '2.3', '11.2']),
+    invoice_type_code: z.enum(supportedInvoiceTypeCodes),
     payment_method_type: z.number().int().min(0).max(7),
     counterpart: z.strictObject(counterpartFields),
     net_total_amount: inputAmount,
@@ -158,9 +161,11 @@ export const createSchema = z
     mark_as_paid: z.boolean().optional(),
   })
   .refine((v) => (v.currency === undefined) === (v.exchange_rate === undefined))
+  // Per-profile refinement, kept apart from the field validation above: a business profile
+  // needs the counterpart's identity and address, a retail one only its name.
   .refine(
     (v) =>
-      v.invoice_type_code === '11.2' ||
+      counterpartRule(v.invoice_type_code) === 'name-only' ||
       [
         v.counterpart.country_code,
         v.counterpart.vat,

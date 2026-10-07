@@ -6,19 +6,21 @@ grounded in documentation, what is observed behavior, and what remains an open q
 
 ## Supported operations
 
-| Resource                | Method/path under /api/v1                | Effect         |
-| ----------------------- | ---------------------------------------- | -------------- |
-| login (internal)        | POST /login                              | authentication |
-| tenant.get              | GET /tenant_details                      | read           |
-| vat.search              | GET /vat_search?vat=...&country_code=... | read           |
-| vat.exemptions          | GET /vat_exemptions                      | read           |
-| branches.list           | GET /branches                            | read           |
-| billingBooks.list       | GET /billing_books                       | read           |
-| invoices.getStatus      | GET /invoices/:id                        | read           |
-| invoices.get            | GET /invoices/:id/find_invoice_by_id     | read           |
-| invoices.list / iterate | GET /invoices/find_all_invoices          | read           |
-| invoices.create         | POST /invoices                           | effectful      |
-| invoices.requestPdf     | GET /invoices/:id/generate_pdf           | effectful      |
+| Resource                   | Method/path under /api/v1                | Effect         |
+| -------------------------- | ---------------------------------------- | -------------- |
+| login (internal)           | POST /login                              | authentication |
+| tenant.get                 | GET /tenant_details                      | read           |
+| vat.search                 | GET /vat_search?vat=...&country_code=... | read           |
+| vat.exemptions             | GET /vat_exemptions                      | read           |
+| branches.list              | GET /branches                            | read           |
+| billingBooks.list          | GET /billing_books                       | read           |
+| invoices.getStatus         | GET /invoices/:id                        | read           |
+| invoices.get               | GET /invoices/:id/find_invoice_by_id     | read           |
+| invoices.list / iterate    | GET /invoices/find_all_invoices          | read           |
+| invoices.create            | POST /invoices                           | effectful      |
+| invoices.requestPdf        | GET /invoices/:id/generate_pdf           | effectful      |
+| invoices.requestThermalPdf | GET /invoices/:id/generate_thermal_pdf   | effectful      |
+| invoices.issuedCount       | GET /invoices/issued_count               | read           |
 
 There is no generic request escape hatch. Origins are explicit staging/production; the
 loopback-only test-origin override is visibly an advanced test capability. An injected fetch
@@ -34,7 +36,8 @@ Optional: branch, payment_details, notes, currency with exchange_rate, correlate
 customer_emails, email_locale, generate_pdf, mark_as_paid. All other fields reject pre-I/O.
 
 Invoice types 2.1/2.2/2.3/11.2 only; draft/POS/B2G/delivery/fuel/special-tax features are not
-supported. Counterpart: name required; country_code, vat, city, street, number, postal_code
+supported. All 52 provider type codes and the status of each are listed in
+[invoice-capabilities.md](invoice-capabilities.md). Counterpart: name required; country_code, vat, city, street, number, postal_code
 also required for B2B service types 2.x; optional for retail 11.2. Email optional.
 
 Each line: line_number, name, quantity, unit_price, net_total_price, vat_rate, vat_total,
@@ -197,6 +200,12 @@ SDK sends, never what it tolerates on a read.
   maxPages fail explicitly. No snapshot guarantee, silent truncation or silent deduplication.
 - The PDF URL is data, HTTPS only, never automatically fetched. A status-only PDF response has
   unknown acknowledgement semantics; unsigned prose is not queued/ready evidence.
+- requestThermalPdf follows the same rules as requestPdf on its own route and operation name:
+  one effectful GET, the same available, acknowledged and rejected outcomes, no download, no
+  polling. It takes no locale.
+- issuedCount returns the tenant's issued-invoice count as exact integer text (issuedCount),
+  up to 30 digits. A count that is not a nonnegative JSON integer token is a protocol error;
+  nothing is narrowed to a floating-point number.
 - Webhooks verify HMAC-SHA256 over the original bytes before strict UTF-8/JSON decoding;
   bounded body and bounded key rotation; malformed/multiple signatures fail closed.
   Event-Type is untrusted; no replay/freshness/tenant-authentication promise.

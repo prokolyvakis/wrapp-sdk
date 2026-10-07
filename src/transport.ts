@@ -14,6 +14,8 @@ export const operations = Object.freeze({
   list: { method: 'GET', effectful: false },
   create: { method: 'POST', effectful: true },
   pdf: { method: 'GET', effectful: true },
+  thermalPdf: { method: 'GET', effectful: true },
+  issuedCount: { method: 'GET', effectful: false },
 } as const);
 export type Operation = keyof typeof operations;
 export function scope(
