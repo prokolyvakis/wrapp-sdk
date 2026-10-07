@@ -61,6 +61,11 @@ export interface Counterpart {
   readonly number?: string;
   readonly postal_code?: string;
   readonly email?: string;
+  /**
+   * The client's supply account number, for a fuel invoice. Optional. The provider documents
+   * that it ignores and does not store it on any other invoice; the SDK sends it as given.
+   */
+  readonly supply_account_no?: string;
 }
 /**
  * One invoice line. The caller supplies every amount and tax classification; the SDK
@@ -117,6 +122,12 @@ export interface InvoiceLine {
    * is not validated.
    */
   readonly fees_category?: number;
+  /**
+   * A fuel code from the provider's table, accepted only when the invoice sets
+   * `fuel_invoice: true`. Code 999 may appear on one line only, and that line's
+   * `net_total_price` may not exceed the sum of the other lines' `net_total_price`.
+   */
+  readonly fuel_code?: number;
 }
 /** One entry of a line's `classifications`. */
 export interface LineClassification {
@@ -209,6 +220,8 @@ export interface CreateInvoiceInput {
   readonly installments?: boolean;
   /** At most 2 fraction digits. */
   readonly tip_amount?: Decimal;
+  /** Marks a fuel invoice. Required as `true` for any line to carry a `fuel_code`. */
+  readonly fuel_invoice?: boolean;
 }
 /** An issued invoice as observed via status lookup, creation or a verified webhook. */
 export interface InvoiceObservation {

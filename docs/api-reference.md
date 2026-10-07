@@ -66,10 +66,11 @@ Optional: branch, payment_details, notes, currency with exchange_rate, correlate
 customer_emails, email_locale, email_subject, email_body, generate_pdf, mark_as_paid, num,
 self_pricing, special_invoice_category, and the invoice-level totals other_taxes_amount,
 withholding_total_amount, total_stamp_duty_amount, stamp_duty_amount, deductions_total_amount
-and fees_amount, and the POS fields pos_device_id, installments and tip_amount. All other
-fields reject pre-I/O.
+and fees_amount, the POS fields pos_device_id, installments and tip_amount, and
+fuel_invoice. The counterpart also takes an optional supply_account_no, and a line an
+optional fuel_code. All other fields reject pre-I/O.
 
-Invoice types 2.1/2.2/2.3/11.2 only; draft/B2G/delivery/fuel features, POS refunds and
+Invoice types 2.1/2.2/2.3/11.2 only; draft/B2G/delivery features, POS refunds and
 preloaded POS transactions (refund_invoice_id, aade_preloaded, third_party_collection) and the
 invoice-level tax mode (taxes_totals) are not supported. All 52 provider type codes and the status of each are listed in
 [invoice-capabilities.md](invoice-capabilities.md). Counterpart: name required; country_code, vat, city, street, number, postal_code
@@ -114,9 +115,26 @@ POS fields on an invoice:
   terminals only and is the one to refuse another terminal; false is sent as given.
 - tip_amount is an exact amount with at most 2 fraction digits.
 
+Fuel fields on an invoice:
+
+- fuel_invoice marks a fuel invoice; false is sent as given.
+- A line's fuel_code is one of the provider's fuel codes (10 to 15, 20, 21, 30 to 38, 40 to
+  44, 50, 60, 61, 70 to 72 and 999) and is accepted only when the invoice sets
+  fuel_invoice: true. The provider refuses a fuel code on any other invoice, so the SDK
+  refuses it first.
+- Code 999 may appear on one line only, and that line's net_total_price may not be greater
+  than the sum of the other lines' net_total_price. This is the one comparison of amounts
+  the SDK makes, because the provider states it as a validity rule. It is made exactly, in
+  hundredths, and compares only those line values: no total is derived or corrected, and
+  the invoice totals are not consulted.
+- counterpart.supply_account_no is optional. The provider documents that it uses it only on
+  a fuel invoice and ignores it, without storing it, on any other; the SDK sends it as given
+  in both cases and does not claim it is returned by a read.
+
 These presence rules are the ones the provider's reference states. They only require a field
 to be there: the SDK never sums deductions, derives a total, or compares a total with its
-parts, so totals that disagree are sent as given and judged by the provider.
+parts, so totals that disagree are sent as given and judged by the provider. The fuel code
+999 rule above is the single exception.
 
 Three numeric line codes are checked against the provider's documented request sets before
 authentication: vat_rate is one of 0, 3, 4, 6, 9, 13, 17, 24; quantity_type is one of 1 to 6;

@@ -199,6 +199,10 @@ const general: Pick<CreateInvoiceInput, 'email_subject' | 'num' | 'self_pricing'
   { email_subject: 'Invoice $INVOICE_CODE', num: 11, self_pricing: false, fees_amount: sdk.decimal('3.00'), deductions_total_amount: sdk.decimal('1.00') };
 assert.equal(arrayClassified.classifications?.length, 1);
 assert.equal(general.num, 11);
+const fuelLine: Pick<InvoiceLine, 'fuel_code'> = { fuel_code: 20 };
+const fuelRoot: Pick<CreateInvoiceInput, 'fuel_invoice'> & { counterpart: Pick<CreateInvoiceInput['counterpart'], 'supply_account_no'> } =
+  { fuel_invoice: true, counterpart: { supply_account_no: '12345678' } };
+assert.equal(String(fuelLine.fuel_code) + String(fuelRoot.fuel_invoice), '20true');
 const softpos: CreatePosDeviceInput = { pos_type: 'worldline_softpos', terminal_id: '16000002', merchant_id: 'merchant@example.invalid' };
 const pos: Pick<CreateInvoiceInput, 'pos_device_id' | 'installments' | 'tip_amount'> = { pos_device_id: 'device', installments: false, tip_amount: sdk.decimal('2.00') };
 assert.equal(softpos.pos_type + String(pos.installments), 'worldline_softposfalse');

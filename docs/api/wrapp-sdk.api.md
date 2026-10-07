@@ -256,6 +256,7 @@ export interface Counterpart {
     readonly postal_code?: string;
     // (undocumented)
     readonly street?: string;
+    readonly supply_account_no?: string;
     // (undocumented)
     readonly vat?: string;
 }
@@ -324,6 +325,7 @@ export interface CreateInvoiceInput {
     readonly exchange_rate?: Decimal;
     readonly external_id: string;
     readonly fees_amount?: Decimal;
+    readonly fuel_invoice?: boolean;
     // (undocumented)
     readonly generate_pdf?: boolean;
     readonly installments?: boolean;
@@ -585,6 +587,7 @@ export interface InvoiceLine {
     readonly expense?: boolean;
     readonly expenses_vat_classification?: string;
     readonly fees_category?: number;
+    readonly fuel_code?: number;
     // (undocumented)
     readonly line_number: number;
     // (undocumented)

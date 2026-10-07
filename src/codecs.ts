@@ -172,6 +172,10 @@ const lineFields = {
   expense: z.boolean().optional(),
   rec_type: z.literal(2).optional(),
   fees_category: positiveInteger.optional(),
+  fuel_code: member([
+    10, 11, 12, 13, 14, 15, 20, 21, 30, 31, 32, 33, 34, 35, 36, 37, 38, 40, 41, 42, 43, 44, 50, 60,
+    61, 70, 71, 72, 999,
+  ]).optional(),
 };
 // Presence rules the reference states for one line. They require a field to be there; they
 // never compute or compare an amount.
@@ -189,13 +193,41 @@ const lineSchema = z
 function hasDeductions(line: { deductions?: readonly unknown[] | undefined }): boolean {
   return line.deductions !== undefined && line.deductions.length > 0;
 }
+// An amount of at most 2 fraction digits as a whole number of hundredths. Exact: the digits
+// are aligned and compared as integers, never through a binary floating-point number.
+function hundredths(amount: LosslessNumber): bigint {
+  const [whole = '0', fraction = ''] = amount.value.split('.');
+  return BigInt(whole + fraction.padEnd(2, '0'));
+}
+// The reference allows fuel code 999 on one line only, with a net value no greater than the
+// sum of the net values of the other lines. Only that stated inequality is checked; no total
+// is derived, corrected or compared with the invoice totals.
+function fuelChargeWithinOtherLines(
+  lines: readonly { fuel_code?: number | undefined; net_total_price: LosslessNumber }[],
+): boolean {
+  const charges = lines.filter((line) => line.fuel_code === 999);
+  const [charge] = charges;
+  if (charge === undefined) return true;
+  if (charges.length > 1) return false;
+  const others = lines
+    .filter((line) => line !== charge)
+    .reduce((sum, line) => sum + hundredths(line.net_total_price), 0n);
+  return hundredths(charge.net_total_price) <= others;
+}
 export const createSchema = z
   .strictObject({
     external_id: identifier,
     billing_book_id: identifier,
     invoice_type_code: z.enum(supportedInvoiceTypeCodes),
     payment_method_type: z.number().int().min(0).max(7),
-    counterpart: z.strictObject(counterpartFields),
+    counterpart: z.strictObject({
+      ...counterpartFields,
+      // A request field only: the shared fields above also shape the counterpart that reads
+      // return, and no returned supply account is claimed. The provider documents that it
+      // ignores this on an invoice that is not a fuel invoice, so it is sent as given either
+      // way and never required.
+      supply_account_no: nonempty.optional(),
+    }),
     net_total_amount: inputAmount,
     vat_total_amount: inputAmount,
     total_amount: inputAmount,
@@ -231,6 +263,7 @@ export const createSchema = z
     installments: z.boolean().optional(),
     tip_amount: inputAmount.optional(),
     third_party_collection: z.boolean().optional(),
+    fuel_invoice: z.boolean().optional(),
   })
   .refine((v) => (v.currency === undefined) === (v.exchange_rate === undefined))
   // Per-profile refinement, kept apart from the field validation above: a business profile
@@ -268,7 +301,10 @@ export const createSchema = z
     (v) =>
       v.third_party_collection === undefined ||
       thirdPartyCollectionTypes.includes(v.invoice_type_code),
-  );
+  )
+  // The provider refuses a fuel code on an invoice not sent as a fuel invoice.
+  .refine((v) => v.fuel_invoice === true || v.invoice_lines.every((l) => l.fuel_code === undefined))
+  .refine((v) => fuelChargeWithinOtherLines(v.invoice_lines));
 
 export const observationSchema = z.object({
   id: identifier,
