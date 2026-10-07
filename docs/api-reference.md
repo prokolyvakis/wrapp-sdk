@@ -42,17 +42,49 @@ Create uses provider snake_case keys to avoid a second field vocabulary. Require
 external_id, billing_book_id, invoice_type_code, payment_method_type, counterpart,
 net_total_amount, vat_total_amount, total_amount, payable_total_amount, invoice_lines.
 Optional: branch, payment_details, notes, currency with exchange_rate, correlated_invoices,
-customer_emails, email_locale, generate_pdf, mark_as_paid. All other fields reject pre-I/O.
+customer_emails, email_locale, email_subject, email_body, generate_pdf, mark_as_paid, num,
+self_pricing, special_invoice_category, and the invoice-level totals other_taxes_amount,
+withholding_total_amount, total_stamp_duty_amount, stamp_duty_amount, deductions_total_amount
+and fees_amount. All other fields reject pre-I/O.
 
-Invoice types 2.1/2.2/2.3/11.2 only; draft/POS/B2G/delivery/fuel/special-tax features are not
-supported. All 52 provider type codes and the status of each are listed in
+Invoice types 2.1/2.2/2.3/11.2 only; draft/POS/B2G/delivery/fuel features and the
+invoice-level tax mode (taxes_totals) are not supported. All 52 provider type codes and the status of each are listed in
 [invoice-capabilities.md](invoice-capabilities.md). Counterpart: name required; country_code, vat, city, street, number, postal_code
 also required for B2B service types 2.x; optional for retail 11.2. Email optional.
 
-Each line: line_number, name, quantity, unit_price, net_total_price, vat_rate, vat_total,
-subtotal, classification_category, classification_type required; code, description,
-quantity_type, vat_exemption_code optional. VAT-zero requires an exemption; the SDK invents
-no tax codes.
+Each line: line_number, name, quantity, unit_price, net_total_price, vat_rate, vat_total and
+subtotal required, plus a classification (below); code, description, quantity_type,
+vat_exemption_code, withhold_tax_rate, withhold_tax_code, withholding_total,
+stamp_duty_tax_code, stamp_duty_amount, deductions, deductions_amount,
+expenses_vat_classification, expense, rec_type and fees_category optional. VAT-zero requires an
+exemption; the SDK invents no tax codes.
+
+General invoice and line fields, each sent exactly as given:
+
+- email_subject and email_body override the customer email. Placeholders such as
+  $INVOICE_CODE, $COMPANY_NAME and $ISSUE_DATES are substituted by the provider, not the SDK;
+  line breaks and surrounding spaces are kept.
+- num is a specific invoice number, a positive integer chosen by the caller. The SDK keeps no
+  numbering state and does not check it against the billing book.
+- special_invoice_category is one of 1 to 13.
+- A line is classified by classification_category and classification_type together, or by a
+  nonempty classifications array of `{ category, type, amount }`, or by both. When both are
+  sent the provider documents that the array overrides the pair; the SDK sends all of it
+  unmerged. A line with neither, or with one scalar and no array, is refused. The array's
+  amounts are not checked against the line total.
+- withhold_tax_rate is a whole percent from 0 to 100; withhold_tax_code is a string from '1'
+  to '18'; stamp_duty_tax_code is a string from '1' to '4'. A code is never derived from a
+  rate, or the reverse.
+- deductions is an array of `{ title?, amount, informational? }`. A line with at least one
+  deduction needs deductions_amount, and the invoice then needs deductions_total_amount. An
+  empty array is sent as given and requires nothing.
+- self_pricing: true needs expenses_vat_classification on every line.
+- rec_type marks a fee line and accepts only 2. fees_category is a positive integer. A line
+  with either needs fees_amount on the invoice.
+
+These presence rules are the ones the provider's reference states. They only require a field
+to be there: the SDK never sums deductions, derives a total, or compares a total with its
+parts, so totals that disagree are sent as given and judged by the provider.
 
 Three numeric line codes are checked against the provider's documented request sets before
 authentication: vat_rate is one of 0, 3, 4, 6, 9, 13, 17, 24; quantity_type is one of 1 to 6;
@@ -203,7 +235,7 @@ pending envelope is documented for this event.
 ## Deliberate differences from the provider API
 
 Covering an operation or a field is not the same as accepting everything the provider
-accepts. These seven SDK policies are intentional and remain in force; each narrows what the
+accepts. These nine SDK policies are intentional and remain in force; each narrows what the
 SDK sends, never what it tolerates on a read.
 
 1. external_id is required on create, although the provider makes it optional. It is the only
@@ -217,14 +249,22 @@ SDK sends, never what it tolerates on a read.
 4. Amounts are exact decimal strings (the decimal() brand): nonnegative, at most 18 integer
    digits, no exponent, sign or leading zero. Plain numbers are refused. Monetary totals and
    the exchange rate take at most 2 fraction digits and are refused, not rounded, beyond that.
-5. Local size bounds: text at most 4096 code units, at most 1000 invoice lines with unique
-   line numbers from 1 to 1000, at most 100 correlated marks and 100 customer emails,
+5. Local size bounds: text at most 4096 code units (email_subject and email_body included),
+   at most 1000 invoice lines with unique line numbers from 1 to 1000, at most 100 correlated
+   marks, 100 customer emails, and 100 classifications and 100 deductions per line,
    identifiers at most 256. These are SDK bounds, not known provider maxima.
 6. Country and currency codes are checked for shape only, not against an ISO list;
    classification strings and emails only need to be nonempty. Choosing them is the caller's
    tax and business decision.
 7. unit_price accepts up to 12 fraction digits although the provider documents 2. This follows
    provider behavior recorded in [provider-evidence.md](provider-evidence.md).
+8. num is at least 1 and withhold_tax_rate is a whole percent from 0 to 100. The provider
+   documents both only as integers.
+9. Two fields are covered without a rule the reference leaves unsettled. It documents two
+   stamp-duty totals, stamp_duty_amount ("required when stamp duty present") and
+   total_stamp_duty_amount, while its own example sends line stamp duty with only the second;
+   the SDK accepts both, requires neither and never treats one as the other. It gives no code
+   table for fees_category, so any positive integer is sent and the provider decides.
 
 ## Invariants and failure modes
 

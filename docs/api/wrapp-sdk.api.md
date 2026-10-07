@@ -224,10 +224,15 @@ export interface CreateInvoiceInput {
     readonly currency?: string;
     // (undocumented)
     readonly customer_emails?: readonly string[];
+    readonly deductions_total_amount?: Decimal;
+    // (undocumented)
+    readonly email_body?: string;
     // (undocumented)
     readonly email_locale?: 'el' | 'en';
+    readonly email_subject?: string;
     readonly exchange_rate?: Decimal;
     readonly external_id: string;
+    readonly fees_amount?: Decimal;
     // (undocumented)
     readonly generate_pdf?: boolean;
     // (undocumented)
@@ -239,16 +244,25 @@ export interface CreateInvoiceInput {
     readonly net_total_amount: Decimal;
     // (undocumented)
     readonly notes?: string;
+    readonly num?: number;
+    readonly other_taxes_amount?: Decimal;
     // (undocumented)
     readonly payable_total_amount: Decimal;
     // (undocumented)
     readonly payment_details?: string;
     // (undocumented)
     readonly payment_method_type: number;
+    readonly self_pricing?: boolean;
+    readonly special_invoice_category?: number;
+    // (undocumented)
+    readonly stamp_duty_amount?: Decimal;
     // (undocumented)
     readonly total_amount: Decimal;
+    readonly total_stamp_duty_amount?: Decimal;
     // (undocumented)
     readonly vat_total_amount: Decimal;
+    // (undocumented)
+    readonly withholding_total_amount?: Decimal;
 }
 
 // @public
@@ -383,14 +397,21 @@ export interface InvoiceDetails {
 
 // @public
 export interface InvoiceLine {
+    readonly classification_category?: string;
     // (undocumented)
-    readonly classification_category: string;
-    // (undocumented)
-    readonly classification_type: string;
+    readonly classification_type?: string;
+    readonly classifications?: readonly LineClassification[];
     // (undocumented)
     readonly code?: string;
     // (undocumented)
+    readonly deductions?: readonly LineDeduction[];
+    readonly deductions_amount?: Decimal;
+    // (undocumented)
     readonly description?: string;
+    // (undocumented)
+    readonly expense?: boolean;
+    readonly expenses_vat_classification?: string;
+    readonly fees_category?: number;
     // (undocumented)
     readonly line_number: number;
     // (undocumented)
@@ -400,6 +421,10 @@ export interface InvoiceLine {
     // (undocumented)
     readonly quantity: Decimal;
     readonly quantity_type?: number;
+    readonly rec_type?: 2;
+    // (undocumented)
+    readonly stamp_duty_amount?: Decimal;
+    readonly stamp_duty_tax_code?: string;
     // (undocumented)
     readonly subtotal: Decimal;
     // (undocumented)
@@ -408,6 +433,10 @@ export interface InvoiceLine {
     readonly vat_rate: number;
     // (undocumented)
     readonly vat_total: Decimal;
+    readonly withhold_tax_code?: string;
+    readonly withhold_tax_rate?: number;
+    // (undocumented)
+    readonly withholding_total?: Decimal;
 }
 
 // @public
@@ -494,6 +523,24 @@ export type InvoiceStatusOutcome = Readonly<{
     invoice: InvoiceObservation;
     identity: IdentityEvidence;
 }> | PendingInvoiceOutcome;
+
+// @public
+export interface LineClassification {
+    readonly amount: Decimal;
+    // (undocumented)
+    readonly category: string;
+    // (undocumented)
+    readonly type: string;
+}
+
+// @public
+export interface LineDeduction {
+    readonly amount: Decimal;
+    // (undocumented)
+    readonly informational?: boolean;
+    // (undocumented)
+    readonly title?: string;
+}
 
 // @public
 export interface ListInvoicesInput {

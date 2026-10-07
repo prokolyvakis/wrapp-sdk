@@ -50,6 +50,8 @@ export type {
   InvoiceObservation,
   InvoiceDetails,
   InvoiceLine,
+  LineClassification,
+  LineDeduction,
   Counterpart,
   InvoicePage,
   ListInvoicesInput,

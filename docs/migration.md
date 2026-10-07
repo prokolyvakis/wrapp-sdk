@@ -165,3 +165,24 @@ One case needs an edit: code that implements the exported `InvoiceResource` inte
 such as a typed test double, must add the new methods. The same holds for an object typed as
 `WrappClient['branches']` or `WrappClient['billingBooks']`, now the exported `BranchResource`
 and `BillingBookResource` interfaces.
+
+### New create fields
+
+Additive. `invoices.create` accepts more of the provider's documented request, on the same
+four invoice types:
+
+- on the invoice: `email_subject`, `email_body`, `num`, `self_pricing`,
+  `special_invoice_category`, `other_taxes_amount`, `withholding_total_amount`,
+  `total_stamp_duty_amount`, `stamp_duty_amount`, `deductions_total_amount`, `fees_amount`;
+- on a line: `classifications`, `withhold_tax_rate`, `withhold_tax_code`, `withholding_total`,
+  `stamp_duty_tax_code`, `stamp_duty_amount`, `deductions`, `deductions_amount`,
+  `expenses_vat_classification`, `expense`, `rec_type`, `fees_category`.
+
+A request that was valid before is still valid and is sent unchanged. See "General invoice
+and line fields" in the [API reference](api-reference.md) for the presence rules; the SDK
+requires the fields the provider's reference says are required and computes no total.
+
+One case needs an edit: `InvoiceLine.classification_category` and `classification_type` are
+now optional in the type, because a `classifications` array can replace them. Code that reads
+either field from an `InvoiceLine` value gets `string | undefined`. At run time a line still
+needs the pair or the array, and is refused before any request without one.

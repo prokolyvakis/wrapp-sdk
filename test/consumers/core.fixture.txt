@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import * as sdk from '@prokolyvakis/wrapp-sdk';
-import type { CreateInvoiceInput, CreateOutcome, InvoiceStatusOutcome, VerifiedWebhook } from '@prokolyvakis/wrapp-sdk';
+import type { CreateInvoiceInput, CreateOutcome, InvoiceLine, InvoiceStatusOutcome, LineClassification, LineDeduction, VerifiedWebhook } from '@prokolyvakis/wrapp-sdk';
 
 assert.deepEqual(Object.keys(sdk).sort(), ['WrappClient', 'WrappError', 'calendarDate', 'decimal', 'getProviderDiagnostics', 'verifyWebhook'].sort());
 assert.equal(sdk.decimal('9007199254740993.12'), '9007199254740993.12');
@@ -123,7 +123,19 @@ const webhook = sdk.verifyWebhook({
 });
 assert.equal(route(webhook), 'thermal-print-pdf https://example.invalid/pdf');
 assert.equal(webhook.eventTypeAuthenticated, false);
+const split: readonly LineClassification[] = [{ category: 'category1_3', type: 'E3_561_001', amount: sdk.decimal('10.00') }];
+const deducted: readonly LineDeduction[] = [{ amount: sdk.decimal('1.00') }];
+const arrayClassified: InvoiceLine = { line_number: 1, name: 'Service', quantity: sdk.decimal('1'), unit_price: sdk.decimal('10'),
+  net_total_price: sdk.decimal('10'), vat_rate: 24, vat_total: sdk.decimal('2.40'), subtotal: sdk.decimal('12.40'),
+  classifications: split, deductions: deducted, deductions_amount: sdk.decimal('1.00'), withhold_tax_code: '3', rec_type: 2, fees_category: 5 };
+const general: Pick<CreateInvoiceInput, 'email_subject' | 'num' | 'self_pricing' | 'fees_amount' | 'deductions_total_amount'> =
+  { email_subject: 'Invoice $INVOICE_CODE', num: 11, self_pricing: false, fees_amount: sdk.decimal('3.00'), deductions_total_amount: sdk.decimal('1.00') };
+assert.equal(arrayClassified.classifications?.length, 1);
+assert.equal(general.num, 11);
 if (false) {
+  // @ts-expect-error 2 is the only documented fee record type.
+  const feeType: InvoiceLine['rec_type'] = 1;
+  void feeType;
   // @ts-expect-error Explicit environment is required.
   new sdk.WrappClient({ credentials: { apiKey: 'fake', tenant: { kind: 'userId', value: 'test' } } });
   // @ts-expect-error An amount is not an unchecked number.

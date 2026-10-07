@@ -72,22 +72,23 @@ observation profile follows the wire:
 
 Implement incrementally, never advertise entire-API support from a small endpoint wrapper.
 
-| Family                                                                         | Initial disposition                                           |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------- |
-| Login, tenant details                                                          | Core                                                          |
-| VAT search/exemptions, branch/billing-book reads                               | Core read capabilities                                        |
-| Invoice create/status/full lookup/list                                         | Core, supported-field matrix required                         |
-| PDF request + issued/PDF webhook parsing                                       | Core, side-effect rules apply                                 |
-| Branch create/update, billing-book create                                      | Core; shapes from documentation, unobserved                   |
-| Billing-book number update                                                     | Blocked: method and body are not established                  |
-| Thermal PDF request, issued count                                              | Core; shapes from documentation, unobserved                   |
-| Delivery-note cancellation, reference assignment, mark-as-paid, draft deletion | Core; shapes from documentation, unobserved                   |
-| Draft save, issue and listing                                                  | Blocked on undocumented response contracts                    |
-| Thermal PDF/POS-error callbacks                                                | Core typed events; body shapes from documentation, unobserved |
-| POS devices/sessions and Viva links                                            | Deferred                                                      |
-| Catering tables/order notes                                                    | Deferred                                                      |
-| Digital clientele correlation by mark and by FIM                               | Core; shapes from documentation, unobserved                   |
-| Digital clientele read/create/update/cancel, digital transports                | Deferred                                                      |
+| Family                                                                                                                                           | Initial disposition                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| Login, tenant details                                                                                                                            | Core                                                          |
+| VAT search/exemptions, branch/billing-book reads                                                                                                 | Core read capabilities                                        |
+| Invoice create/status/full lookup/list                                                                                                           | Core, supported-field matrix required                         |
+| Create fields for email overrides, number, self pricing, special category, withholding, stamp duty, deductions, fee lines, classification arrays | Core; request shapes from documentation, unobserved           |
+| PDF request + issued/PDF webhook parsing                                                                                                         | Core, side-effect rules apply                                 |
+| Branch create/update, billing-book create                                                                                                        | Core; shapes from documentation, unobserved                   |
+| Billing-book number update                                                                                                                       | Blocked: method and body are not established                  |
+| Thermal PDF request, issued count                                                                                                                | Core; shapes from documentation, unobserved                   |
+| Delivery-note cancellation, reference assignment, mark-as-paid, draft deletion                                                                   | Core; shapes from documentation, unobserved                   |
+| Draft save, issue and listing                                                                                                                    | Blocked on undocumented response contracts                    |
+| Thermal PDF/POS-error callbacks                                                                                                                  | Core typed events; body shapes from documentation, unobserved |
+| POS devices/sessions and Viva links                                                                                                              | Deferred                                                      |
+| Catering tables/order notes                                                                                                                      | Deferred                                                      |
+| Digital clientele correlation by mark and by FIM                                                                                                 | Core; shapes from documentation, unobserved                   |
+| Digital clientele read/create/update/cancel, digital transports                                                                                  | Deferred                                                      |
 
 Endpoint paths and parameter schemas must be transcribed and tested per implemented operation
 against the linked source. Do not copy the complete vendor document or sample payloads into
@@ -98,19 +99,20 @@ this repository without confirming reuse rights. Use independently authored synt
 Items already settled by observed provider behavior have moved to the section above; the
 original numbering is retained for the remainder.
 
-| ID  | Uncertainty                                                                            | Consequence / evidence required                                                                                                     |
-| --- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| V01 | Official maintained SDK or authoritative machine schema; redistribution rights         | Confirm before maintaining generated/copied plumbing. No official TypeScript SDK was verified in the search, not proof none exists. |
-| V02 | External-reference retention and concurrency (uniqueness and case scope are observed)  | Concurrent create/read-back experiments; same reference/different body; never infer matching payload from duplicate text.           |
-| V03 | Visibility of pending/draft/rejected objects (observed-create visibility is confirmed) | Missing read is not permission to issue under a new reference; test visibility delays and retained failures.                        |
-| V04 | Rate limits and Retry-After (core statuses and envelopes are observed)                 | Capture redacted outcomes; do not infer limits from example headings.                                                               |
-| V05 | Which rejection outcomes are final, whether later UI repair can issue                  | SDK exposes evidence, not terminality guesses. Mutation retry remains caller-owned.                                                 |
-| V06 | Webhook event IDs/timestamps/retries/order, key scope/rotation and unsigned Event-Type | No SDK freshness or deduplication guarantee without evidence; integrate durable inbox and read-back externally.                     |
-| V07 | Identifier size limits and remaining field nullability (amount precision is observed)  | Exact serialization and schema fixtures per field; never silently round or coerce.                                                  |
-| V08 | PDF locale parameter placement, approved artifact origins, expiry and redirects        | Return links as data initially; downloading is outside v1.                                                                          |
-| V09 | Pagination under concurrent writes and historical completeness (empty shape observed)  | No snapshot/export-completeness promise; callers use overlap and deduplication.                                                     |
-| V11 | Version announcements, deprecation windows, server schema/version headers              | Establish monitoring and contact; do not invent an API-version header.                                                              |
-| V12 | Destructive/corrective endpoint semantics and console repair                           | Separate gates before exposing management operations.                                                                               |
+| ID  | Uncertainty                                                                                                                                          | Consequence / evidence required                                                                                                     |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| V01 | Official maintained SDK or authoritative machine schema; redistribution rights                                                                       | Confirm before maintaining generated/copied plumbing. No official TypeScript SDK was verified in the search, not proof none exists. |
+| V02 | External-reference retention and concurrency (uniqueness and case scope are observed)                                                                | Concurrent create/read-back experiments; same reference/different body; never infer matching payload from duplicate text.           |
+| V03 | Visibility of pending/draft/rejected objects (observed-create visibility is confirmed)                                                               | Missing read is not permission to issue under a new reference; test visibility delays and retained failures.                        |
+| V04 | Rate limits and Retry-After (core statuses and envelopes are observed)                                                                               | Capture redacted outcomes; do not infer limits from example headings.                                                               |
+| V05 | Which rejection outcomes are final, whether later UI repair can issue                                                                                | SDK exposes evidence, not terminality guesses. Mutation retry remains caller-owned.                                                 |
+| V06 | Webhook event IDs/timestamps/retries/order, key scope/rotation and unsigned Event-Type                                                               | No SDK freshness or deduplication guarantee without evidence; integrate durable inbox and read-back externally.                     |
+| V07 | Identifier size limits and remaining field nullability (amount precision is observed)                                                                | Exact serialization and schema fixtures per field; never silently round or coerce.                                                  |
+| V08 | PDF locale parameter placement, approved artifact origins, expiry and redirects                                                                      | Return links as data initially; downloading is outside v1.                                                                          |
+| V09 | Pagination under concurrent writes and historical completeness (empty shape observed)                                                                | No snapshot/export-completeness promise; callers use overlap and deduplication.                                                     |
+| V11 | Version announcements, deprecation windows, server schema/version headers                                                                            | Establish monitoring and contact; do not invent an API-version header.                                                              |
+| V12 | Destructive/corrective endpoint semantics and console repair                                                                                         | Separate gates before exposing management operations.                                                                               |
+| V13 | Which stamp-duty total is required beside line stamp duty (stamp_duty_amount, total_stamp_duty_amount or both), and the code table for fees_category | The SDK accepts both totals, requires neither, and sends any positive fees_category. Tighten only on a provider answer.             |
 
 Every future verification record must identify SDK SHA, date, environment, operation, synthetic
 test identity, authorization, expected outcome, observed response and cleanup restrictions.

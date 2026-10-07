@@ -83,6 +83,12 @@ const vatExemptionCode = member([
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
   28, 29, 30, 31,
 ]);
+// Codes the reference documents as strings: "1" up to the given count, no padding.
+const codeText = (count: number) =>
+  z.string().refine((v) => /^[1-9]\d?$/.test(v) && Number(v) <= count);
+// Caller-chosen integers the reference gives no table for. The bound is the exact-integer
+// range, not a claim about which values the provider accepts.
+const positiveInteger = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const isoDate = z.string().refine(isCalendarDate).transform(calendarDate);
 const providerDate = z
   .string()
@@ -125,9 +131,50 @@ const lineFields = {
   vat_total: inputAmount,
   subtotal: inputAmount,
   vat_exemption_code: vatExemptionCode.optional(),
-  classification_category: nonempty,
-  classification_type: nonempty,
+  classification_category: nonempty.optional(),
+  classification_type: nonempty.optional(),
+  classifications: z
+    .array(z.strictObject({ category: nonempty, type: nonempty, amount: inputAmount }))
+    .min(1)
+    .max(100)
+    .optional(),
+  withhold_tax_rate: z.number().int().min(0).max(100).optional(),
+  withhold_tax_code: codeText(18).optional(),
+  withholding_total: inputAmount.optional(),
+  stamp_duty_tax_code: codeText(4).optional(),
+  stamp_duty_amount: inputAmount.optional(),
+  deductions_amount: inputAmount.optional(),
+  deductions: z
+    .array(
+      z.strictObject({
+        title: text.optional(),
+        amount: inputAmount,
+        informational: z.boolean().optional(),
+      }),
+    )
+    .max(100)
+    .optional(),
+  expenses_vat_classification: nonempty.optional(),
+  expense: z.boolean().optional(),
+  rec_type: z.literal(2).optional(),
+  fees_category: positiveInteger.optional(),
 };
+// Presence rules the reference states for one line. They require a field to be there; they
+// never compute or compare an amount.
+const lineSchema = z
+  .strictObject(lineFields)
+  .refine((v) => v.vat_rate !== 0 || v.vat_exemption_code !== undefined)
+  // The array replaces the scalar pair. Both forms may be sent: the provider documents that
+  // the array then overrides, so nothing is merged or dropped here.
+  .refine(
+    (v) =>
+      v.classifications !== undefined ||
+      (v.classification_category !== undefined && v.classification_type !== undefined),
+  )
+  .refine((v) => !hasDeductions(v) || v.deductions_amount !== undefined);
+function hasDeductions(line: { deductions?: readonly unknown[] | undefined }): boolean {
+  return line.deductions !== undefined && line.deductions.length > 0;
+}
 export const createSchema = z
   .strictObject({
     external_id: identifier,
@@ -139,14 +186,7 @@ export const createSchema = z
     vat_total_amount: inputAmount,
     total_amount: inputAmount,
     payable_total_amount: inputAmount,
-    invoice_lines: z
-      .array(
-        z
-          .strictObject(lineFields)
-          .refine((v) => v.vat_rate !== 0 || v.vat_exemption_code !== undefined),
-      )
-      .min(1)
-      .max(1000),
+    invoice_lines: z.array(lineSchema).min(1).max(1000),
     branch: identifier.optional(),
     payment_details: text.optional(),
     notes: text.optional(),
@@ -160,6 +200,19 @@ export const createSchema = z
     email_locale: z.enum(['el', 'en']).optional(),
     generate_pdf: z.boolean().optional(),
     mark_as_paid: z.boolean().optional(),
+    email_subject: text.optional(),
+    email_body: text.optional(),
+    num: positiveInteger.optional(),
+    self_pricing: z.boolean().optional(),
+    special_invoice_category: member([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]).optional(),
+    other_taxes_amount: inputAmount.optional(),
+    withholding_total_amount: inputAmount.optional(),
+    // Two documented fields with their own wire keys. Which of them the provider requires
+    // beside line stamp duty is an open provider question, so neither is enforced or aliased.
+    total_stamp_duty_amount: inputAmount.optional(),
+    stamp_duty_amount: inputAmount.optional(),
+    deductions_total_amount: inputAmount.optional(),
+    fees_amount: inputAmount.optional(),
   })
   .refine((v) => (v.currency === undefined) === (v.exchange_rate === undefined))
   // Per-profile refinement, kept apart from the field validation above: a business profile
@@ -176,8 +229,19 @@ export const createSchema = z
         v.counterpart.postal_code,
       ].every((field) => field !== undefined && field.length > 0),
   )
+  .refine((v) => new Set(v.invoice_lines.map((l) => l.line_number)).size === v.invoice_lines.length)
+  // Presence rules across the invoice, as the reference words them: "required when
+  // self_pricing is true", "required when deductions present", "required when fees present".
   .refine(
-    (v) => new Set(v.invoice_lines.map((l) => l.line_number)).size === v.invoice_lines.length,
+    (v) =>
+      v.self_pricing !== true ||
+      v.invoice_lines.every((l) => l.expenses_vat_classification !== undefined),
+  )
+  .refine((v) => v.deductions_total_amount !== undefined || !v.invoice_lines.some(hasDeductions))
+  .refine(
+    (v) =>
+      v.fees_amount !== undefined ||
+      v.invoice_lines.every((l) => l.rec_type === undefined && l.fees_category === undefined),
   );
 
 export const observationSchema = z.object({

@@ -87,8 +87,53 @@ export interface InvoiceLine {
   readonly subtotal: Decimal;
   /** One of 1 to 31; required when vat_rate is 0. */
   readonly vat_exemption_code?: number;
-  readonly classification_category: string;
-  readonly classification_type: string;
+  /**
+   * Both scalar fields are required unless `classifications` is supplied. All three may be
+   * sent together: the provider documents that the array then overrides the pair, and the SDK
+   * sends them as given without merging.
+   */
+  readonly classification_category?: string;
+  readonly classification_type?: string;
+  /** At least one entry when supplied. Amounts are not checked against the line total. */
+  readonly classifications?: readonly LineClassification[];
+  /** Whole percent, 0 to 100: 20 means 20%. */
+  readonly withhold_tax_rate?: number;
+  /** One of '1' to '18', as a string. Not derived from or checked against the rate. */
+  readonly withhold_tax_code?: string;
+  readonly withholding_total?: Decimal;
+  /** One of '1' to '4', as a string. */
+  readonly stamp_duty_tax_code?: string;
+  readonly stamp_duty_amount?: Decimal;
+  /** Required when `deductions` holds at least one entry. Never computed from them. */
+  readonly deductions_amount?: Decimal;
+  readonly deductions?: readonly LineDeduction[];
+  /** Required on every line when the invoice sets `self_pricing: true`. */
+  readonly expenses_vat_classification?: string;
+  readonly expense?: boolean;
+  /** Marks a fee line; 2 is the only value the reference documents. */
+  readonly rec_type?: 2;
+  /**
+   * Positive integer sent as given. The reference publishes no table for it, so membership
+   * is not validated.
+   */
+  readonly fees_category?: number;
+}
+/** One entry of a line's `classifications`. */
+export interface LineClassification {
+  readonly category: string;
+  readonly type: string;
+  /** At most 2 fraction digits. */
+  readonly amount: Decimal;
+}
+/**
+ * One deduction on a line. Omitted fields are not sent; the provider documents that a missing
+ * `informational` means false.
+ */
+export interface LineDeduction {
+  readonly title?: string;
+  /** At most 2 fraction digits. */
+  readonly amount: Decimal;
+  readonly informational?: boolean;
 }
 /**
  * Invoice creation payload, using the provider's snake_case field vocabulary.
@@ -124,6 +169,37 @@ export interface CreateInvoiceInput {
   readonly email_locale?: 'el' | 'en';
   readonly generate_pdf?: boolean;
   readonly mark_as_paid?: boolean;
+  /**
+   * Override the customer email's subject and body. Sent exactly as given: placeholders such
+   * as $INVOICE_CODE are substituted by the provider, and line breaks are kept.
+   */
+  readonly email_subject?: string;
+  readonly email_body?: string;
+  /**
+   * A specific invoice number, chosen by the caller: a positive integer. The SDK keeps no
+   * numbering state and does not check the number against the billing book.
+   */
+  readonly num?: number;
+  /** When true, every line needs `expenses_vat_classification`. */
+  readonly self_pricing?: boolean;
+  /** One of 1 to 13. */
+  readonly special_invoice_category?: number;
+  /**
+   * Invoice-level totals, each at most 2 fraction digits and sent exactly as given. The SDK
+   * never derives one from the lines or compares it with them.
+   */
+  readonly other_taxes_amount?: Decimal;
+  readonly withholding_total_amount?: Decimal;
+  /**
+   * The reference documents two stamp-duty totals with separate wire fields. Neither is
+   * treated as an alias of the other, and neither is required by the SDK.
+   */
+  readonly total_stamp_duty_amount?: Decimal;
+  readonly stamp_duty_amount?: Decimal;
+  /** Required when any line holds at least one deduction. */
+  readonly deductions_total_amount?: Decimal;
+  /** Required when any line sets `rec_type` or `fees_category`. */
+  readonly fees_amount?: Decimal;
 }
 /** An issued invoice as observed via status lookup, creation or a verified webhook. */
 export interface InvoiceObservation {
