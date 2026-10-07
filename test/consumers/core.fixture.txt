@@ -5,20 +5,31 @@ import type { CreateInvoiceInput, CreateOutcome, InvoiceStatusOutcome, VerifiedW
 
 assert.deepEqual(Object.keys(sdk).sort(), ['WrappClient', 'WrappError', 'calendarDate', 'decimal', 'getProviderDiagnostics', 'verifyWebhook'].sort());
 assert.equal(sdk.decimal('9007199254740993.12'), '9007199254740993.12');
+const routes: Record<string, unknown> = {
+  '/api/v1/login': { data: { type: 'jwt', attributes: { jwt: 'fake.jwt' } } },
+  '/api/v1/tenant_details': { wrapp_user_id: 'tenant', partner_user_id: null, issue_invoice_status: true,
+    email: 'test@example.invalid', has_plan: true, plan_name: 'test',
+    next_payment_date: null, next_payment_amount: null },
+  '/api/v1/vat_search': { vat_no: 'synthetic', name: 'Company', city: 'City', address: 'Street', postal_code: '00000', street_number: '1' },
+  '/api/v1/vat_exemptions': [{ '1': 'Synthetic exemption' }],
+  '/api/v1/branches': [{ id: 'branch', name: 'Main', code: 0 }],
+  '/api/v1/billing_books': [{ id: 'book', name: 'Service', series: 'S', invoice_type_code: '2.1', number: 4 }],
+};
 const client = new sdk.WrappClient({
   environment: 'staging',
   credentials: { apiKey: 'synthetic-consumer-key', tenant: { kind: 'userId', value: 'tenant' } },
   advanced: { fetch: async (resource) => {
-    const url = resource instanceof Request ? resource.url : String(resource);
-    return new Response(JSON.stringify(url.endsWith('/login')
-      ? { data: { type: 'jwt', attributes: { jwt: 'fake.jwt' } } }
-      : { wrapp_user_id: 'tenant', partner_user_id: null, issue_invoice_status: true,
-          email: 'test@example.invalid', has_plan: true, plan_name: 'test',
-          next_payment_date: null, next_payment_amount: null }),
-      { headers: { 'content-type': 'application/json' } });
+    const url = new URL(resource instanceof Request ? resource.url : String(resource));
+    return new Response(JSON.stringify(routes[url.pathname]), { headers: { 'content-type': 'application/json' } });
   } },
 });
 assert.equal((await client.tenant.get()).wrapp_user_id, 'tenant');
+const branchCode: string = (await client.branches.list())[0]?.code ?? '';
+assert.equal(branchCode, '0');
+const bookNumber: string = (await client.billingBooks.list())[0]?.number ?? '';
+assert.equal(bookNumber, '4');
+assert.equal((await client.vat.search({ vat: 'synthetic', country_code: 'GR' })).vat_no, 'synthetic');
+assert.equal((await client.vat.exemptions())[0]?.['1'], 'Synthetic exemption');
 const forbiddenPath = '@prokolyvakis/wrapp-sdk/dist/client.js';
 await assert.rejects(import(forbiddenPath), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
 

@@ -118,6 +118,21 @@ characters are rejected pre-I/O.
 Provider-returned download/portal URLs are data only: no authenticated fetch to those hosts,
 no automatic PDF download, no secrets in URLs.
 
+## Internal structure
+
+Each client owns exactly one internal runtime, which holds the transport, the login session,
+the default deadline and the request-size limit. Resource modules receive that runtime as a
+single capability: run a registered operation on a path relative to the fixed origin, with a
+decoder. They cannot read the credentials, reach another origin or issue an unregistered
+request, and the runtime is not a public export.
+
+An operation finishes validating and serializing its input before it calls the runtime. The
+runtime then validates the request options, bounds the serialized body in UTF-8 bytes,
+authenticates, dispatches once and hands the parsed value to the operation's own decoder. The
+size bound sits in the runtime, before authentication, so every body-bearing operation
+inherits it. Operations are registered explicitly with their method and effect class; the
+effect is never derived from the HTTP verb.
+
 ## Authentication concurrency
 
 Tokens are acquired lazily and concurrent logins are coalesced per immutable client. The API

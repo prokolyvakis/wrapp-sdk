@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 export { WrappClient } from './client.js';
-export type { InvoiceResource } from './client.js';
+export type { InvoiceResource } from './resources/invoices.js';
 export { getProviderDiagnostics } from './diagnostics.js';
 export type { ProviderDiagnostics, ProviderIssue } from './diagnostics.js';
 export { WrappError } from './errors.js';

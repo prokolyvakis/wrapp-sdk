@@ -691,13 +691,15 @@ describe('pending outcomes', () => {
       label: 'a response that never arrives',
       respond: () => new Promise<Response>(() => undefined),
       code: 'TIMEOUT',
+      // The only case that needs a short deadline; the others answer at once.
+      timeoutMs: 50,
     },
   ])(
     'should dispatch a create once and report unknown effect after $label',
-    async ({ respond, code }) => {
+    async ({ respond, code, timeoutMs }) => {
       const { client, calls } = provider(
         ({ url }) => (url.pathname.endsWith('/login') ? login() : respond()),
-        { timeoutMs: 50 },
+        timeoutMs === undefined ? {} : { timeoutMs },
       );
       await expect(client.invoices.create(invoice())).rejects.toMatchObject({
         code,
