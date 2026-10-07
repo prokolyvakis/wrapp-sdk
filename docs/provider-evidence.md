@@ -67,6 +67,11 @@ observation profile follows the wire:
   recorded. The SDK now decodes most of them from the shapes in reference v1.18.0
   (documentation-derived, not re-observed); deductions and the line withholding rate stay
   ignored until their populated shape is established.
+- On full-detail records a line's `code` was null on almost every observed record, and its
+  `quantity_type` can be null. On records of types this SDK does not issue, a line can have
+  an empty `name` and null `vat_rate`, `classification_category` and `classification_type`,
+  and the counterpart `name` can be empty. All are accepted and returned as they came; a
+  read that refused null failed on almost every real record.
 
 ## Coverage inventory
 

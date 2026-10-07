@@ -397,24 +397,30 @@ export interface InvoiceDetails {
   /** Documented provider timestamp with numeric offset, validated but not reinterpreted. */
   readonly issued_at: string;
   readonly code: string;
+  /**
+   * The optional fields below, here and on each line, are absent when the provider omits
+   * them and null when it returns null, which it does for a field it has no value for.
+   * Absent and null are different observations.
+   */
   /** Provider payment-method code as exact text; unknown codes are kept, not interpreted. */
-  readonly payment_method?: string;
+  readonly payment_method?: string | null;
   /** Provider branch code as exact text. */
-  readonly branch?: string;
-  readonly is_delivery_note?: boolean;
-  readonly fuel_invoice?: boolean;
-  readonly third_party_collection?: boolean;
+  readonly branch?: string | null;
+  readonly is_delivery_note?: boolean | null;
+  readonly fuel_invoice?: boolean | null;
+  readonly third_party_collection?: boolean | null;
   readonly currency: string;
-  readonly exchange_rate?: string;
-  readonly other_taxes_amount?: string;
+  readonly exchange_rate?: string | null;
+  readonly other_taxes_amount?: string | null;
   readonly net_total_amount: string;
   readonly vat_total_amount: string;
   readonly total_amount: string;
   readonly payable_total_amount: string;
-  readonly notes?: string;
-  readonly withholding_total_amount?: string;
-  readonly total_stamp_duty_amount?: string;
+  readonly notes?: string | null;
+  readonly withholding_total_amount?: string | null;
+  readonly total_stamp_duty_amount?: string | null;
   readonly counterpart: Readonly<{
+    /** Empty on a record that has no counterpart. */
     name: string;
     country_code?: string | undefined;
     vat?: string | undefined;
@@ -424,25 +430,30 @@ export interface InvoiceDetails {
     postal_code?: string | undefined;
     email?: string | undefined;
   }>;
+  /**
+   * A read returns every invoice of the tenant, including types this SDK does not issue.
+   * On some of those a line has an empty name, or null for its VAT rate or for either
+   * classification field.
+   */
   readonly invoice_lines: readonly Readonly<{
     line_number: number;
     name: string;
-    code?: string;
-    description?: string;
+    code?: string | null;
+    description?: string | null;
     quantity: string;
-    quantity_type?: string;
+    quantity_type?: string | null;
     unit_price: string;
     net_total_price: string;
-    vat_rate: number;
+    vat_rate: number | null;
     vat_total: string;
     subtotal: string;
-    withhold_tax_code?: string;
-    withholding_total?: string;
-    classification_category: string;
-    classification_type: string;
-    stamp_duty_tax_code?: string;
-    stamp_duty_amount?: string;
-    deductions_amount?: string;
+    withhold_tax_code?: string | null;
+    withholding_total?: string | null;
+    classification_category: string | null;
+    classification_type: string | null;
+    stamp_duty_tax_code?: string | null;
+    stamp_duty_amount?: string | null;
+    deductions_amount?: string | null;
   }>[];
 }
 /** One validated result page. No snapshot guarantee exists under concurrent writes. */

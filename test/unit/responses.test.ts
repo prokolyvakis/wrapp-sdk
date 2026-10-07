@@ -259,8 +259,11 @@ function holder(record: InvoiceDetails, at: Place): object {
 interface Sample {
   readonly label: string;
   readonly token: string;
-  readonly value?: string | boolean;
+  readonly value?: string | boolean | null;
 }
+// The provider returns null for a field it has no value for: a line's `code` is null on
+// almost every record. Null is therefore a value to keep, apart from absence.
+const reportedNull: Sample = { label: 'null', token: 'null', value: null };
 type Codec = 'code' | 'flag' | 'amount' | 'text';
 const wire: Record<Codec, { valid: readonly Sample[]; invalid: readonly Sample[] }> = {
   code: {
@@ -268,6 +271,7 @@ const wire: Record<Codec, { valid: readonly Sample[]; invalid: readonly Sample[]
       { label: 'zero', token: '0', value: '0' },
       { label: 'a small code', token: '3', value: '3' },
       { label: 'a 30-digit code', token: '9'.repeat(30), value: '9'.repeat(30) },
+      reportedNull,
     ],
     invalid: [
       { label: 'a JSON string', token: '"3"' },
@@ -275,7 +279,6 @@ const wire: Record<Codec, { valid: readonly Sample[]; invalid: readonly Sample[]
       { label: 'a fraction', token: '1.5' },
       { label: 'an exponent', token: '1e2' },
       { label: 'a 31-digit code', token: '9'.repeat(31) },
-      { label: 'null', token: 'null' },
       { label: 'a boolean', token: 'true' },
     ],
   },
@@ -283,11 +286,11 @@ const wire: Record<Codec, { valid: readonly Sample[]; invalid: readonly Sample[]
     valid: [
       { label: 'true', token: 'true', value: true },
       { label: 'false', token: 'false', value: false },
+      reportedNull,
     ],
     invalid: [
       { label: 'a JSON string', token: '"true"' },
       { label: 'a number', token: '0' },
-      { label: 'null', token: 'null' },
     ],
   },
   amount: {
@@ -299,12 +302,12 @@ const wire: Record<Codec, { valid: readonly Sample[]; invalid: readonly Sample[]
         value: '9007199254740993.12',
       },
       { label: 'a numeric string', token: '"1.50"', value: '1.50' },
+      reportedNull,
     ],
     invalid: [
       { label: 'a negative number', token: '-1' },
       { label: 'non-numeric text', token: '"abc"' },
       { label: 'thirteen fraction digits', token: '1.1234567890123' },
-      { label: 'null', token: 'null' },
       { label: 'a boolean', token: 'true' },
     ],
   },
@@ -321,10 +324,10 @@ const wire: Record<Codec, { valid: readonly Sample[]; invalid: readonly Sample[]
         token: JSON.stringify('x'.repeat(4096)),
         value: 'x'.repeat(4096),
       },
+      reportedNull,
     ],
     invalid: [
       { label: 'a number', token: '42' },
-      { label: 'null', token: 'null' },
       { label: 'an array', token: '["x"]' },
       { label: 'a 4097-unit string', token: JSON.stringify('x'.repeat(4097)) },
     ],
@@ -375,6 +378,57 @@ describe.each(detailFields)('full-detail $at field $field', ({ at, field, codec 
       await refusesDetails(detailWith(at, field, sample.token));
     },
   );
+});
+describe('read shapes of records the SDK does not issue', () => {
+  // A list returns every invoice of the tenant, whatever its type. These are the shapes the
+  // provider returns for types with no counterpart or with lines that carry no name, VAT rate
+  // or classification: one such record must not make the whole read fail.
+  const [line] = details().invoice_lines;
+  const sparse = {
+    ...details(),
+    counterpart: { name: '', vat: '', city: '', street: '', number: '', postal_code: '' },
+    invoice_lines: [
+      {
+        ...line,
+        name: '',
+        code: null,
+        quantity_type: null,
+        vat_rate: null,
+        classification_category: null,
+        classification_type: null,
+      },
+    ],
+  };
+  it('should decode a record with an empty counterpart name and null line fields, keeping them as they came', async () => {
+    const records = await detailRecords(JSON.stringify(sparse));
+    expect(records).toHaveLength(3);
+    for (const record of records) {
+      expect(record.counterpart.name).toBe('');
+      expect(record.invoice_lines[0]).toMatchObject({
+        name: '',
+        code: null,
+        quantity_type: null,
+        vat_rate: null,
+        classification_category: null,
+        classification_type: null,
+      });
+    }
+  });
+  it.each([
+    ['a numeric line name', { name: 5 }],
+    ['a null line name', { name: null }],
+    ['a textual VAT rate', { vat_rate: '24' }],
+    ['a fractional VAT rate', { vat_rate: 24.5 }],
+    ['a numeric classification category', { classification_category: 1 }],
+    ['a numeric classification type', { classification_type: 1 }],
+  ])('should still reject %s', async (_label, patch) => {
+    await refusesDetails(JSON.stringify({ ...details(), invoice_lines: [{ ...line, ...patch }] }));
+  });
+  it('should still reject a counterpart without a name', async () => {
+    await refusesDetails(
+      JSON.stringify({ ...details(), counterpart: { vat: '', city: 'Athens' } }),
+    );
+  });
 });
 describe('documented read shapes', () => {
   it('should decode the whole documented observation field set', async () => {

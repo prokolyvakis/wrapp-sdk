@@ -116,7 +116,7 @@ produce a wrong fiscal document. If you computed a rate such as 25 or sent an ex
 such as `decimal('1.0834')`, decide the correct value in your application; the SDK does not
 round or pick codes. Quantity and unit-price precision are unchanged.
 
-### 5. Reads return more fields, and are stricter about them
+### 5. Reads return more fields, and line fields can be null
 
 Additive for most code: `InvoiceObservation` gains five optional fields. `InvoiceDetails`
 gains ten optional fields on the record and eight optional fields on each invoice line. See
@@ -128,8 +128,15 @@ attention:
   the read fail and now succeeds; do not assume a returned reference is safe to use as an
   outbound one.
 - The new full-detail fields are validated. If the provider sends one of them with an
-  unexpected type, or as `null`, that read fails with `PROTOCOL_ERROR` where 0.1 ignored the
-  field. This is deliberate: the SDK does not return a value it could not validate.
+  unexpected type, that read fails with `PROTOCOL_ERROR` where 0.1 ignored the field. A
+  `null` is not an unexpected type: the provider returns null for a field it has no value
+  for, and the SDK returns that null, so each of these fields is typed `T | null` and may
+  also be absent.
+- A read returns every invoice of the tenant, including types this SDK does not issue. On
+  some of those a line has no VAT rate or classification. `vat_rate`,
+  `classification_category` and `classification_type` on a returned line are therefore
+  `number | null` and `string | null`, a returned line name can be empty, and a returned
+  counterpart name can be empty. Code that reads them as always present needs a null check.
 
 ### 6. Provider diagnostics are available on request
 

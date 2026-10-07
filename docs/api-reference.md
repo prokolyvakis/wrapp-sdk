@@ -436,10 +436,15 @@ total_stamp_duty_amount; and per line code, description, quantity_type, withhold
 withholding_total, stamp_duty_tax_code, stamp_duty_amount and deductions_amount. Returned
 numeric codes (payment_method, branch, quantity_type) are exact decimal text, not numbers, and
 are not checked against the request code sets, so an unfamiliar code is kept rather than
-refused. The two tax-code fields are plain text, empty when unused. The provider reference
-shows these fields populated and does not say whether they can be null. As an SDK decoding
-policy, not a provider guarantee, a null or a value of another type in one of them is a
-protocol error for that read rather than a second form of absence.
+refused. The two tax-code fields are plain text, empty when unused. The provider returns
+null for a field it has no value for (a line's code is null on most records), so each of
+these fields is null when the provider says null and absent when it omits the field; the two
+are kept distinct. A value of another type is a protocol error for that read.
+
+A read returns every invoice of the tenant, including types this SDK does not issue. On some
+of those the provider returns a line with an empty name, or with null for vat_rate,
+classification_category or classification_type, and a counterpart with an empty name. These
+are returned as they came; a line's vat_rate and its two classification fields can be null.
 
 Nine documented fields are not returned, because the provider reference does not establish
 their populated shape: the line fields withhold_tax_rate, deductions and fuel_code; the record

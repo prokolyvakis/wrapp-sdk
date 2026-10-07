@@ -532,46 +532,51 @@ export const detailsSchema = z.object({
   code: text,
   // The optional fields below and on each line follow the documented full-detail shape.
   // Returned codes keep their exact digits as text and are not checked against the request
-  // member sets. The reference shows these fields populated and does not say they can be
-  // null, so by SDK policy a null is a protocol error rather than a second kind of absence.
-  payment_method: integerString.exactOptional(),
-  branch: integerString.exactOptional(),
-  is_delivery_note: z.boolean().exactOptional(),
-  fuel_invoice: z.boolean().exactOptional(),
-  third_party_collection: z.boolean().exactOptional(),
+  // member sets. Provider-observed: a field the provider has no value for comes back as
+  // null (a line's code is null on almost every record), so null is kept as null and stays
+  // distinct from an absent field.
+  payment_method: integerString.nullable().exactOptional(),
+  branch: integerString.nullable().exactOptional(),
+  is_delivery_note: z.boolean().nullable().exactOptional(),
+  fuel_invoice: z.boolean().nullable().exactOptional(),
+  third_party_collection: z.boolean().nullable().exactOptional(),
   currency: nonempty,
-  exchange_rate: numericText.exactOptional(),
-  other_taxes_amount: numericText.exactOptional(),
+  exchange_rate: numericText.nullable().exactOptional(),
+  other_taxes_amount: numericText.nullable().exactOptional(),
   net_total_amount: numericText,
   vat_total_amount: numericText,
   total_amount: numericText,
   payable_total_amount: numericText,
-  notes: text.exactOptional(),
-  withholding_total_amount: numericText.exactOptional(),
-  total_stamp_duty_amount: numericText.exactOptional(),
-  // Provider-observed: the wire carries vat: "" for counterparts without a VAT number.
-  counterpart: z.object({ ...counterpartFields, vat: text.optional() }),
+  notes: text.nullable().exactOptional(),
+  withholding_total_amount: numericText.nullable().exactOptional(),
+  total_stamp_duty_amount: numericText.nullable().exactOptional(),
+  // Provider-observed: the wire carries vat: "" for counterparts without a VAT number, and
+  // an empty name on a record that has no counterpart at all.
+  counterpart: z.object({ ...counterpartFields, name: text, vat: text.optional() }),
+  // A list returns every invoice of the tenant, including types create() does not issue.
+  // Provider-observed on such records: an empty line name, and null for the VAT rate and
+  // for either classification field. One such record must not fail the whole read.
   invoice_lines: z
     .array(
       z.object({
         line_number: integer,
-        name: nonempty,
-        code: text.exactOptional(),
-        description: text.exactOptional(),
+        name: text,
+        code: text.nullable().exactOptional(),
+        description: text.nullable().exactOptional(),
         quantity: numericText,
-        quantity_type: integerString.exactOptional(),
+        quantity_type: integerString.nullable().exactOptional(),
         unit_price: numericText,
         net_total_price: numericText,
-        vat_rate: integer,
+        vat_rate: integer.nullable(),
         vat_total: numericText,
         subtotal: numericText,
-        withhold_tax_code: text.exactOptional(),
-        withholding_total: numericText.exactOptional(),
-        classification_category: nonempty,
-        classification_type: nonempty,
-        stamp_duty_tax_code: text.exactOptional(),
-        stamp_duty_amount: numericText.exactOptional(),
-        deductions_amount: numericText.exactOptional(),
+        withhold_tax_code: text.nullable().exactOptional(),
+        withholding_total: numericText.nullable().exactOptional(),
+        classification_category: text.nullable(),
+        classification_type: text.nullable(),
+        stamp_duty_tax_code: text.nullable().exactOptional(),
+        stamp_duty_amount: numericText.nullable().exactOptional(),
+        deductions_amount: numericText.nullable().exactOptional(),
       }),
     )
     .min(1)

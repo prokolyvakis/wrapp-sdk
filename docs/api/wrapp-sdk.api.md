@@ -563,7 +563,7 @@ export type IdentityEvidence = 'exact' | 'ascii-case-variant';
 export interface InvoiceDetails {
     // (undocumented)
     readonly billing_book_id: string;
-    readonly branch?: string;
+    readonly branch?: string | null;
     // (undocumented)
     readonly code: string;
     // (undocumented)
@@ -580,57 +580,56 @@ export interface InvoiceDetails {
     // (undocumented)
     readonly currency: string;
     // (undocumented)
-    readonly exchange_rate?: string;
+    readonly exchange_rate?: string | null;
     readonly external_id: string | null;
     // (undocumented)
-    readonly fuel_invoice?: boolean;
+    readonly fuel_invoice?: boolean | null;
     // (undocumented)
     readonly id: string;
-    // (undocumented)
     readonly invoice_lines: readonly Readonly<{
         line_number: number;
         name: string;
-        code?: string;
-        description?: string;
+        code?: string | null;
+        description?: string | null;
         quantity: string;
-        quantity_type?: string;
+        quantity_type?: string | null;
         unit_price: string;
         net_total_price: string;
-        vat_rate: number;
+        vat_rate: number | null;
         vat_total: string;
         subtotal: string;
-        withhold_tax_code?: string;
-        withholding_total?: string;
-        classification_category: string;
-        classification_type: string;
-        stamp_duty_tax_code?: string;
-        stamp_duty_amount?: string;
-        deductions_amount?: string;
+        withhold_tax_code?: string | null;
+        withholding_total?: string | null;
+        classification_category: string | null;
+        classification_type: string | null;
+        stamp_duty_tax_code?: string | null;
+        stamp_duty_amount?: string | null;
+        deductions_amount?: string | null;
     }>[];
     // (undocumented)
     readonly invoice_type_code: string;
     // (undocumented)
-    readonly is_delivery_note?: boolean;
+    readonly is_delivery_note?: boolean | null;
     readonly issued_at: string;
     // (undocumented)
     readonly net_total_amount: string;
     // (undocumented)
-    readonly notes?: string;
+    readonly notes?: string | null;
     // (undocumented)
-    readonly other_taxes_amount?: string;
+    readonly other_taxes_amount?: string | null;
     // (undocumented)
     readonly payable_total_amount: string;
-    readonly payment_method?: string;
+    readonly payment_method?: string | null;
     // (undocumented)
-    readonly third_party_collection?: boolean;
+    readonly third_party_collection?: boolean | null;
     // (undocumented)
     readonly total_amount: string;
     // (undocumented)
-    readonly total_stamp_duty_amount?: string;
+    readonly total_stamp_duty_amount?: string | null;
     // (undocumented)
     readonly vat_total_amount: string;
     // (undocumented)
-    readonly withholding_total_amount?: string;
+    readonly withholding_total_amount?: string | null;
 }
 
 // @public
