@@ -136,6 +136,7 @@ describe('client runtime', () => {
         'branches',
         'cateringTables',
         'digitalClienteles',
+        'digitalTransports',
         'invoices',
         'posDevices',
         'posSessions',

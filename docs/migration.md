@@ -147,8 +147,9 @@ The release also adds these type exports: `InvoiceStatusOutcome`, `PendingInvoic
 ### New operations
 
 Additive. Each is a new method, on an existing resource or on one of the new
-`client.digitalClienteles`, `client.posDevices`, `client.posSessions` and
-`client.cateringTables` resources, and changes nothing you already call.
+`client.digitalClienteles`, `client.posDevices`, `client.posSessions`,
+`client.cateringTables` and `client.digitalTransports` resources, and changes nothing you
+already call.
 
 - `invoices.requestThermalPdf(invoiceId)` — the thermal-printer PDF, with the outcomes of
   `requestPdf`.
@@ -168,6 +169,10 @@ Additive. Each is a new method, on an existing resource or on one of the new
   `client.cateringTables` resource.
 - `invoices.listOpenCateringOrderNotes({ page? })` and
   `invoices.cancelCateringOrderNotes(input)`. The second issues a cancelling invoice.
+- `digitalTransports.list`, `get`, `create`, `refresh`, `reject`, `confirmDelivery`,
+  `confirmReturn` and `transfer`, on a new `client.digitalTransports` resource. A record's
+  `my_data_response` is returned as the new `ProviderJson` type: an opaque tree with exact
+  number text.
 
 One case needs an edit: code that implements the exported `InvoiceResource` interface itself,
 such as a typed test double, must add the new methods. The same holds for an object typed as
@@ -195,3 +200,13 @@ One case needs an edit: `InvoiceLine.classification_category` and `classificatio
 now optional in the type, because a `classifications` array can replace them. Code that reads
 either field from an `InvoiceLine` value gets `string | undefined`. At run time a line still
 needs the pair or the array, and is refused before any request without one.
+
+### A `__proto__` key in a provider or webhook body is always refused
+
+Hardening, with no effect on a well-formed body. A JSON body carrying a `__proto__` key whose
+value was an object was already refused. One whose value was a number, string, boolean or
+null lost that key without notice; it is now refused too, with `PROTOCOL_ERROR` for a
+response and `WEBHOOK_INVALID` for a webhook.
+
+A body nested more than 64 levels deep is refused the same way, before it is parsed. Such a
+body used to fail inside the parser instead.

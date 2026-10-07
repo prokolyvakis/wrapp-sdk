@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import * as sdk from '@prokolyvakis/wrapp-sdk';
-import type { CreateInvoiceInput, CreateOutcome, CreatePosDeviceInput, InvoiceLine, InvoiceStatusOutcome, LineClassification, LineDeduction, VerifiedWebhook } from '@prokolyvakis/wrapp-sdk';
+import type { CreateInvoiceInput, CreateOutcome, CreatePosDeviceInput, InvoiceLine, InvoiceStatusOutcome, LineClassification, LineDeduction, ProviderJson, VerifiedWebhook } from '@prokolyvakis/wrapp-sdk';
 
 assert.deepEqual(Object.keys(sdk).sort(), ['WrappClient', 'WrappError', 'calendarDate', 'decimal', 'getProviderDiagnostics', 'verifyWebhook'].sort());
 assert.equal(sdk.decimal('9007199254740993.12'), '9007199254740993.12');
@@ -20,6 +20,14 @@ const written: Record<string, unknown> = {
   'DELETE /api/v1/catering_tables/table': { status: 'Catering table deleted' },
   'GET /api/v1/invoices/list_open_catering_order_notes': { invoices: [{ id: 'note', my_data_mark: '400000000000001', issued_at: '2026-05-13T10:00:00.000Z', catering_table_id: 'table' }], total_pages: 1, current_page: 1 },
   'POST /api/v1/invoices/cancel_catering_order_note': { id: 'cancelling', my_data_mark: 'mark', my_data_uid: 'uid', my_data_qr_url: 'https://example.invalid/qr', series: 'a', num: 1, wrapp_invoice_url: 'https://example.invalid/el', wrapp_invoice_url_en: 'https://example.invalid/en' },
+  'GET /api/v1/digital_transports': { digital_transports: [{ id: 'transport', category: 'shipping', status: 'pending', invoice_id: 'invoice', my_data_response: { code: 7, text: '7' } }], total_pages: 1, current_page: 1 },
+  'GET /api/v1/digital_transports/transport': { digital_transport: { id: 'transport', category: 'shipping', status: 'delivered', my_data_response: null } },
+  'POST /api/v1/digital_transports': { digital_transport: { id: 'transport', category: 'shipping', status: 'pending', invoice_id: 'invoice' } },
+  'POST /api/v1/digital_transports/transport/refresh': { digital_transport: { id: 'transport', category: 'shipping', status: 'delivered' } },
+  'POST /api/v1/digital_transports/transport/reject': { errors: [{ message: 'Reject failed' }] },
+  'POST /api/v1/digital_transports/transport/confirm_delivery': { digital_transport: { id: 'transport', category: 'shipping', status: 'delivered' } },
+  'POST /api/v1/digital_transports/transport/confirm_return': { digital_transport: { id: 'transport', category: 'shipping', status: 'COMPLETED' } },
+  'POST /api/v1/digital_transports/transport/transfer': { digital_transport: { id: 'transport', category: 'shipping', status: 'IN_TRANSIT' } },
   'GET /api/v1/pos_devices': [{ id: 'device', name: 'Front desk', terminal_id: '16000001', merchant_id: null }],
   'POST /api/v1/pos_devices': { errors: { 'pos_devices.name': ['Taken'], authorization_code: ['Wrong', 'Used'] } },
   'DELETE /api/v1/pos_devices/device': { status: 'POS device deleted' },
@@ -96,11 +104,36 @@ const notes = await client.invoices.listOpenCateringOrderNotes({ page: 1 });
 assert.equal(notes.invoices[0]?.issued_at, '2026-05-13T10:00:00.000Z');
 const cancelling = await client.invoices.cancelCateringOrderNotes({ billing_book_id: 'book', correlated_invoices: ['400000000000001'] });
 assert.equal(cancelling.kind === 'observed' ? cancelling.receipt.num : cancelling.kind, '1');
+const transports = await client.digitalTransports.list({ category: 'shipping', page: 1 });
+const evidenceNode: ProviderJson | undefined = transports.digital_transports[0]?.my_data_response;
+assert.equal(describeEvidence(evidenceNode), 'object(code=number:7,text=string:7)');
+assert.equal(describeEvidence((await client.digitalTransports.get('transport')).my_data_response), 'null');
+const leg = { vehicle_number: 'ABC1234', transport_type: 2, carrier_vat_number: '123456789' };
+const registered = await client.digitalTransports.create({ invoice_id: 'invoice', ...leg });
+assert.equal(registered.kind === 'observed' ? registered.transport.status : registered.kind, 'pending');
+assert.equal((await client.digitalTransports.refresh('transport')).kind, 'observed');
+assert.equal((await client.digitalTransports.reject('transport', { reject_reason: 'Not received' })).kind, 'rejected');
+const delivered = await client.digitalTransports.confirmDelivery('transport', { outcome: 'PARTIAL', delivered_packaging: [{ packaging_type: 6, quantity: 2, other_packaging_title: 'Big bag' }] });
+assert.equal(delivered.kind, 'observed');
+assert.equal((await client.digitalTransports.confirmReturn('transport')).kind, 'observed');
+const moved = await client.digitalTransports.transfer('transport', leg);
+assert.equal(moved.kind === 'observed' ? moved.transport.status : moved.kind, 'IN_TRANSIT');
 const deleted = await client.invoices.drafts.delete('invoice');
 assert.equal(deleted.kind === 'rejected' ? deleted.errorCount : 0, 1);
 const forbiddenPath = '@prokolyvakis/wrapp-sdk/dist/client.js';
 await assert.rejects(import(forbiddenPath), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
 
+function describeEvidence(node: ProviderJson | undefined): string {
+  if (node === undefined) return 'absent';
+  switch (node.kind) {
+    case 'null': return 'null';
+    case 'boolean': return 'boolean:' + String(node.value);
+    case 'string': return 'string:' + node.value;
+    case 'number': return 'number:' + node.text;
+    case 'array': return 'array(' + node.items.map(describeEvidence).join(',') + ')';
+    case 'object': return 'object(' + node.entries.map((entry) => entry.key + '=' + describeEvidence(entry.value)).join(',') + ')';
+  }
+}
 function consume(outcome: CreateOutcome): string {
   switch (outcome.kind) {
     case 'observed': return outcome.invoice.id;
@@ -170,6 +203,10 @@ const softpos: CreatePosDeviceInput = { pos_type: 'worldline_softpos', terminal_
 const pos: Pick<CreateInvoiceInput, 'pos_device_id' | 'installments' | 'tip_amount'> = { pos_device_id: 'device', installments: false, tip_amount: sdk.decimal('2.00') };
 assert.equal(softpos.pos_type + String(pos.installments), 'worldline_softposfalse');
 if (false) {
+  // @ts-expect-error A delivery outcome is FULL, PARTIAL or NONE, exactly as written.
+  void client.digitalTransports.confirmDelivery('transport', { outcome: 'full' });
+  // @ts-expect-error A number node carries exact text, not a JavaScript number.
+  void (evidenceNode?.kind === 'number' ? evidenceNode.value : undefined);
   // @ts-expect-error A table is opened by id, by name or by both, never by neither.
   void client.cateringTables.open({});
   // @ts-expect-error The order-note page reports no total count.

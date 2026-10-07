@@ -109,6 +109,16 @@ const timestamp = z
         v,
       ) && isCalendarDate(v.slice(0, 10)),
   );
+// A timestamp with optional fraction, ending in Z or an offset: the reference shows this form
+// on catering order notes and digital transports. Returned verbatim, never reparsed.
+export const instant = z
+  .string()
+  .refine(
+    (v) =>
+      /^\d{4}-\d{2}-\d{2}[T ](?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?(?:Z| ?[+-](?:0\d|1[0-4]):?[0-5]\d)$/.test(
+        v,
+      ) && isCalendarDate(v.slice(0, 10)),
+  );
 const counterpartFields = {
   name: nonempty,
   country_code: z
@@ -480,7 +490,38 @@ function assertOwnPrototypes(value: unknown): void {
   }
   for (const child of Object.values(value)) assertOwnPrototypes(child);
 }
+// The same key with a primitive value leaves no trace at all: it is silently dropped. The
+// native parser keeps "__proto__" as an own property, so it is used to find the key. Only a
+// text that can spell the key, literally or through an escape, pays for the second pass.
+function hasProtoKey(value: unknown): boolean {
+  if (value === null || typeof value !== 'object') return false;
+  return Object.hasOwn(value, '__proto__') || Object.values(value).some(hasProtoKey);
+}
+// Both parsers recurse once per level of nesting, so a deeply nested body would exhaust the
+// stack inside them. Depth is bounded here first, by a linear scan that ignores brackets
+// inside strings. No documented answer comes near the limit.
+const maxJsonDepth = 64;
+function nestedTooDeep(textValue: string): boolean {
+  let depth = 0;
+  let inString = false;
+  for (let index = 0; index < textValue.length; index += 1) {
+    const code = textValue.charCodeAt(index);
+    if (inString) {
+      // A backslash escapes the next character, a quote included.
+      if (code === 92) index += 1;
+      else if (code === 34) inString = false;
+    } else if (code === 34) inString = true;
+    else if (code === 91 || code === 123) {
+      depth += 1;
+      if (depth > maxJsonDepth) return true;
+    } else if (code === 93 || code === 125) depth -= 1;
+  }
+  return false;
+}
 export function parseJson(textValue: string): unknown {
+  if (nestedTooDeep(textValue)) throw new Error('JSON nested too deeply');
+  if (/__proto__|\\u/i.test(textValue) && hasProtoKey(JSON.parse(textValue)))
+    throw new Error('Forbidden JSON key');
   const value = parse(textValue, undefined, {
     onDuplicateKey: () => {
       throw new Error('Duplicate JSON key');

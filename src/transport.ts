@@ -40,6 +40,15 @@ export const operations = Object.freeze({
   openCateringOrderNotes: { method: 'GET', effectful: false },
   // Issues a cancelling 8.6 invoice: a fiscal creation, not a state update.
   cancelCateringOrderNotes: { method: 'POST', effectful: true },
+  digitalTransports: { method: 'GET', effectful: false },
+  digitalTransport: { method: 'GET', effectful: false },
+  digitalTransportCreate: { method: 'POST', effectful: true },
+  // Re-fetches the status and updates the provider's record: not a read.
+  digitalTransportRefresh: { method: 'POST', effectful: true },
+  digitalTransportReject: { method: 'POST', effectful: true },
+  digitalTransportConfirmDelivery: { method: 'POST', effectful: true },
+  digitalTransportConfirmReturn: { method: 'POST', effectful: true },
+  digitalTransportTransfer: { method: 'POST', effectful: true },
 } as const);
 export type Operation = keyof typeof operations;
 export function scope(

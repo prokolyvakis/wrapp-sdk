@@ -232,6 +232,14 @@ export interface ClientOptions {
     readonly timeoutMs?: number;
 }
 
+// @public (undocumented)
+export interface ConfirmDeliveryInput {
+    // (undocumented)
+    readonly delivered_packaging?: readonly DeliveredPackaging[];
+    // (undocumented)
+    readonly outcome: 'FULL' | 'PARTIAL' | 'NONE';
+}
+
 // @public
 export interface Counterpart {
     // (undocumented)
@@ -287,6 +295,11 @@ export interface CreateBranchInput {
     readonly postal_code: string;
     // (undocumented)
     readonly street_number: string;
+}
+
+// @public (undocumented)
+export interface CreateDigitalTransportInput extends TransportLegInput {
+    readonly invoice_id: string;
 }
 
 // @public
@@ -384,6 +397,13 @@ export type Decimal = string & {
 // @public
 export function decimal(value: string): Decimal;
 
+// @public (undocumented)
+export interface DeliveredPackaging {
+    readonly other_packaging_title?: string;
+    readonly packaging_type: number;
+    readonly quantity: number;
+}
+
 // @public
 export interface DigitalClienteleResource {
     correlateByFim(clienteleId: string, input: Readonly<{
@@ -393,6 +413,60 @@ export interface DigitalClienteleResource {
     correlateByMark(clienteleId: string, input: Readonly<{
         correlate_mark: string;
     }>, options?: RequestOptions): Promise<ClienteleCorrelationOutcome>;
+}
+
+// @public
+export interface DigitalTransport {
+    readonly category: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly invoice_code?: string | null;
+    readonly invoice_id?: string | null;
+    // (undocumented)
+    readonly invoice_issued_at?: string | null;
+    // (undocumented)
+    readonly last_status_update_at?: string | null;
+    readonly my_data_response?: ProviderJson;
+    readonly status: string;
+}
+
+// @public
+export type DigitalTransportOutcome = Readonly<{
+    kind: 'observed';
+    transport: DigitalTransport;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
+export interface DigitalTransportPage {
+    // (undocumented)
+    readonly current_page: number;
+    // (undocumented)
+    readonly digital_transports: readonly DigitalTransport[];
+    // (undocumented)
+    readonly total_pages: number;
+}
+
+// @public (undocumented)
+export interface DigitalTransportResource {
+    confirmDelivery(transportId: string, input: ConfirmDeliveryInput, options?: RequestOptions): Promise<DigitalTransportOutcome>;
+    confirmReturn(transportId: string, options?: RequestOptions): Promise<DigitalTransportOutcome>;
+    create(transport: CreateDigitalTransportInput, options?: RequestOptions): Promise<DigitalTransportOutcome>;
+    // (undocumented)
+    get(transportId: string, options?: RequestOptions): Promise<DigitalTransport>;
+    list(input?: Readonly<{
+        category?: 'shipping' | 'receiving';
+        page?: number;
+    }>, options?: RequestOptions): Promise<DigitalTransportPage>;
+    refresh(transportId: string, options?: RequestOptions): Promise<DigitalTransportOutcome>;
+    reject(transportId: string, input?: Readonly<{
+        reject_reason?: string;
+    }>, options?: RequestOptions): Promise<DigitalTransportOutcome>;
+    transfer(transportId: string, leg: TransportLegInput, options?: RequestOptions): Promise<DigitalTransportOutcome>;
 }
 
 // @public
@@ -769,6 +843,29 @@ export interface ProviderIssue {
 }
 
 // @public
+export type ProviderJson = Readonly<{
+    kind: 'null';
+}> | Readonly<{
+    kind: 'boolean';
+    value: boolean;
+}> | Readonly<{
+    kind: 'string';
+    value: string;
+}> | Readonly<{
+    kind: 'number';
+    text: string;
+}> | Readonly<{
+    kind: 'array';
+    items: readonly ProviderJson[];
+}> | Readonly<{
+    kind: 'object';
+    entries: readonly Readonly<{
+        key: string;
+        value: ProviderJson;
+    }>[];
+}>;
+
+// @public
 export type RejectionSource = 'invoice-errors' | 'mydata-errors' | 'unknown';
 
 // @public
@@ -804,6 +901,15 @@ export type TenantIdentity = Readonly<{
     kind: 'email' | 'userId';
     value: string;
 }>;
+
+// @public
+export interface TransportLegInput {
+    // (undocumented)
+    readonly carrier_vat_number: string;
+    readonly transport_type: number;
+    // (undocumented)
+    readonly vehicle_number: string;
+}
 
 // @public
 export type UpdateBranchInput = Partial<CreateBranchInput>;
@@ -867,6 +973,8 @@ export class WrappClient {
     readonly cateringTables: Readonly<CateringTableResource>;
     // (undocumented)
     readonly digitalClienteles: Readonly<DigitalClienteleResource>;
+    // (undocumented)
+    readonly digitalTransports: Readonly<DigitalTransportResource>;
     // (undocumented)
     readonly invoices: Readonly<InvoiceResource>;
     // (undocumented)

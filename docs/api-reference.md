@@ -43,6 +43,14 @@ grounded in documentation, what is observed behavior, and what remains an open q
 | cateringTables.delete               | DELETE /catering_tables/:id                    | effectful      |
 | invoices.listOpenCateringOrderNotes | GET /invoices/list_open_catering_order_notes   | read           |
 | invoices.cancelCateringOrderNotes   | POST /invoices/cancel_catering_order_note      | effectful      |
+| digitalTransports.list              | GET /digital_transports                        | read           |
+| digitalTransports.get               | GET /digital_transports/:id                    | read           |
+| digitalTransports.create            | POST /digital_transports                       | effectful      |
+| digitalTransports.refresh           | POST /digital_transports/:id/refresh           | effectful      |
+| digitalTransports.reject            | POST /digital_transports/:id/reject            | effectful      |
+| digitalTransports.confirmDelivery   | POST /digital_transports/:id/confirm_delivery  | effectful      |
+| digitalTransports.confirmReturn     | POST /digital_transports/:id/confirm_return    | effectful      |
+| digitalTransports.transfer          | POST /digital_transports/:id/transfer          | effectful      |
 
 There is no generic request escape hatch. Origins are explicit staging/production; the
 loopback-only test-origin override is visibly an advanced test capability. An injected fetch
@@ -282,6 +290,70 @@ no replacement document is issued.
 Moving invoices between tables, and creating order notes or other 8.6 invoices through
 invoices.create, are not available.
 
+## Digital transports
+
+Eight operations on `client.digitalTransports` cover the movement of a delivery note:
+
+- list({ category?, page? }) returns one page: digital_transports (up to 10 records),
+  total_pages and current_page, with no total count. category is `shipping` or `receiving`;
+  without it the provider lists the shipping transports.
+- get(transportId) returns one record.
+- create({ invoice_id, vehicle_number, transport_type, carrier_vat_number }) registers a
+  transport for an invoice. transport_type is one of 1 to 7.
+- refresh(transportId) asks the provider to fetch the status again and update its record. It
+  changes provider state, so it is classified effectful, not a read.
+- reject(transportId, { reject_reason? }) rejects a received transport.
+- confirmDelivery(transportId, { outcome, delivered_packaging? }) confirms a delivery.
+  outcome is `FULL`, `PARTIAL` or `NONE`, exactly as written. Each packaging row has a
+  packaging_type from 1 to 6, a nonnegative integer quantity and an optional
+  other_packaging_title. The title is optional for every type: the provider says it applies
+  to type 6 and states no rule that requires it there or refuses it elsewhere.
+- confirmReturn(transportId) completes a transport on the return of undelivered goods.
+- transfer(transportId, { vehicle_number, transport_type, carrier_vat_number }) declares a
+  new leg.
+
+The six writes are dispatched at most once, never retried, and report effect unknown after a
+dispatched failure. Each returns observed with the record, or rejected.
+
+Eligibility belongs to the provider. It requires an issued delivery note with a registration
+mark for create, the issuer and particular states for confirmReturn, and a transport in
+transit for transfer; it does not accept confirmDelivery for a reverse delivery note the
+caller issued. The SDK checks none of this beforehand, makes no preliminary read, and after a
+refusal attempts nothing else: a refused confirmDelivery is not turned into confirmReturn.
+
+A record carries id, category and status, and, when the provider sends them, invoice_id,
+invoice_issued_at, invoice_code and last_status_update_at (absent and null are kept apart;
+timestamps are the provider's text, verbatim). status is also the provider's text. Its
+reference shows pending, delivered, rejected, COMPLETED and IN_TRANSIT in different answers
+without relating them, so the SDK does not map them onto one lifecycle, and a value it has
+never seen is returned as received. No status is treated as a finished delivery by the SDK.
+
+An answer is refused as a protocol error when it is about another transport than the one
+addressed, when a created transport names another invoice than the one requested, or when a
+record arrives beside an error field.
+
+### Opaque provider evidence
+
+my_data_response is the tax authority's answer as the provider stored it. The provider does
+not document its contents, so the SDK returns it as `ProviderJson`: a tree that keeps the
+structure and nothing else. Each node has a `kind`: `null`, `boolean` (value), `string`
+(value), `number` (text), `array` (items) or `object` (entries, an ordered list of
+`{ key, value }`). A number keeps the exact text of its JSON token, sign, fraction and
+exponent included, and is never converted to a JavaScript number; the number 1 and the string
+"1" stay different nodes. An object is a list of entries, not a JavaScript object, so a key
+such as `constructor` is only a key. The tree is deeply frozen.
+
+Bounds, which are SDK policy and not provider limits: 20 levels of nesting, 10 000 nodes, and
+4096 UTF-16 code units for each string, key and number token. A larger value fails the read
+with a protocol error. An absent my_data_response stays absent; an explicit JSON null is a
+node of kind `null`.
+
+Nothing inside the tree is read by the SDK: an error-shaped or status-shaped value in it does
+not change the outcome of an operation. Treat it the same way unless the provider documents
+its fields to you.
+
+Importing a transport by mark or by QR URL is not available.
+
 ## Returned fields
 
 An observation (create, status, the issued-invoice webhook) carries id, external_id,
@@ -374,6 +446,11 @@ SDK sends, never what it tolerates on a read.
   Exception: the top-level keys errors, error and status are reserved envelope discriminators —
   their appearance on a read response is treated as a provider error report, never as an
   additive field.
+- A provider body or webhook body that carries a `__proto__` key, at any depth and however
+  the key is escaped, is refused as malformed. Such a key is never honored and never
+  silently dropped.
+- A provider body or webhook body nested more than 64 levels deep is refused as malformed
+  before it is parsed. This is an SDK bound; no documented answer comes near it.
 - No automatic retry or auth replay of any operation. One invoice dispatch maximum per call.
 - Login key/tenant in JSON body only, bearer token in header only; redirect:error everywhere.
 - Absolute request deadline spans auth wait and body; shared login has its own finite deadline.

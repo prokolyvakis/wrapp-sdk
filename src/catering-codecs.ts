@@ -2,13 +2,13 @@ import { z } from 'zod';
 import {
   httpsUrl,
   identifier,
+  instant,
   integer,
   integerString,
   nonempty,
   numericText,
   text,
 } from './codecs.js';
-import { isCalendarDate } from './values.js';
 
 // A table's status is data about the table, kept verbatim. It is not the reserved envelope
 // key of other answers, and a value outside the documented four is returned, not refused.
@@ -36,16 +36,6 @@ export const cateringTableOpenSchema = z
 export const openOrderNotesInputSchema = z.strictObject({
   page: z.number().int().min(1).max(1_000_000).optional(),
 });
-// The reference shows a UTC instant with milliseconds here, unlike the offset form of the
-// full-detail reads. Both spellings are accepted and returned verbatim, never reparsed.
-const instant = z
-  .string()
-  .refine(
-    (v) =>
-      /^\d{4}-\d{2}-\d{2}[T ](?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?(?:Z| ?[+-](?:0\d|1[0-4]):?[0-5]\d)$/.test(
-        v,
-      ) && isCalendarDate(v.slice(0, 10)),
-  );
 // Its own page: 20 summary records, and no total count in the reference.
 export const openOrderNotesPageSchema = z.object({
   invoices: z

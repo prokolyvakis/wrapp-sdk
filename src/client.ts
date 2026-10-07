@@ -8,12 +8,14 @@ import {
 } from './codecs.js';
 import type { CateringTableResource } from './catering-types.js';
 import type { DigitalClienteleResource } from './digital-clientele-types.js';
+import type { DigitalTransportResource } from './digital-transport-types.js';
 import type { BillingBookResource, BranchResource } from './management-types.js';
 import type { PosDeviceResource, PosSessionResource } from './pos-types.js';
 import { billingBookResource } from './resources/billing-books.js';
 import { cateringTableResource } from './resources/catering-tables.js';
 import { branchResource } from './resources/branches.js';
 import { digitalClienteleResource } from './resources/digital-clienteles.js';
+import { digitalTransportResource } from './resources/digital-transports.js';
 import { invoiceResource } from './resources/invoices.js';
 import type { InvoiceResource } from './resources/invoices.js';
 import { posDeviceResource } from './resources/pos-devices.js';
@@ -39,6 +41,7 @@ export class WrappClient {
   readonly invoices: Readonly<InvoiceResource>;
   readonly digitalClienteles: Readonly<DigitalClienteleResource>;
   readonly cateringTables: Readonly<CateringTableResource>;
+  readonly digitalTransports: Readonly<DigitalTransportResource>;
   readonly posDevices: Readonly<PosDeviceResource>;
   readonly posSessions: Readonly<PosSessionResource>;
 
@@ -81,6 +84,7 @@ export class WrappClient {
     this.invoices = Object.freeze(invoiceResource(runtime));
     this.digitalClienteles = Object.freeze(digitalClienteleResource(runtime));
     this.cateringTables = Object.freeze(cateringTableResource(runtime));
+    this.digitalTransports = Object.freeze(digitalTransportResource(runtime));
     this.posDevices = Object.freeze(posDeviceResource(runtime));
     this.posSessions = Object.freeze(posSessionResource(runtime));
     Object.freeze(this);

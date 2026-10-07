@@ -24,6 +24,17 @@ export type {
   DigitalClienteleResource,
 } from './digital-clientele-types.js';
 export type {
+  ConfirmDeliveryInput,
+  CreateDigitalTransportInput,
+  DeliveredPackaging,
+  DigitalTransport,
+  DigitalTransportOutcome,
+  DigitalTransportPage,
+  DigitalTransportResource,
+  TransportLegInput,
+} from './digital-transport-types.js';
+export type { ProviderJson } from './provider-json.js';
+export type {
   BillingBookCreateOutcome,
   BillingBookReceipt,
   BillingBookResource,
