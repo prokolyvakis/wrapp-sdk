@@ -1,8 +1,20 @@
 # Invoice type capabilities
 
-The provider reference (v1.18.0) lists 52 invoice type codes. `invoices.create` accepts 28
-of them. This page lists all 52, so that "not accepted" is a visible, deliberate state and not an
+The provider reference (v1.18.0) lists 52 invoice type codes. `invoices.create` accepts 28 of
+them. This page lists all 52, so that "not accepted" is a visible, deliberate state and not an
 oversight.
+
+## Contents
+
+- [What accepted means](#what-accepted-means)
+- [How to read the table](#how-to-read-the-table)
+- [All 52 type codes](#all-52-type-codes)
+- [What the evidence shows](#what-the-evidence-shows)
+- [Rules of the supported types](#rules-of-the-supported-types)
+- [Types that are not accepted](#types-that-are-not-accepted)
+- [Rules for every supported type](#rules-for-every-supported-type)
+
+## What accepted means
 
 A code is accepted only when its whole request profile and every response it can produce are
 implemented and tested. Naming a code in a type or a table is not support, and the SDK does
@@ -14,6 +26,18 @@ Two things this page cannot tell you:
 - **Whether your account may issue a type.** That is decided by the provider and the tax
   authority for each tenant. Local acceptance means the request is well formed, nothing more.
 - **Which type is fiscally correct.** The SDK makes no tax decision.
+
+## How to read the table
+
+The table has one row for each code. The second column gives the SDK status, and the third
+column depends on it.
+
+| SDK status   | What it means                                                                     | What the third column gives                                                                |
+| ------------ | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Supported    | `invoices.create` accepts the code.                                               | The counterpart rule, then any rules of the type itself, separated by semicolons.          |
+| Not accepted | `invoices.create` fails with `INVALID_INPUT` before any request, including login. | The reason. [Types that are not accepted](#types-that-are-not-accepted) explains each one. |
+
+## All 52 type codes
 
 | Code  | SDK status   | Counterpart rule, or why it is not accepted                                                                                                                                                                                                                                                                 |
 | ----- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -70,36 +94,68 @@ Two things this page cannot tell you:
 | 17.5  | Not accepted | No request shape was found that the provider and the tax authority accept                                                                                                                                                                                                                                   |
 | 17.6  | Not accepted | No request shape was found that the provider and the tax authority accept                                                                                                                                                                                                                                   |
 
+## What the evidence shows
+
 Each supported type was accepted by the provider in the shape described here, in an
 authorized test with synthetic data. That shows the request is well formed for the provider
 and the tax authority; it is not a certification, and it says nothing about any other shape.
 
-Types 9.2 and 9.3 (delivery notes) and 10.1 and 10.2 (quantity receipt notes) are accepted in
-one fixed shape, the only one observed to work: all four totals at zero, zero-value lines
-classified category3, the full counterpart, the delivery flag and detail on 9.2 and 9.3, a
-receipt purpose on 10.1 and 10.2. Two points differ from the provider's reference: it lists
-only three totals, but a nonzero net amount is refused; and it says 9.2 needs only a name
-and an address, but the counterpart's VAT number and country are required.
+The observations are recorded in [provider-evidence.md](provider-evidence.md).
 
-Other rules that were observed to be enforced: 1.6, 2.4 and 5.1 need the mark of the invoice
-they supplement or credit; 3.1 and 3.2 (title deeds) and 8.1 (rent) carry no VAT, the first
-two with an exemption code and expense lines, the third without a code; 6.1, 6.2 and the
-catering order note 8.6 need no counterpart.
+## Rules of the supported types
+
+### Delivery notes and quantity receipt notes
+
+Types 9.2 and 9.3 (delivery notes) and 10.1 and 10.2 (quantity receipt notes) are accepted in
+one fixed shape, the only one observed to work:
+
+- all four totals at zero;
+- zero-value lines classified category3;
+- the full counterpart;
+- the delivery flag and detail on 9.2 and 9.3;
+- a receipt purpose on 10.1 and 10.2.
+
+Two points differ from the provider's reference:
+
+- The reference lists only three totals, but a nonzero net amount is refused.
+- The reference says 9.2 needs only a name and an address, but the counterpart's VAT number
+  and country are required.
+
+### Correlated marks, VAT and counterparts
+
+Other rules that were observed to be enforced:
+
+- 1.6, 2.4 and 5.1 need the mark of the invoice they supplement or credit.
+- 3.1 and 3.2 (title deeds) and 8.1 (rent) carry no VAT, the first two with an exemption code
+  and expense lines, the third without a code.
+- 6.1, 6.2 and the catering order note 8.6 need no counterpart.
+
+### Accommodation-tax receipt
 
 The accommodation-tax receipt 8.2 needs the other-taxes total and, on every line, the
 accommodation tax with its category and amount. It is sent only in the shape observed to be
 accepted: net and VAT amounts of zero, and lines whose net, VAT and subtotal are zero at VAT
 rate 24.
 
-The codes that are not accepted were all tried against the provider. 8.4 and 8.5 were
-issued in a plain shape, but they are card-terminal documents whose own fields are still
-open questions, so the SDK does not send them yet. No accepted request was found for 1.5 and
-the six 17.x accounting entries. The fifteen types from 13.1 to 16.1 are documents received
-from another party: the tax authority refuses them when the tenant transmits them through
-the provider.
+## Types that are not accepted
 
-Three more input rules apply to every supported type and are described in
-the [API reference](api-reference.md): the request code sets for VAT rate, quantity type and
-VAT exemption; the exact-decimal amount rules; and the fields that are rejected because their
-profile is not implemented (invoice-level taxes, POS refunds and preloaded POS
-transactions). Any supported type can also be saved as a draft with `invoices.drafts.create`.
+The codes that are not accepted were all tried against the provider. The table gives one of
+three reasons.
+
+- **8.4 and 8.5.** They were issued in a plain shape, but they are card-terminal documents
+  whose own fields are still open questions, so the SDK does not send them yet.
+- **1.5 and the six 17.x accounting entries.** No accepted request was found.
+- **The fifteen types from 13.1 to 16.1.** They are documents received from another party:
+  the tax authority refuses them when the tenant transmits them through the provider.
+
+## Rules for every supported type
+
+Three more input rules apply to every supported type and are described in the
+[API reference](api-reference.md):
+
+- the request code sets for VAT rate, quantity type and VAT exemption;
+- the exact-decimal amount rules;
+- the fields that are rejected because their profile is not implemented (invoice-level taxes,
+  POS refunds and preloaded POS transactions).
+
+Any supported type can also be saved as a draft with `invoices.drafts.create`.
