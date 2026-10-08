@@ -564,12 +564,10 @@ describe('resources', () => {
     const { client } = provider(({ url }) => {
       if (url.pathname.endsWith('/login')) return login();
       if (url.pathname.endsWith('/branches'))
-        return json([{ id: '4ddce104-7b53-4aed-a08c-5bf15229cfee', name: 'Έδρα', code: 0 }]);
+        return json([{ id: 'branch-one', name: 'Έδρα', code: 0 }]);
       return new Response(listBody, { headers: { 'content-type': 'application/json' } });
     });
-    expect(await client.branches.list()).toEqual([
-      { id: '4ddce104-7b53-4aed-a08c-5bf15229cfee', name: 'Έδρα', code: '0' },
-    ]);
+    expect(await client.branches.list()).toEqual([{ id: 'branch-one', name: 'Έδρα', code: '0' }]);
     const page = await client.invoices.list();
     expect(page.invoices[0]?.issued_at).toBe('2026-09-18T14:28:41+03:00');
     expect(page.invoices[0]?.invoice_lines[0]?.quantity).toBe('1.0');
