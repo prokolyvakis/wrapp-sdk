@@ -395,10 +395,11 @@ export interface CreateInvoiceInput {
     readonly billing_book_id: string;
     // (undocumented)
     readonly branch?: string;
+    readonly catering_table_id?: string;
+    readonly catering_table_name?: string;
     // (undocumented)
     readonly correlated_invoices?: readonly string[];
-    // (undocumented)
-    readonly counterpart: Counterpart;
+    readonly counterpart?: Counterpart;
     readonly currency?: string;
     // (undocumented)
     readonly customer_emails?: readonly string[];
@@ -428,7 +429,7 @@ export interface CreateInvoiceInput {
     readonly installments?: boolean;
     // (undocumented)
     readonly invoice_lines: readonly InvoiceLine[];
-    readonly invoice_type_code: '1.1' | '2.1' | '2.2' | '2.3' | '5.1' | '5.2' | '9.2' | '9.3' | '10.1' | '10.2' | '11.1' | '11.2' | '11.4';
+    readonly invoice_type_code: '1.1' | '1.2' | '1.3' | '1.4' | '1.6' | '2.1' | '2.2' | '2.3' | '2.4' | '3.1' | '3.2' | '5.1' | '5.2' | '6.1' | '6.2' | '7.1' | '8.1' | '8.2' | '8.6' | '9.2' | '9.3' | '10.1' | '10.2' | '11.1' | '11.2' | '11.3' | '11.4' | '11.5';
     readonly is_delivery_note?: boolean;
     // (undocumented)
     readonly mark_as_paid?: boolean;
@@ -936,6 +937,7 @@ export interface InvoiceDetails {
 
 // @public
 export interface InvoiceLine {
+    readonly accommodation_tax?: Decimal;
     readonly classification_category?: string;
     // (undocumented)
     readonly classification_type?: string;
@@ -959,6 +961,9 @@ export interface InvoiceLine {
     readonly name: string;
     // (undocumented)
     readonly net_total_price: Decimal;
+    // (undocumented)
+    readonly other_taxes_amount?: Decimal;
+    readonly other_taxes_percent_category?: '6' | '7' | '8' | '9' | '10' | '17' | '20' | '21' | '22' | '23' | '24' | '25' | '26' | '27' | '28' | '29' | '30';
     // (undocumented)
     readonly quantity: Decimal;
     readonly quantity_type?: number;

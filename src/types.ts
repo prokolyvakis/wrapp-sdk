@@ -128,6 +128,32 @@ export interface InvoiceLine {
    * `net_total_price` may not exceed the sum of the other lines' `net_total_price`.
    */
   readonly fuel_code?: number;
+  /**
+   * The three fields below belong to the accommodation-tax receipt (type 8.2), which needs
+   * all three on every line beside zero net, VAT and subtotal values at `vat_rate` 24, and
+   * are refused on every other type.
+   */
+  readonly accommodation_tax?: Decimal;
+  /** The provider's codes for this field. */
+  readonly other_taxes_percent_category?:
+    | '6'
+    | '7'
+    | '8'
+    | '9'
+    | '10'
+    | '17'
+    | '20'
+    | '21'
+    | '22'
+    | '23'
+    | '24'
+    | '25'
+    | '26'
+    | '27'
+    | '28'
+    | '29'
+    | '30';
+  readonly other_taxes_amount?: Decimal;
   /** Required on every line when the invoice sets `b2g: true`. */
   readonly cpv_code?: string;
 }
@@ -162,26 +188,56 @@ export interface CreateInvoiceInput {
   readonly external_id: string;
   readonly billing_book_id: string;
   /**
-   * The supported types; any other code is rejected pre-I/O. 5.1 needs the mark of the
-   * invoice it credits in `correlated_invoices`. 9.2 and 9.3 are delivery notes and 10.1 and
-   * 10.2 quantity receipt notes, each sent in one fixed shape; see the API reference.
+   * The supported types; any other code is rejected pre-I/O. Several have rules of their own
+   * (a correlated mark on 1.6, 2.4 and 5.1; fixed shapes for 9.2, 9.3, 10.1 and 10.2; no VAT
+   * on 3.1, 3.2 and 8.1); see "Invoice types with rules of their own" in the API reference.
    */
   readonly invoice_type_code:
     | '1.1'
+    | '1.2'
+    | '1.3'
+    | '1.4'
+    | '1.6'
     | '2.1'
     | '2.2'
     | '2.3'
+    | '2.4'
+    | '3.1'
+    | '3.2'
     | '5.1'
     | '5.2'
+    | '6.1'
+    | '6.2'
+    | '7.1'
+    | '8.1'
+    | '8.2'
+    | '8.6'
     | '9.2'
     | '9.3'
     | '10.1'
     | '10.2'
     | '11.1'
     | '11.2'
-    | '11.4';
+    | '11.3'
+    | '11.4'
+    | '11.5';
   readonly payment_method_type: number;
-  readonly counterpart: Counterpart;
+  /**
+   * Required for every type except 6.1, 6.2 and 8.6, where it may be omitted. Which of its
+   * fields are required depends on the type.
+   */
+  readonly counterpart?: Counterpart;
+  /**
+   * The open catering table of an order note (type 8.6), or of the retail receipt 11.1 that
+   * closes order notes, which then names their marks in `correlated_invoices`. Refused on
+   * every other type.
+   */
+  readonly catering_table_id?: string;
+  /**
+   * The name of a new catering table that an order note (type 8.6) creates and opens. Not
+   * sent together with `catering_table_id`. Refused on every other type.
+   */
+  readonly catering_table_name?: string;
   readonly net_total_amount: Decimal;
   readonly vat_total_amount: Decimal;
   readonly total_amount: Decimal;

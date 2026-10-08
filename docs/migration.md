@@ -241,6 +241,32 @@ A request for one of the four earlier types is unaffected.
 compatibility policy an added member of a closed union is a breaking type change: code that
 switches exhaustively over the union, or maps it with a `Record`, needs the new cases.
 
+### Fifteen more invoice types, and an optional counterpart
+
+`invoices.create` also accepts types 1.2, 1.3, 1.4, 1.6, 2.4, 3.1, 3.2, 6.1, 6.2, 7.1, 8.1,
+8.2, 8.6, 11.3 and 11.5, two fields for catering order notes (`catering_table_id` and
+`catering_table_name`) and three line fields for the accommodation-tax receipt 8.2
+(`accommodation_tax`, `other_taxes_percent_category` and `other_taxes_amount`). The rules of each type are under "Invoice types with rules of their
+own" in the [API reference](api-reference.md). A request for an earlier type is unaffected.
+
+Two type changes need attention:
+
+- `CreateInvoiceInput['invoice_type_code']` gains fifteen more members: the same breaking
+  union change as above.
+- `CreateInvoiceInput['counterpart']` is now optional in the type, because types 6.1, 6.2 and
+  8.6 need none. At run time every other type still requires it and is refused before any
+  request without it. Code that reads `counterpart` from a `CreateInvoiceInput` value gets
+  `Counterpart | undefined`:
+
+  ```ts
+  // Before
+  const name = input.counterpart.name;
+  type Party = CreateInvoiceInput['counterpart'];
+  // After
+  const name = input.counterpart?.name;
+  type Party = Counterpart; // exported; or NonNullable<CreateInvoiceInput['counterpart']>
+  ```
+
 ### A `__proto__` key in a provider or webhook body is always refused
 
 Hardening, with no effect on a well-formed body. A JSON body carrying a `__proto__` key whose

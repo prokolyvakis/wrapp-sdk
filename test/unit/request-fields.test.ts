@@ -544,7 +544,11 @@ const complete = (type: '2.1' | '2.2' | '2.3' | '11.2'): CreateInvoiceInput => {
     email_locale: 'en',
     generate_pdf: true,
     mark_as_paid: false,
-    counterpart: { ...base.counterpart, email: 'recipient@example.invalid' },
+    counterpart: {
+      name: 'Synthetic Company',
+      ...base.counterpart,
+      email: 'recipient@example.invalid',
+    },
     invoice_lines: [
       { ...first, code: 'SKU-SYNTHETIC', description: 'Synthetic description', quantity_type: 1 },
       { ...first, line_number: 2, vat_rate: 0, vat_exemption_code: 1, vat_total: decimal('0') },
@@ -613,7 +617,7 @@ describe.each(['2.1', '2.2', '2.3', '11.2'] as const)('invoice type %s profile',
   });
 });
 describe('unsupported invoice types', () => {
-  it.each(['1.2', '2.4', '8.2', '8.6', '11.3', '', 2.1, null])(
+  it.each(['1.5', '8.4', '8.5', '13.1', '17.1', '', 2.1, null])(
     'should refuse invoice type %j before authentication',
     async (type) => {
       await refused(place('create', 'invoice_type_code', type));

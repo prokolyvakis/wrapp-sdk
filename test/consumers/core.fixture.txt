@@ -248,7 +248,7 @@ const general: Pick<CreateInvoiceInput, 'email_subject' | 'num' | 'self_pricing'
 assert.equal(arrayClassified.classifications?.length, 1);
 assert.equal(general.num, 11);
 const fuelLine: Pick<InvoiceLine, 'fuel_code'> = { fuel_code: 20 };
-const fuelRoot: Pick<CreateInvoiceInput, 'fuel_invoice'> & { counterpart: Pick<CreateInvoiceInput['counterpart'], 'supply_account_no'> } =
+const fuelRoot: Pick<CreateInvoiceInput, 'fuel_invoice'> & { counterpart: Pick<NonNullable<CreateInvoiceInput['counterpart']>, 'supply_account_no'> } =
   { fuel_invoice: true, counterpart: { supply_account_no: '12345678' } };
 assert.equal(String(fuelLine.fuel_code) + String(fuelRoot.fuel_invoice), '20true');
 const publicSector: Pick<CreateInvoiceInput, 'b2g' | 'b2g_budget_type' | 'b2g_due_date' | 'delivery_address_city'> =
@@ -272,14 +272,18 @@ const deductedAmount: string | undefined = readBack?.invoice_lines[0]?.deduction
 assert.equal([dispatchDate, budgetType, withheld, deductedAmount].every((value) => value === undefined), true);
 const receiptNote: Pick<CreateInvoiceInput, 'invoice_type_code' | 'receiving_note_purpose' | 'correlated_invoices'> =
   { invoice_type_code: '10.1', receiving_note_purpose: 5, correlated_invoices: ['400000000000001'] };
-const types: readonly CreateInvoiceInput['invoice_type_code'][] = ['1.1', '5.1', '9.3', '11.4'];
-assert.equal(receiptNote.invoice_type_code + String(types.length), '10.14');
+const types: readonly CreateInvoiceInput['invoice_type_code'][] = ['1.1', '5.1', '9.3', '11.4', '1.2', '3.1', '6.1', '8.1', '8.6', '11.5'];
+assert.equal(receiptNote.invoice_type_code + String(types.length), '10.110');
+const lodging: Pick<InvoiceLine, 'accommodation_tax' | 'other_taxes_percent_category' | 'other_taxes_amount'> = { accommodation_tax: sdk.decimal('1.50'), other_taxes_percent_category: '7', other_taxes_amount: sdk.decimal('1.50') };
+assert.equal(String(lodging.accommodation_tax) + String(lodging.other_taxes_percent_category), '1.507');
+const orderNote: Pick<CreateInvoiceInput, 'invoice_type_code' | 'counterpart' | 'catering_table_name' | 'catering_table_id'> = { invoice_type_code: '8.6', catering_table_name: 'Table 7' };
+assert.equal(String(orderNote.counterpart?.name) + String(orderNote.catering_table_name), 'undefinedTable 7');
 const softpos: CreatePosDeviceInput = { pos_type: 'worldline_softpos', terminal_id: '16000002', merchant_id: 'merchant@example.invalid' };
 const pos: Pick<CreateInvoiceInput, 'pos_device_id' | 'installments' | 'tip_amount'> = { pos_device_id: 'device', installments: false, tip_amount: sdk.decimal('2.00') };
 assert.equal(softpos.pos_type + String(pos.installments), 'worldline_softposfalse');
 if (false) {
-  // @ts-expect-error Type 8.6 is not issued through create.
-  const unaccepted: CreateInvoiceInput['invoice_type_code'] = '8.6';
+  // @ts-expect-error Type 8.4 is not issued through create.
+  const unaccepted: CreateInvoiceInput['invoice_type_code'] = '8.4';
   void unaccepted;
   // @ts-expect-error A clientele flag is a boolean, never text.
   void client.digitalClienteles.create({ client_service_type: 'garage', branch: '0', recurring_service: 'true' });
@@ -303,9 +307,9 @@ if (false) {
   void client.cateringTables.create({});
   // @ts-expect-error Only the number of a billing book can be updated.
   void client.billingBooks.updateNumber('new-book', { name: 'Renamed' });
-  // @ts-expect-error The accommodation-tax fields of type 8.2 are not part of the line type.
-  const lodging: InvoiceLine['accommodation_tax'] = undefined;
-  void lodging;
+  // @ts-expect-error The detail type of invoice type 1.5 is not part of the line type.
+  const detail: InvoiceLine['invoice_detail_type'] = undefined;
+  void detail;
   // @ts-expect-error A due date is a validated calendar date, not any string.
   const dueDate: CreateInvoiceInput['b2g_due_date'] = '2026-01-31';
   void dueDate;

@@ -1,7 +1,10 @@
 import type { CreateInvoiceInput } from './types.js';
 
-/** Which counterpart fields a supported type requires before any request is made. */
-export type CounterpartRule = 'business-identity' | 'name-only';
+/**
+ * Which counterpart a supported type needs before any request is made: its full identity and
+ * address, its name alone, or none at all ('optional': when one is sent, its name is needed).
+ */
+export type CounterpartRule = 'business-identity' | 'name-only' | 'optional';
 /**
  * Rules of one supported type beyond the general request rules. Each one is a presence or
  * exact-value rule that the provider or the tax authority was observed to enforce, or the
@@ -16,29 +19,56 @@ export type CounterpartRule = 'business-identity' | 'name-only';
  * - deliveryNote: is_delivery_note must be true, and with it the delivery detail;
  * - receivingNote: receiving_note_purpose is required; a 'correlated' note also needs the mark
  *   of the delivery note being received, and only it accepts purpose 5. No delivery field
- *   was observed on a receipt note, so the delivery flag is refused there.
+ *   was observed on a receipt note, so the delivery flag is refused there;
+ * - expenseLines: every line carries expense: true, the shape in which the type was accepted;
+ * - noVat: the authority refuses VAT on the type. 'exempt': every line has vat_rate 0, and
+ *   with it the exemption code every zero-rate line needs. 'plain': every line has vat_rate 0
+ *   and no exemption code, which the authority refuses on this type;
+ * - accommodationTax: the root other_taxes_amount is required, and every line carries
+ *   accommodation_tax, other_taxes_percent_category and other_taxes_amount. The type was
+ *   observed to be accepted with zero net and VAT totals and zero-value lines at vat_rate 24,
+ *   and is sent only so: net_total_amount and vat_total_amount zero, every line with
+ *   net_total_price 0, vat_rate 24, vat_total 0 and subtotal 0;
+ * - cateringTable: where the two catering table fields may appear. 'order-note': at most one
+ *   of catering_table_id and catering_table_name. 'closing-receipt': catering_table_id only,
+ *   and only with the marks of the order notes being closed. Everywhere else both are refused.
  */
 export interface TypeRules {
   readonly correlatedInvoices?: true;
+  readonly expenseLines?: true;
+  readonly noVat?: 'exempt' | 'plain';
+  readonly accommodationTax?: true;
+  readonly cateringTable?: 'order-note' | 'closing-receipt';
   readonly zeroTotals?: true;
   readonly zeroValueLines?: true;
   readonly deliveryNote?: true;
   readonly receivingNote?: 'correlated' | 'uncorrelated';
 }
 /**
- * Why a code the provider lists is not accepted by create:
- * - 'catering-profile': the reference's catering examples conflict with its general rules;
- * - 'partly-documented': the reference gives some rule or an example specific to the type,
- *   but not its complete profile;
- * - 'listed-only': the reference lists the code without any type-specific rule.
+ * Why a code the provider lists is not accepted by create, as observed on the provider:
+ * - 'own-fields': the type was issued, but with request fields of its own that this SDK
+ *   does not send yet;
+ * - 'no-accepted-shape': no request shape was found that the provider and the tax authority
+ *   both accept;
+ * - 'other-party-issuer': a document whose issuer is the other party. The tax authority
+ *   refuses it when the tenant transmits it through the provider.
  */
-export type UnsupportedReason = 'catering-profile' | 'partly-documented' | 'listed-only';
+export type UnsupportedReason = 'own-fields' | 'no-accepted-shape' | 'other-party-issuer';
 export type InvoiceTypeContract =
   | Readonly<{ code: string; supported: true; counterpart: CounterpartRule; rules?: TypeRules }>
   | Readonly<{ code: string; supported: false; reason: UnsupportedReason }>;
 
-const open = (code: string, reason: UnsupportedReason = 'listed-only') =>
+const open = (code: string, reason: UnsupportedReason) =>
   ({ code, supported: false, reason }) as const;
+const business = (code: string, rules?: TypeRules) =>
+  ({
+    code,
+    supported: true,
+    counterpart: 'business-identity',
+    ...(rules ? { rules } : {}),
+  }) as const;
+const optional = (code: string, rules?: TypeRules) =>
+  ({ code, supported: true, counterpart: 'optional', ...(rules ? { rules } : {}) }) as const;
 /**
  * Every invoice type code of the provider reference, in its order, and what this SDK does
  * with each. Listing a code is bookkeeping: create accepts a code only once its whole request
@@ -46,101 +76,85 @@ const open = (code: string, reason: UnsupportedReason = 'listed-only') =>
  * all is decided by the provider and the tax authority, never here.
  */
 export const invoiceTypeCatalogue: readonly InvoiceTypeContract[] = Object.freeze([
-  { code: '1.1', supported: true, counterpart: 'business-identity' },
-  open('1.2'),
-  open('1.3'),
-  open('1.4'),
-  open('1.5', 'partly-documented'),
-  open('1.6'),
-  { code: '2.1', supported: true, counterpart: 'business-identity' },
-  { code: '2.2', supported: true, counterpart: 'business-identity' },
-  { code: '2.3', supported: true, counterpart: 'business-identity' },
-  open('2.4'),
-  open('3.1'),
-  open('3.2'),
+  business('1.1'),
+  business('1.2'),
+  business('1.3'),
+  business('1.4'),
+  open('1.5', 'no-accepted-shape'),
+  business('1.6', { correlatedInvoices: true }),
+  business('2.1'),
+  business('2.2'),
+  business('2.3'),
+  business('2.4', { correlatedInvoices: true }),
+  business('3.1', { expenseLines: true, noVat: 'exempt' }),
+  business('3.2', { expenseLines: true, noVat: 'exempt' }),
+  business('5.1', { correlatedInvoices: true }),
+  business('5.2'),
+  optional('6.1'),
+  optional('6.2'),
+  business('7.1'),
+  business('8.1', { noVat: 'plain' }),
+  business('8.2', { accommodationTax: true }),
+  open('8.4', 'own-fields'),
+  open('8.5', 'own-fields'),
+  optional('8.6', { cateringTable: 'order-note' }),
+  business('9.2', { zeroTotals: true, zeroValueLines: true, deliveryNote: true }),
+  business('9.3', { zeroTotals: true, zeroValueLines: true, deliveryNote: true }),
+  business('10.1', { zeroTotals: true, zeroValueLines: true, receivingNote: 'correlated' }),
+  business('10.2', { zeroTotals: true, zeroValueLines: true, receivingNote: 'uncorrelated' }),
   {
-    code: '5.1',
+    code: '11.1',
     supported: true,
-    counterpart: 'business-identity',
-    rules: { correlatedInvoices: true },
+    counterpart: 'name-only',
+    rules: { cateringTable: 'closing-receipt' },
   },
-  { code: '5.2', supported: true, counterpart: 'business-identity' },
-  open('6.1'),
-  open('6.2'),
-  open('7.1'),
-  open('8.1'),
-  open('8.2', 'partly-documented'),
-  open('8.4', 'partly-documented'),
-  open('8.5', 'partly-documented'),
-  open('8.6', 'catering-profile'),
-  {
-    code: '9.2',
-    supported: true,
-    counterpart: 'business-identity',
-    rules: { zeroTotals: true, zeroValueLines: true, deliveryNote: true },
-  },
-  {
-    code: '9.3',
-    supported: true,
-    counterpart: 'business-identity',
-    rules: { zeroTotals: true, zeroValueLines: true, deliveryNote: true },
-  },
-  {
-    code: '10.1',
-    supported: true,
-    counterpart: 'business-identity',
-    rules: { zeroTotals: true, zeroValueLines: true, receivingNote: 'correlated' },
-  },
-  {
-    code: '10.2',
-    supported: true,
-    counterpart: 'business-identity',
-    rules: { zeroTotals: true, zeroValueLines: true, receivingNote: 'uncorrelated' },
-  },
-  { code: '11.1', supported: true, counterpart: 'name-only' },
   { code: '11.2', supported: true, counterpart: 'name-only' },
-  open('11.3'),
+  { code: '11.3', supported: true, counterpart: 'name-only' },
   { code: '11.4', supported: true, counterpart: 'name-only' },
-  open('11.5'),
-  open('13.1'),
-  open('13.2'),
-  open('13.3'),
-  open('13.4'),
-  open('13.30'),
-  open('13.31'),
-  open('14.1'),
-  open('14.2'),
-  open('14.3'),
-  open('14.4'),
-  open('14.5'),
-  open('14.30'),
-  open('14.31'),
-  open('15.1'),
-  open('16.1'),
-  open('17.1'),
-  open('17.2'),
-  open('17.3'),
-  open('17.4'),
-  open('17.5'),
-  open('17.6'),
+  business('11.5'),
+  ...['13.1', '13.2', '13.3', '13.4', '13.30', '13.31'].map((code) =>
+    open(code, 'other-party-issuer'),
+  ),
+  ...['14.1', '14.2', '14.3', '14.4', '14.5', '14.30', '14.31'].map((code) =>
+    open(code, 'other-party-issuer'),
+  ),
+  ...['15.1', '16.1'].map((code) => open(code, 'other-party-issuer')),
+  ...['17.1', '17.2', '17.3', '17.4', '17.5', '17.6'].map((code) =>
+    open(code, 'no-accepted-shape'),
+  ),
 ]);
 
 type SupportedCode = CreateInvoiceInput['invoice_type_code'];
 /** The codes create accepts. The public input type names exactly these. */
 export const supportedInvoiceTypeCodes = [
   '1.1',
+  '1.2',
+  '1.3',
+  '1.4',
+  '1.6',
   '2.1',
   '2.2',
   '2.3',
+  '2.4',
+  '3.1',
+  '3.2',
   '5.1',
   '5.2',
+  '6.1',
+  '6.2',
+  '7.1',
+  '8.1',
+  '8.2',
+  '8.6',
   '9.2',
   '9.3',
   '10.1',
   '10.2',
   '11.1',
   '11.2',
+  '11.3',
   '11.4',
+  '11.5',
 ] as const;
 // The tuple above and the public input type must name the same codes, in both directions.
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
@@ -151,7 +165,7 @@ export const catalogueMatchesInputType: Same<
 
 /**
  * The reference accepts third_party_collection on these types only. create() knows the field
- * so that promoting either type enables it; neither is issued yet, so it is refused today.
+ * so that accepting either type enables it; neither is accepted yet, so it is refused today.
  */
 export const thirdPartyCollectionTypes: readonly string[] = ['8.4', '8.5'];
 

@@ -40,10 +40,10 @@ const status = await client.invoices.getStatus({ kind: 'externalId', value: refe
 Amounts are exact decimal strings, never floats: `decimal('12.40')`.
 
 Resources: `tenant.get`, `branches.list`, `billingBooks.list`, `vat.search`/`exemptions`,
-`invoices.getStatus`/`get`/`list`/`iterate`/`create`/`requestPdf`. Invoice creation supports a
-strict subset of thirteen invoice types (goods 1.1 and 11.1, services 2.1, 2.2, 2.3 and 11.2,
-credits 5.1, 5.2 and 11.4, delivery notes 9.2 and 9.3, quantity receipt notes 10.1 and 10.2);
-unsupported types and fields fail before any network access. The full operation and field matrix is in the
+`invoices.getStatus`/`get`/`list`/`iterate`/`create`/`requestPdf`. Invoice creation supports 28
+of the provider's 52 invoice types, each in a request shape the provider was observed to
+accept; the list is in [docs/invoice-capabilities.md](docs/invoice-capabilities.md).
+Unsupported types and fields fail before any network access. The full operation and field matrix is in the
 [API reference](docs/api-reference.md).
 
 ## Creating invoices: the ambiguity contract

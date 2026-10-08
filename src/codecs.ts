@@ -312,7 +312,6 @@ const lineSchema = z
     other_taxes_percent_category: profileLineFields.other_taxes_percent_category.optional(),
     invoice_detail_type: profileLineFields.invoice_detail_type.optional(),
   })
-  .refine((v) => v.vat_rate !== 0 || v.vat_exemption_code !== undefined)
   // The array replaces the scalar pair. Both forms may be sent: the provider documents that
   // the array then overrides, so nothing is merged or dropped here.
   .refine(
@@ -351,14 +350,18 @@ export const createSchema = z
     billing_book_id: identifier,
     invoice_type_code: z.enum(supportedInvoiceTypeCodes),
     payment_method_type: z.number().int().min(0).max(7),
-    counterpart: z.strictObject({
-      ...counterpartFields,
-      // A request field only: the shared fields above also shape the counterpart that reads
-      // return, and no returned supply account is claimed. The provider documents that it
-      // ignores this on an invoice that is not a fuel invoice, so it is sent as given either
-      // way and never required.
-      supply_account_no: nonempty.optional(),
-    }),
+    counterpart: z
+      .strictObject({
+        ...counterpartFields,
+        // A request field only: the shared fields above also shape the counterpart that reads
+        // return, and no returned supply account is claimed. The provider documents that it
+        // ignores this on an invoice that is not a fuel invoice, so it is sent as given either
+        // way and never required.
+        supply_account_no: nonempty.optional(),
+      })
+      .optional(),
+    catering_table_id: identifier.optional(),
+    catering_table_name: nonempty.optional(),
     net_total_amount: inputAmount,
     vat_total_amount: inputAmount,
     total_amount: inputAmount,
@@ -407,9 +410,12 @@ export const createSchema = z
   })
   .refine((v) => (v.currency === undefined) === (v.exchange_rate === undefined))
   // Per-profile refinement, kept apart from the field validation above: a business profile
-  // needs the counterpart's identity and address, a retail one only its name.
+  // needs the counterpart's identity and address, a retail one only its name, and a few types
+  // need no counterpart at all.
   .refine((v) => {
-    if (typeProfile(v.invoice_type_code).counterpart === 'name-only') return true;
+    const rule = typeProfile(v.invoice_type_code).counterpart;
+    if (v.counterpart === undefined) return rule === 'optional';
+    if (rule !== 'business-identity') return true;
     const { country_code, vat, city, street, number, postal_code } = v.counterpart;
     return [country_code, vat, city, street, number, postal_code].every(
       (field) => field !== undefined && field.length > 0,
@@ -449,10 +455,46 @@ export const createSchema = z
   )
   // The flag and the detail are sent together or not at all.
   .refine((v) => (v.is_delivery_note === true) === (v.delivery_detail !== undefined))
+  // A zero rate needs its exemption code, except on a type the authority allows no code on.
+  .refine((v) => {
+    const { noVat } = typeProfile(v.invoice_type_code).rules;
+    return v.invoice_lines.every((l) =>
+      noVat === 'plain'
+        ? l.vat_rate === 0 && l.vat_exemption_code === undefined
+        : (noVat !== 'exempt' || l.vat_rate === 0) &&
+          (l.vat_rate !== 0 || l.vat_exemption_code !== undefined),
+    );
+  })
   // The rules of particular invoice types. See TypeRules.
   .refine((v) => {
     const { rules } = typeProfile(v.invoice_type_code);
     const marked = v.correlated_invoices !== undefined && v.correlated_invoices.length > 0;
+    if (rules.expenseLines === true && !v.invoice_lines.every((l) => l.expense === true))
+      return false;
+    if (
+      rules.accommodationTax === true &&
+      !(
+        v.other_taxes_amount !== undefined &&
+        isZero(v.net_total_amount) &&
+        isZero(v.vat_total_amount) &&
+        v.invoice_lines.every(
+          (l) =>
+            l.other_taxes_amount !== undefined &&
+            l.accommodation_tax !== undefined &&
+            l.other_taxes_percent_category !== undefined &&
+            isZero(l.net_total_price) &&
+            l.vat_rate === 24 &&
+            isZero(l.vat_total) &&
+            isZero(l.subtotal),
+        )
+      )
+    )
+      return false;
+    const table = v.catering_table_id !== undefined;
+    const newTable = v.catering_table_name !== undefined;
+    if (rules.cateringTable === undefined && (table || newTable)) return false;
+    if (rules.cateringTable === 'order-note' && table && newTable) return false;
+    if (rules.cateringTable === 'closing-receipt' && (newTable || (table && !marked))) return false;
     if (rules.correlatedInvoices === true && !marked) return false;
     if (rules.deliveryNote === true && v.is_delivery_note !== true) return false;
     if (rules.receivingNote !== undefined && v.is_delivery_note === true) return false;

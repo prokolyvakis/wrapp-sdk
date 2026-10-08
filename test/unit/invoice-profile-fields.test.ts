@@ -93,17 +93,14 @@ describe('line field of invoice type 1.5', () => {
   });
 });
 
-describe('profile-bound line fields stay closed', () => {
+describe('profile-bound line fields', () => {
   const valid = {
     other_taxes_amount: decimal('1.50'),
     accommodation_tax: decimal('1.50'),
     other_taxes_percent_category: '7',
     invoice_detail_type: 1,
   };
-  it('should bind each field to invoice types the catalogue knows and create() does not issue', () => {
-    expect(Object.keys(profileLineFieldTypes).sort()).toEqual(
-      Object.keys(profileLineFields).sort(),
-    );
+  it('should bind each field to one invoice type: the three tax fields to 8.2, which is issued, and the detail type to 1.5, which is not', () => {
     expect(profileLineFieldTypes).toEqual({
       other_taxes_amount: ['8.2'],
       accommodation_tax: ['8.2'],
@@ -111,16 +108,14 @@ describe('profile-bound line fields stay closed', () => {
       invoice_detail_type: ['1.5'],
     });
     const supported: readonly string[] = supportedInvoiceTypeCodes;
-    for (const code of Object.values(profileLineFieldTypes).flat()) {
-      const entry = invoiceTypeCatalogue.find((row) => row.code === code);
-      expect(entry?.supported).toBe(false);
-      expect(supported).not.toContain(code);
-    }
+    expect(supported).toContain('8.2');
+    expect(supported).not.toContain('1.5');
+    expect(invoiceTypeCatalogue.find((row) => row.code === '1.5')?.supported).toBe(false);
   });
   it.each(
-    supportedInvoiceTypeCodes.flatMap((code) =>
-      Object.entries(valid).map(([key, value]) => [code, key, value] as const),
-    ),
+    supportedInvoiceTypeCodes
+      .filter((code) => code !== '8.2')
+      .flatMap((code) => Object.entries(valid).map(([key, value]) => [code, key, value] as const)),
   )('should refuse invoice type %s carrying %s before authentication', async (code, key, value) => {
     const { client, calls } = provider(({ url }) =>
       url.pathname.endsWith('/login') ? login() : json(observation()),
@@ -136,11 +131,18 @@ describe('profile-bound line fields stay closed', () => {
     });
     expect(calls).toHaveLength(2);
   });
-  it.each(['8.2', '1.5'])(
-    'should still refuse invoice type %s itself: a prepared field does not open a profile',
-    async (code) => {
-      await refusedByCreate({}, { invoice_type_code: code });
-      await refusedByCreate(valid, { invoice_type_code: code });
-    },
-  );
+  it('should still refuse invoice type 1.5 itself, and its line field on 8.2', async () => {
+    await refusedByCreate({}, { invoice_type_code: '1.5' });
+    await refusedByCreate(valid, { invoice_type_code: '1.5' });
+    const { client, calls } = provider(({ url }) =>
+      url.pathname.endsWith('/login') ? login() : json(observation()),
+    );
+    const base = invoiceOfType('8.2');
+    const [first] = base.invoice_lines;
+    const withDetail: unknown = { ...base, invoice_lines: [{ ...first, invoice_detail_type: 1 }] };
+    await expect(client.invoices.create(withDetail as CreateInvoiceInput)).rejects.toMatchObject({
+      code: 'INVALID_INPUT',
+    });
+    expect(calls).toHaveLength(0);
+  });
 });

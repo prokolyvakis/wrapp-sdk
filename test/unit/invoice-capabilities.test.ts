@@ -29,20 +29,34 @@ const reference = [
   ...['17.1', '17.2', '17.3', '17.4', '17.5', '17.6'],
 ];
 const accepted = [
-  '1.1',
-  '2.1',
-  '2.2',
-  '2.3',
-  '5.1',
-  '5.2',
-  '9.2',
-  '9.3',
-  '10.1',
-  '10.2',
-  '11.1',
-  '11.2',
-  '11.4',
+  ...(['1.1', '1.2', '1.3', '1.4', '1.6'] as const),
+  ...(['2.1', '2.2', '2.3', '2.4'] as const),
+  ...(['3.1', '3.2', '5.1', '5.2', '6.1', '6.2', '7.1'] as const),
+  ...(['8.1', '8.2', '8.6'] as const),
+  ...(['9.2', '9.3', '10.1', '10.2'] as const),
+  ...(['11.1', '11.2', '11.3', '11.4', '11.5'] as const),
 ] as const;
+// The counterpart rule of each accepted code, written out independently of the catalogue.
+const counterpartOf: Record<(typeof accepted)[number], string> = {
+  ...Object.fromEntries(accepted.map((code) => [code, 'business-identity'])),
+  ...Object.fromEntries(['11.1', '11.2', '11.3', '11.4'].map((code) => [code, 'name-only'])),
+  ...Object.fromEntries(['6.1', '6.2', '8.6'].map((code) => [code, 'optional'])),
+} as Record<(typeof accepted)[number], string>;
+const rulesOf: Partial<Record<(typeof accepted)[number], TypeRules>> = {
+  '1.6': { correlatedInvoices: true },
+  '2.4': { correlatedInvoices: true },
+  '3.1': { expenseLines: true, noVat: 'exempt' },
+  '3.2': { expenseLines: true, noVat: 'exempt' },
+  '5.1': { correlatedInvoices: true },
+  '8.1': { noVat: 'plain' },
+  '8.2': { accommodationTax: true },
+  '8.6': { cateringTable: 'order-note' },
+  '9.2': { zeroTotals: true, zeroValueLines: true, deliveryNote: true },
+  '9.3': { zeroTotals: true, zeroValueLines: true, deliveryNote: true },
+  '10.1': { zeroTotals: true, zeroValueLines: true, receivingNote: 'correlated' },
+  '10.2': { zeroTotals: true, zeroValueLines: true, receivingNote: 'uncorrelated' },
+  '11.1': { cateringTable: 'closing-receipt' },
+};
 const page = readFileSync(
   fileURLToPath(new URL('../../docs/invoice-capabilities.md', import.meta.url)),
   'utf8',
@@ -59,18 +73,29 @@ const explanation = {
   'business-identity':
     'Counterpart name, country code, VAT number, city, street, number and postal code required',
   'name-only': 'Counterpart name required; the other counterpart fields optional',
-  'catering-profile':
-    'The reference shows catering examples that conflict with its general field rules; open provider question',
-  'partly-documented':
-    'The reference gives some rule or an example specific to this type, but not its complete profile',
-  'listed-only':
-    'The reference lists the code without any type-specific rule; open provider question',
+  optional: 'Counterpart optional; its name required when one is sent',
+  'own-fields': 'The type has request fields of its own that this SDK does not send yet',
+  'no-accepted-shape': 'No request shape was found that the provider and the tax authority accept',
+  'other-party-issuer':
+    'A document whose issuer is the other party; the tax authority refuses it from the tenant through the provider',
 } as const;
 // The sentence for each type rule, in the order the page lists them.
 function rulesText(rules: TypeRules | undefined): string {
   if (rules === undefined) return '';
   return [
-    rules.correlatedInvoices === true ? 'the mark of the credited invoice required' : undefined,
+    rules.correlatedInvoices === true ? 'the mark of the related invoice required' : undefined,
+    rules.expenseLines === true ? 'every line marked as an expense' : undefined,
+    rules.noVat === 'exempt' ? 'every line at VAT rate 0 with an exemption code' : undefined,
+    rules.noVat === 'plain' ? 'every line at VAT rate 0 without an exemption code' : undefined,
+    rules.accommodationTax === true
+      ? 'the other-taxes total and, on every line, the accommodation tax, its category and amount required; net and VAT amounts zero, lines zero-valued at VAT rate 24'
+      : undefined,
+    rules.cateringTable === 'order-note'
+      ? 'catering table id or new table name optional, not both'
+      : undefined,
+    rules.cateringTable === 'closing-receipt'
+      ? 'a catering table id accepted with the marks of the order notes it closes'
+      : undefined,
     rules.deliveryNote === true ? 'delivery flag and delivery detail required' : undefined,
     rules.receivingNote === 'correlated'
       ? 'receiving note purpose and the mark of the received delivery note required'
@@ -95,63 +120,32 @@ describe('invoice type catalogue', () => {
     expect(invoiceTypeCatalogue.map((entry) => entry.code)).toEqual(reference);
     expect(Object.isFrozen(invoiceTypeCatalogue)).toBe(true);
   });
-  it('should claim only the thirteen evidenced profiles and give every other code a reason', () => {
+  it('should claim only the 28 evidenced profiles and give every other code a reason', () => {
     const claimed = invoiceTypeCatalogue.filter((entry) => entry.supported);
     expect(claimed.map((entry) => entry.code)).toEqual(accepted);
     expect([...supportedInvoiceTypeCodes]).toEqual(accepted);
-    expect(claimed).toEqual([
-      { code: '1.1', supported: true, counterpart: 'business-identity' },
-      { code: '2.1', supported: true, counterpart: 'business-identity' },
-      { code: '2.2', supported: true, counterpart: 'business-identity' },
-      { code: '2.3', supported: true, counterpart: 'business-identity' },
-      {
-        code: '5.1',
+    expect(claimed).toEqual(
+      accepted.map((code) => ({
+        code,
         supported: true,
-        counterpart: 'business-identity',
-        rules: { correlatedInvoices: true },
-      },
-      { code: '5.2', supported: true, counterpart: 'business-identity' },
-      {
-        code: '9.2',
-        supported: true,
-        counterpart: 'business-identity',
-        rules: { zeroTotals: true, zeroValueLines: true, deliveryNote: true },
-      },
-      {
-        code: '9.3',
-        supported: true,
-        counterpart: 'business-identity',
-        rules: { zeroTotals: true, zeroValueLines: true, deliveryNote: true },
-      },
-      {
-        code: '10.1',
-        supported: true,
-        counterpart: 'business-identity',
-        rules: { zeroTotals: true, zeroValueLines: true, receivingNote: 'correlated' },
-      },
-      {
-        code: '10.2',
-        supported: true,
-        counterpart: 'business-identity',
-        rules: { zeroTotals: true, zeroValueLines: true, receivingNote: 'uncorrelated' },
-      },
-      { code: '11.1', supported: true, counterpart: 'name-only' },
-      { code: '11.2', supported: true, counterpart: 'name-only' },
-      { code: '11.4', supported: true, counterpart: 'name-only' },
-    ]);
+        counterpart: counterpartOf[code],
+        ...(rulesOf[code] === undefined ? {} : { rules: rulesOf[code] }),
+      })),
+    );
     const reasons = new Map<string, string[]>();
     for (const entry of invoiceTypeCatalogue)
       if (!entry.supported)
         reasons.set(entry.reason, [...(reasons.get(entry.reason) ?? []), entry.code]);
-    const explained = ['1.5', '8.2', '8.4', '8.5', '8.6'];
     expect(Object.fromEntries(reasons)).toEqual({
-      'partly-documented': ['1.5', '8.2', '8.4', '8.5'],
-      'catering-profile': ['8.6'],
-      'listed-only': reference.filter(
-        (code) => ![...accepted, ...explained].some((known) => known === code),
-      ),
+      'no-accepted-shape': ['1.5', '17.1', '17.2', '17.3', '17.4', '17.5', '17.6'],
+      'own-fields': ['8.4', '8.5'],
+      'other-party-issuer': [
+        ...['13.1', '13.2', '13.3', '13.4', '13.30', '13.31'],
+        ...['14.1', '14.2', '14.3', '14.4', '14.5', '14.30', '14.31'],
+        ...['15.1', '16.1'],
+      ],
     });
-    expect(reasons.get('listed-only')).toHaveLength(34);
+    expect([...reasons.values()].flat()).toHaveLength(24);
   });
   it('should publish the same 52 rows, statuses and explanations in the capabilities page', () => {
     expect([...documented.keys()]).toEqual(reference);
@@ -200,7 +194,7 @@ describe('invoice type acceptance', () => {
       });
       refused.push(code);
     }
-    expect(refused).toHaveLength(39);
+    expect(refused).toHaveLength(24);
     expect(calls).toHaveLength(0);
   });
   it.each([2.1, 11.2, '2.10', '02.1', ' 2.1', '2.1 ', 'II', '', null, undefined, ['2.1']])(
@@ -214,16 +208,33 @@ describe('invoice type acceptance', () => {
       expect(calls).toHaveLength(0);
     },
   );
-  it('should apply the name-only counterpart rule to the retail types and the full rule to the rest', async () => {
+  it('should accept a name-only counterpart where the rule allows one and refuse it elsewhere', async () => {
     for (const code of accepted) {
       const nameOnly = { ...invoiceOfType(code), counterpart: { name: 'Synthetic' } };
       const { client, calls } = issuing();
-      if (['11.1', '11.2', '11.4'].includes(code)) {
+      if (counterpartOf[code] !== 'business-identity') {
         expect((await client.invoices.create(nameOnly)).kind).toBe('observed');
         expect(calls).toHaveLength(2);
       } else {
         await expect(client.invoices.create(nameOnly)).rejects.toMatchObject({
           code: 'INVALID_INPUT',
+        });
+        expect(calls).toHaveLength(0);
+      }
+    }
+  });
+  it('should accept an absent counterpart only where it is optional', async () => {
+    for (const code of accepted) {
+      const bare: Record<string, unknown> = { ...invoiceOfType(code) };
+      delete bare.counterpart;
+      const { client, calls } = issuing();
+      if (counterpartOf[code] === 'optional') {
+        expect((await client.invoices.create(bare as never)).kind).toBe('observed');
+        expect(calls[1]?.init.body).not.toContain('counterpart');
+      } else {
+        await expect(client.invoices.create(bare as never)).rejects.toMatchObject({
+          code: 'INVALID_INPUT',
+          effect: 'not-sent',
         });
         expect(calls).toHaveLength(0);
       }

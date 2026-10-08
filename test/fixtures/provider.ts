@@ -185,10 +185,56 @@ export function invoice(): CreateInvoiceInput {
  */
 export function invoiceOfType(code: CreateInvoiceInput['invoice_type_code']): CreateInvoiceInput {
   const base = { ...invoice(), invoice_type_code: code };
-  if (code === '5.1') return { ...base, correlated_invoices: ['400000000000001'] };
-  if (!['9.2', '9.3', '10.1', '10.2'].includes(code)) return base;
   const [first] = base.invoice_lines;
   if (first === undefined) throw new Error('The invoice fixture has no line');
+  if (['5.1', '1.6', '2.4'].includes(code))
+    return { ...base, correlated_invoices: ['400000000000001'] };
+  // Types that carry no VAT: 3.1 and 3.2 with an exemption code and expense lines, 8.1 with
+  // a rate of 0 and no exemption code.
+  if (['3.1', '3.2', '8.1'].includes(code))
+    return {
+      ...base,
+      vat_total_amount: decimal('0'),
+      total_amount: decimal('10.00'),
+      payable_total_amount: decimal('10.00'),
+      invoice_lines: [
+        {
+          ...first,
+          vat_rate: 0,
+          vat_total: decimal('0'),
+          subtotal: decimal('10'),
+          ...(code === '8.1' ? {} : { vat_exemption_code: 1, expense: true }),
+        },
+      ],
+    };
+  // The accommodation-tax receipt: no net and no VAT, the tax on the line and in the total.
+  if (code === '8.2')
+    return {
+      ...base,
+      net_total_amount: decimal('0'),
+      vat_total_amount: decimal('0'),
+      total_amount: decimal('1.50'),
+      payable_total_amount: decimal('1.50'),
+      other_taxes_amount: decimal('1.50'),
+      invoice_lines: [
+        {
+          ...first,
+          unit_price: decimal('0'),
+          net_total_price: decimal('0'),
+          vat_total: decimal('0'),
+          subtotal: decimal('0'),
+          accommodation_tax: decimal('1.50'),
+          other_taxes_percent_category: '7',
+          other_taxes_amount: decimal('1.50'),
+        },
+      ],
+    };
+  if (['6.1', '6.2', '8.6'].includes(code)) {
+    const bare: CreateInvoiceInput = { ...base };
+    delete (bare as { counterpart?: unknown }).counterpart;
+    return bare;
+  }
+  if (!['9.2', '9.3', '10.1', '10.2'].includes(code)) return base;
   const zero = {
     net_total_amount: decimal('0'),
     vat_total_amount: decimal('0'),

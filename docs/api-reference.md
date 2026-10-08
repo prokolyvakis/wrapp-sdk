@@ -69,8 +69,9 @@ implementations.
 ## Input fields
 
 Create uses provider snake_case keys to avoid a second field vocabulary. Required:
-external_id, billing_book_id, invoice_type_code, payment_method_type, counterpart,
-net_total_amount, vat_total_amount, total_amount, payable_total_amount, invoice_lines.
+external_id, billing_book_id, invoice_type_code, payment_method_type, counterpart (except on
+types 6.1, 6.2 and 8.6), net_total_amount, vat_total_amount, total_amount,
+payable_total_amount, invoice_lines.
 Optional: branch, payment_details, notes, currency with exchange_rate, correlated_invoices,
 customer_emails, email_locale, email_subject, email_body, generate_pdf, mark_as_paid, num,
 self_pricing, special_invoice_category, and the invoice-level totals other_taxes_amount,
@@ -80,23 +81,23 @@ fuel_invoice, and the fourteen B2G fields described below. The counterpart also 
 optional supply_account_no, and a line an optional fuel_code and cpv_code. All other fields
 reject pre-I/O.
 
-Thirteen invoice types (1.1, 2.1, 2.2, 2.3, 5.1, 5.2, 9.2, 9.3, 10.1, 10.2, 11.1, 11.2, 11.4);
-the draft key (a draft is saved with invoices.drafts.create, which sets it), POS refunds and
+Twenty-eight invoice types are accepted (1.1, 1.2, 1.3, 1.4, 1.6, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 5.1, 5.2, 6.1, 6.2, 7.1, 8.1, 8.2, 8.6, 9.2, 9.3, 10.1, 10.2, 11.1, 11.2, 11.3, 11.4 and 11.5).
+Not supported: the draft key (a draft is saved with invoices.drafts.create, which sets it), POS refunds and
 preloaded POS transactions (refund_invoice_id, aade_preloaded, third_party_collection), the
-invoice-level tax mode (taxes_totals), and the line fields the provider defines for invoice
-types this SDK does not issue yet (other_taxes_amount, accommodation_tax and
-other_taxes_percent_category for type 8.2, invoice_detail_type for type 1.5) are not
-supported. All 52 provider type codes and the status of each are listed in
+invoice-level tax mode (taxes_totals), and invoice_detail_type, the line field of type 1.5,
+which is not issued. All 52
+provider type codes and the status of each are listed in
 [invoice-capabilities.md](invoice-capabilities.md). Counterpart: name required; country_code, vat, city, street, number, postal_code
-also required for every type except the retail ones (11.1, 11.2, 11.4), where they are
-optional. Email optional.
+also required for every type except 11.1, 11.2, 11.3 and 11.4, where they are optional, and
+6.1, 6.2 and 8.6, where the whole counterpart is optional (when one is sent, its name is
+required). Email optional.
 
 Each line: line_number, name, quantity, unit_price, net_total_price, vat_rate, vat_total and
 subtotal required, plus a classification (below); code, description, quantity_type,
 vat_exemption_code, withhold_tax_rate, withhold_tax_code, withholding_total,
 stamp_duty_tax_code, stamp_duty_amount, deductions, deductions_amount,
 expenses_vat_classification, expense, rec_type and fees_category optional. VAT-zero requires an
-exemption; the SDK invents no tax codes.
+exemption, except on type 8.1; the SDK invents no tax codes.
 
 General invoice and line fields, each sent exactly as given:
 
@@ -192,6 +193,35 @@ or the tax authority, or is the one shape in which the type was observed to be a
 
 - 5.1 (correlated credit invoice) requires correlated_invoices to hold the mark of the
   invoice it credits. 5.2 and 11.4 do not.
+- 1.6 and 2.4 (supplementary invoices) require correlated_invoices to hold the mark of the
+  invoice they supplement; the tax authority refuses either without one.
+- 3.1 and 3.2 (title deeds) require every line to carry expense: true and vat_rate 0, and
+  with it the exemption code of a zero-rate line. The authority refuses VAT on these types.
+- 8.1 (rent) requires every line to carry vat_rate 0 and no vat_exemption_code: the
+  authority refuses VAT on this type, and refuses an exemption code on it too.
+- 8.2 (accommodation-tax receipt) requires other_taxes_amount on the invoice and, on every
+  line, accommodation_tax, other_taxes_percent_category (one of '6' to '10', '17', '20' to
+  '30') and other_taxes_amount. These three line fields are refused on every other type. The
+  type was observed to be accepted with zero net and VAT amounts and zero-value lines at
+  vat_rate 24, the tax appearing only in those fields and in the totals, and it is sent only
+  so: net_total_amount and vat_total_amount must be zero, and every line must keep
+  net_total_price 0, vat_rate 24, vat_total 0 and subtotal 0. Another shape is unverified.
+- 6.1 and 6.2 (self-delivery and self-use records) and 8.6 (catering order note) take no
+  counterpart, a name alone, or a full one.
+- 8.6 takes at most one of catering_table_id (an open table) and catering_table_name (a
+  table the provider creates and opens for this order note). With neither, the provider opens
+  a table under a name of its own. The observed result carries catering_table_id either way.
+  The provider accepts both fields together and then uses the id; the SDK refuses the pair,
+  as the provider's reference tells callers to. Its examples use payment_method_type 0.
+- 11.1 takes catering_table_id together with correlated_invoices holding the marks of order
+  notes: this is the receipt that closes them. The table stays open; closing it is
+  cateringTables.close. An 11.1 with correlated_invoices and no table id is an ordinary
+  receipt, as it always was: the SDK does not know whether a mark belongs to an order note. Both catering fields are refused on every other type, and
+  catering_table_name on 11.1.
+- 1.2 and 1.3 take the full counterpart and no rule of their own: the SDK checks neither the
+  counterpart's country nor the VAT rate. They were observed to be accepted with a
+  counterpart in another EU country (1.2) or outside the EU (1.3) and zero-rate lines with
+  an exemption code. The provider keeps their billing books under type 1.1.
 - 9.2 and 9.3 (delivery notes) and 10.1 and 10.2 (quantity receipt notes) require
   net_total_amount, vat_total_amount, total_amount and payable_total_amount to be zero ('0',
   '0.0' and '0.00' are all zero), and every line to keep net_total_price 0, vat_rate 24,
@@ -439,6 +469,10 @@ provider id or by external reference: the provider answers with the status alone
 no record and nothing to compare the reference with.
 
 ## Catering tables and order notes
+
+An order note itself is issued with invoices.create as type 8.6, and settled by a retail
+receipt 11.1 that names its mark; both are described under "Invoice types with rules of
+their own". The operations below manage the tables and the open order notes.
 
 Tables, on `client.cateringTables`:
 
