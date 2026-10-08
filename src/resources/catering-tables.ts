@@ -113,8 +113,8 @@ export function cateringTableResource(runtime: Runtime): CateringTableResource {
       return runtime.run(
         'cateringTableTransfer',
         '/catering_tables/transfer?' + query.toString(),
-        // The provider's answer does not say which of the two tables it is, so no id is expected.
-        (value, report) => written(value, report, 'cateringTableTransfer'),
+        // The provider answers with the target table.
+        (value, report) => written(value, report, 'cateringTableTransfer', valid.target_table),
         opts,
       );
     },

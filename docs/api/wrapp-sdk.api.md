@@ -877,7 +877,7 @@ export interface InvoiceResource {
     create(invoice: CreateInvoiceInput, options?: RequestOptions): Promise<CreateOutcome>;
     readonly drafts: Readonly<{
         create(invoice: CreateDraftInput, options?: RequestOptions): Promise<DraftCreateOutcome>;
-        issue(invoiceId: string, input?: IssueDraftInput, options?: RequestOptions): Promise<DraftIssueOutcome>;
+        issue(reference: InvoiceReference, input?: IssueDraftInput, options?: RequestOptions): Promise<DraftIssueOutcome>;
         list(filters?: Readonly<{
             page?: number;
         }>, options?: RequestOptions): Promise<DraftInvoicePage>;
@@ -1159,10 +1159,8 @@ export type TenantIdentity = Readonly<{
 
 // @public
 export interface TransferCateringOrderNotesInput {
-    // (undocumented)
     readonly current_table: string;
     readonly marks?: readonly string[];
-    // (undocumented)
     readonly target_table: string;
 }
 

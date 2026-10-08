@@ -174,7 +174,8 @@ already call.
 - `invoices.cancelDeliveryNote(invoiceId)` — delivery notes only.
 - `invoices.setExternalId(invoiceId, { external_id })` — permanent reference assignment.
 - `invoices.markAsPaid(invoiceId)` — an effectful GET.
-- `invoices.drafts.create(invoice)`, `issue(invoiceId, input?)`, `list({ page? })`,
+- `invoices.drafts.create(invoice)`, `issue(reference, input?)` (the reference is the
+  `{ kind: 'invoiceId' | 'externalId', value }` object of `invoices.getStatus`), `list({ page? })`,
   `iterate({ page? }, { maxPages })` and `delete(invoiceId)` — draft invoices. A draft is
   saved through `drafts.create`; `invoices.create` still refuses a `draft` key.
 - `branches.create(input)` and `branches.update(branchId, patch)`.

@@ -88,15 +88,17 @@ observation profile follows the wire:
   on a 1.1. A request the authority refuses still appears to use up a number in the series.
 - `from_branch` and `to_branch` of a delivery detail are accepted as JSON integers holding a
   branch code and are read back as numbers; omitted, they are read back as null. A code that
-  matches no branch was not tried.
+  matches no branch of the tenant is accepted and returned as sent.
 - The billing-book number update is `PUT /billing_books/:id` with `number` alone in the
   body, answered with the book and its new number. The same request with a name instead of a
   number is refused and changes nothing; the route does not exist for POST.
 - `generate_pdf` reads `locale` from the query string. An unknown locale is answered with a
-  2xx errors list. Whether each locale has its own artifact was not observed.
+  2xx errors list. Each locale has its own artifact, and a request without a locale returns
+  the `el` one.
 - The catering transfer is a GET with `current_table`, `target_table` and `marks[]` in the
   query string, answered with a table in the detail shape; the route does not exist for
-  POST. Not observed: which of the two tables is returned, and a transfer without marks.
+  POST. The table returned is the target table. Without `marks[]` every open order note of
+  the current table moves. A table name in place of an id is answered with HTTP 422.
 - The catering table list applies its status and name filters only when they arrive in the
   body of the GET request, not in the query string.
 - A catering table created without a name is answered with HTTP 400; a created table is
@@ -107,11 +109,18 @@ observation profile follows the wire:
   `status: "draft"` alone, by provider id and by external reference.
 - A draft appears in `find_all_invoices?status=draft` and in the full-detail lookup in the
   full-detail shape, with `code`, `my_data_mark`, `my_data_uid` and `authentication_code` as
-  empty strings and `issued_at` present. One draft row was observed.
+  empty strings and `issued_at` present. Four draft rows were observed, all in that shape.
+  Drafts do not appear in the listing without a status.
 - `issue_draft` without a body, addressed by provider id, is answered with the issued
   observation plus one field the reference does not list. Issuing the same invoice again is
-  answered with HTTP 404. Not observed: a body with the documented fields, a pending answer,
-  and addressing by external reference.
+  answered with HTTP 404. A body with `email_locale` and `generate_pdf` is accepted, and so
+  is the draft's external reference in place of the id; the answer then carries the provider
+  id and echoes the reference. Not observed: the other four body fields and a pending answer.
+- A draft saved with `mark_as_paid` or `generate_pdf` is answered like any saved draft; what
+  either does when the draft is issued was not observed.
+- The SDK's own requests for the nine added invoice types, the draft operations, the
+  billing-book number update, the PDF locale and the catering transfer were each sent to the
+  provider and answered as the SDK expects.
 - After a draft was deleted, a new draft with the same external reference was accepted.
 
 ## Coverage inventory
@@ -152,22 +161,22 @@ this repository without confirming reuse rights. Use independently authored synt
 Items already settled by observed provider behavior have moved to the section above; the
 original numbering is retained for the remainder.
 
-| ID  | Uncertainty                                                                                                                                                      | Consequence / evidence required                                                                                                                   |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| V01 | Official maintained SDK or authoritative machine schema; redistribution rights                                                                                   | Confirm before maintaining generated/copied plumbing. No official TypeScript SDK was verified in the search, not proof none exists.               |
-| V02 | External-reference retention and concurrency (uniqueness and case scope are observed)                                                                            | Concurrent create/read-back experiments; same reference/different body; never infer matching payload from duplicate text.                         |
-| V03 | Visibility of pending/rejected objects (observed-create and saved-draft visibility are confirmed)                                                                | Missing read is not permission to issue under a new reference; test visibility delays and retained failures.                                      |
-| V04 | Rate limits and Retry-After (core statuses and envelopes are observed)                                                                                           | Capture redacted outcomes; do not infer limits from example headings.                                                                             |
-| V05 | Which rejection outcomes are final, whether later UI repair can issue                                                                                            | SDK exposes evidence, not terminality guesses. Mutation retry remains caller-owned.                                                               |
-| V06 | Webhook event IDs/timestamps/retries/order, key scope/rotation and unsigned Event-Type                                                                           | No SDK freshness or deduplication guarantee without evidence; integrate durable inbox and read-back externally.                                   |
-| V07 | Identifier size limits and remaining field nullability (amount precision is observed)                                                                            | Exact serialization and schema fixtures per field; never silently round or coerce.                                                                |
-| V08 | Approved PDF artifact origins, expiry and redirects; whether each locale has its own artifact (the locale parameter placement is observed)                       | Return links as data initially; downloading is outside v1.                                                                                        |
-| V09 | Pagination under concurrent writes and historical completeness (empty shape observed)                                                                            | No snapshot/export-completeness promise; callers use overlap and deduplication.                                                                   |
-| V11 | Version announcements, deprecation windows, server schema/version headers                                                                                        | Establish monitoring and contact; do not invent an API-version header.                                                                            |
-| V12 | Destructive/corrective endpoint semantics and console repair                                                                                                     | Separate gates before exposing management operations.                                                                                             |
-| V13 | Which stamp-duty total is required beside line stamp duty (stamp_duty_amount, total_stamp_duty_amount or both), and the code table for fees_category             | The SDK accepts both totals, requires neither, and sends any positive fees_category. Tighten only on a provider answer.                           |
-| V14 | Other shapes of types 9.2, 10.1 and 10.2 (a nonzero net, ordinary lines, delivery fields on a receipt note), and a name-only counterpart on 9.3                  | Not observed. The SDK sends these types only in the one shape observed to be accepted. Loosen only on evidence.                                   |
-| V15 | Other shapes of a draft row (a null or missing code, mark, uid or date) and of the saved-draft status text; issuing a draft by external reference or with a body | One draft row and one status text were observed. The SDK accepts those shapes only and addresses a draft by provider id. Loosen only on evidence. |
+| ID  | Uncertainty                                                                                                                                                                                        | Consequence / evidence required                                                                                                                              |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| V01 | Official maintained SDK or authoritative machine schema; redistribution rights                                                                                                                     | Confirm before maintaining generated/copied plumbing. No official TypeScript SDK was verified in the search, not proof none exists.                          |
+| V02 | External-reference retention and concurrency (uniqueness and case scope are observed)                                                                                                              | Concurrent create/read-back experiments; same reference/different body; never infer matching payload from duplicate text.                                    |
+| V03 | Visibility of pending/rejected objects (observed-create and saved-draft visibility are confirmed)                                                                                                  | Missing read is not permission to issue under a new reference; test visibility delays and retained failures.                                                 |
+| V04 | Rate limits and Retry-After (core statuses and envelopes are observed)                                                                                                                             | Capture redacted outcomes; do not infer limits from example headings.                                                                                        |
+| V05 | Which rejection outcomes are final, whether later UI repair can issue                                                                                                                              | SDK exposes evidence, not terminality guesses. Mutation retry remains caller-owned.                                                                          |
+| V06 | Webhook event IDs/timestamps/retries/order, key scope/rotation and unsigned Event-Type                                                                                                             | No SDK freshness or deduplication guarantee without evidence; integrate durable inbox and read-back externally.                                              |
+| V07 | Identifier size limits and remaining field nullability (amount precision is observed)                                                                                                              | Exact serialization and schema fixtures per field; never silently round or coerce.                                                                           |
+| V08 | Approved PDF artifact origins, expiry and redirects (the locale parameter and its separate artifacts are observed)                                                                                 | Return links as data initially; downloading is outside v1.                                                                                                   |
+| V09 | Pagination under concurrent writes and historical completeness (empty shape observed)                                                                                                              | No snapshot/export-completeness promise; callers use overlap and deduplication.                                                                              |
+| V11 | Version announcements, deprecation windows, server schema/version headers                                                                                                                          | Establish monitoring and contact; do not invent an API-version header.                                                                                       |
+| V12 | Destructive/corrective endpoint semantics and console repair                                                                                                                                       | Separate gates before exposing management operations.                                                                                                        |
+| V13 | Which stamp-duty total is required beside line stamp duty (stamp_duty_amount, total_stamp_duty_amount or both), and the code table for fees_category                                               | The SDK accepts both totals, requires neither, and sends any positive fees_category. Tighten only on a provider answer.                                      |
+| V14 | Other shapes of types 9.2, 10.1 and 10.2 (a nonzero net, ordinary lines, delivery fields on a receipt note), and a name-only counterpart on 9.3                                                    | Not observed. The SDK sends these types only in the one shape observed to be accepted. Loosen only on evidence.                                              |
+| V15 | Other shapes of a draft row (a null or missing code, mark, uid or date) and of the saved-draft status text; the four unobserved issue fields; what `mark_as_paid` and `generate_pdf` do to a draft | Four draft rows and one status text were observed. The SDK accepts those shapes only and refuses the two create options on a draft. Loosen only on evidence. |
 
 Every future verification record must identify SDK SHA, date, environment, operation, synthetic
 test identity, authorization, expected outcome, observed response and cleanup restrictions.

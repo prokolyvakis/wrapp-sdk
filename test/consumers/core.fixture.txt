@@ -151,7 +151,7 @@ assert.equal(String(draftDate) + String(draftPage.invoices[0] !== undefined && '
 const draftIds: string[] = [];
 for await (const draft of client.invoices.drafts.iterate({}, { maxPages: 1 })) draftIds.push(draft.id);
 assert.deepEqual(draftIds, ['draft']);
-const issuedDraft = await client.invoices.drafts.issue('draft', { customer_emails: ['customer@example.invalid'], email_locale: 'en', generate_pdf: true });
+const issuedDraft = await client.invoices.drafts.issue({ kind: 'invoiceId', value: 'draft' }, { customer_emails: ['customer@example.invalid'], email_locale: 'en', generate_pdf: true });
 assert.equal(issuedDraft.kind === 'observed' ? issuedDraft.invoice.num + issuedDraft.identity : issuedDraft.kind, '5exact');
 const forbiddenPath = '@prokolyvakis/wrapp-sdk/dist/client.js';
 await assert.rejects(import(forbiddenPath), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
@@ -274,7 +274,7 @@ if (false) {
   // @ts-expect-error A draft row has no document code.
   void draftPage.invoices[0]?.code;
   // @ts-expect-error Issuing a draft takes no payment method.
-  void client.invoices.drafts.issue('draft', { payment_method_type: 1 });
+  void client.invoices.drafts.issue({ kind: 'invoiceId', value: 'draft' }, { payment_method_type: 1 });
   // @ts-expect-error A draft status carries no invoice record.
   void draftStatus.invoice;
   // @ts-expect-error A delivery branch is a branch code, a number, not a branch id.

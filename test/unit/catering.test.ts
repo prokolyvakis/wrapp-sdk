@@ -465,6 +465,38 @@ describe('catering table shapes', () => {
   });
 });
 
+describe('cateringTables.list filters', () => {
+  // The provider reads its status and name filters only from the body of the GET request,
+  // which a fetch client cannot send, so none is offered and no body is ever sent in its place.
+  it.each([
+    { status: 'open' },
+    { name: 'table1' },
+    { status: 'open', name: 'table1' },
+    { status: 'reserved-by-a-future-version' },
+  ])('should refuse the filter %j before any request', async (filter) => {
+    const { client, calls } = answering(() => json([summary]));
+    expect(await failure(client.cateringTables.list(filter as never))).toMatchObject({
+      code: 'INVALID_INPUT',
+      operation: 'cateringTables',
+      effect: 'not-sent',
+    });
+    expect(calls).toHaveLength(0);
+  });
+  it('should send the unfiltered URL, with no query and no body', async () => {
+    const { client, calls } = answering(() => json([summary]));
+    await client.cateringTables.list();
+    const call = only(calls);
+    expect(call.url.href).toBe('https://staging.wrapp.ai/api/v1/catering_tables');
+    expect(call.init.body).toBeUndefined();
+  });
+  it('should return a listed status outside the documented four as data', async () => {
+    const { client } = answering(() =>
+      json([{ ...summary, status: 'reserved-by-a-future-version' }]),
+    );
+    expect((await client.cateringTables.list())[0]?.status).toBe('reserved-by-a-future-version');
+  });
+});
+
 describe('cateringTables.create and open inputs', () => {
   it('should refuse a table without a name before any request, since the provider refuses one', async () => {
     const { client, calls } = answering(() => json(table));

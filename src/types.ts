@@ -601,8 +601,9 @@ export interface IssueDraftInput {
   readonly generate_pdf?: boolean;
 }
 /**
- * Result of issuing a draft. 'observed' carries the issued invoice the provider returned for
- * the requested id; read its mark and transmission_failure before concluding anything.
+ * Result of issuing a draft. 'observed' carries the issued invoice the provider returned,
+ * with the identity evidence of a reference-addressed read; read its mark and
+ * transmission_failure before concluding anything.
  * 'pending' is the provider's pending answer, as on create. A rejection says the provider
  * refused, and leaves the draft's state to be read back.
  */

@@ -33,7 +33,9 @@ export type CateringTableOutcome =
   | Readonly<{ kind: 'rejected'; errorCount: number; rejectionSource: RejectionSource }>;
 /** Which order notes to move from one table to another. */
 export interface TransferCateringOrderNotesInput {
+  /** The id of the table the notes are on; a table name is not accepted here. */
   readonly current_table: string;
+  /** The id of the table the notes move to. */
   readonly target_table: string;
   /**
    * Registration marks of the order notes to move: 1 to 100. Omitted, the provider moves
@@ -69,8 +71,7 @@ export interface CateringTableResource {
   /**
    * Moves order notes from one table to another. A GET that changes provider state: it is
    * dispatched at most once and never retried, and a failure after dispatch has effect
-   * 'unknown'. 'observed' carries the table the provider returned, which can be either of
-   * the two; read both tables to see where the notes are.
+   * 'unknown'. 'observed' carries the target table as the provider returned it.
    */
   transfer(
     input: TransferCateringOrderNotesInput,

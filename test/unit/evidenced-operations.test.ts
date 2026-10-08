@@ -370,7 +370,7 @@ describe('cateringTables.transfer', () => {
     expect(only(calls).url.search).toBe('?current_table=table-one&target_table=table-two');
   });
   it('should encode each value once', async () => {
-    const { client, calls } = answering(() => json(table));
+    const { client, calls } = answering(() => json({ ...table, id: 'e_f' }));
     await transfer(client, {
       current_table: 'a+b&c=d',
       target_table: 'e f'.replace(' ', '_'),
@@ -403,14 +403,27 @@ describe('cateringTables.transfer', () => {
     });
     expect(calls).toHaveLength(0);
   });
-  it('should return the table the provider answers with, without claiming which of the two it is', async () => {
-    for (const id of ['table-one', 'table-two', 'table-three']) {
-      const { client } = answering(() => json({ ...table, id }));
-      const outcome = await transfer(client, input);
-      expect(outcome).toEqual({ kind: 'observed', table: { ...table, id, total: '4.5' } });
-      expect(Object.isFrozen(outcome)).toBe(true);
-    }
+  it('should return the target table, which is the one the provider answers with', async () => {
+    const { client } = answering(() => json(table));
+    const outcome = await transfer(client, input);
+    expect(outcome).toEqual({ kind: 'observed', table: { ...table, total: '4.5' } });
+    expect(Object.isFrozen(outcome)).toBe(true);
   });
+  it.each([
+    ['the current table', 'table-one'],
+    ['a third table', 'table-three'],
+  ])(
+    'should treat an answer for %s as a protocol error with unknown effect',
+    async (_label, id) => {
+      const { client, calls } = answering(() => json({ ...table, id }));
+      expect(await failure(transfer(client, input))).toMatchObject({
+        code: 'PROTOCOL_ERROR',
+        operation: 'cateringTableTransfer',
+        effect: 'unknown',
+      });
+      expect(dispatched(calls)).toHaveLength(1);
+    },
+  );
   it('should return an errors list as a rejected result and dispatch nothing else', async () => {
     const { client, calls } = answering(() => json(refusal));
     expect(await transfer(client, input)).toEqual(rejected);

@@ -283,8 +283,14 @@ describe('invoices.getStatus on a draft', () => {
 });
 
 describe('invoices.drafts.issue', () => {
+  // A bare value addresses the draft by provider id; an object is passed as the reference.
   const issue = (client: WrappClient, id: unknown, input?: unknown, options?: RequestOptions) =>
-    client.invoices.drafts.issue(id as string, input as never, options);
+    client.invoices.drafts.issue(
+      (id !== null && typeof id === 'object' ? id : { kind: 'invoiceId', value: id }) as never,
+      input as never,
+      options,
+    );
+  const byReference = { kind: 'externalId', value: 'reference-one' } as const;
   // What the provider was observed to answer: the issued observation and one more field.
   const issued = () =>
     fullObservation({ id: 'draft-one', issued_at_datetime: '2026-09-21T10:00:00.000+03:00' });
@@ -370,6 +376,82 @@ describe('invoices.drafts.issue', () => {
       effect: 'not-sent',
     });
     expect(calls).toHaveLength(0);
+  });
+  it.each([null, undefined, 'draft-one', { kind: 'other', value: 'draft-one' }, { value: 'x' }])(
+    'should refuse the reference %j before any request',
+    async (reference) => {
+      const { client, calls } = answering(() => json(issued()));
+      expect(await failure(client.invoices.drafts.issue(reference as never))).toMatchObject({
+        code: 'INVALID_INPUT',
+        operation: 'issueDraft',
+        effect: 'not-sent',
+      });
+      expect(calls).toHaveLength(0);
+    },
+  );
+  it('should address a draft by its external reference on the same route', async () => {
+    const { client, calls } = answering(() => json(issued()));
+    const outcome = await issue(client, byReference);
+    expect(only(calls).url.pathname).toBe('/api/v1/invoices/reference-one/issue_draft');
+    expect(outcome).toMatchObject({ kind: 'observed', identity: 'exact' });
+  });
+  it.each([
+    ['in another ASCII case, as a case variant', 'REFERENCE-ONE', 'ascii-case-variant'],
+    ['exactly', 'reference-one', 'exact'],
+  ])('should report a reference echoed %s', async (_label, echoed, identity) => {
+    const { client } = answering(() => json(fullObservation({ id: 'p', external_id: echoed })));
+    expect(await issue(client, byReference)).toMatchObject({ kind: 'observed', identity });
+  });
+  it('should refuse an issued invoice that echoes another reference', async () => {
+    const { client } = answering(() => json(fullObservation({ external_id: 'another' })));
+    expect(await failure(issue(client, byReference))).toMatchObject({
+      code: 'PROTOCOL_ERROR',
+      operation: 'issueDraft',
+      effect: 'unknown',
+    });
+  });
+  it('should leave identity unavailable for a pending answer to a reference', async () => {
+    const { client } = answering(() => json(pending({ invoice_id: 'provider-id' })));
+    expect(await issue(client, byReference)).toEqual({
+      kind: 'pending',
+      invoiceId: 'provider-id',
+      referenceState: 'unknown',
+      identity: 'unavailable',
+    });
+  });
+  it('should percent-encode an external reference once', async () => {
+    const reference = { kind: 'externalId', value: 'a+b&c=d' } as const;
+    const { client, calls } = answering(() =>
+      json(fullObservation({ id: 'p', external_id: reference.value })),
+    );
+    expect(await issue(client, reference)).toMatchObject({ kind: 'observed', identity: 'exact' });
+    expect(only(calls).url.pathname).toBe('/api/v1/invoices/a%2Bb%26c%3Dd/issue_draft');
+  });
+  it.each([
+    ['exactly', 'reference-one', 'exact'],
+    ['in another ASCII case', 'Reference-One', 'ascii-case-variant'],
+  ])(
+    'should keep a pending answer with its evidence pending, the reference echoed %s',
+    async (_label, echoed, identity) => {
+      const { client } = answering(() =>
+        json(enrichedPending({ id: 'p', invoice_id: 'p', external_id: echoed })),
+      );
+      expect(await issue(client, byReference)).toMatchObject({
+        kind: 'pending',
+        invoiceId: 'p',
+        identity,
+        invoice: { my_data_mark: null },
+      });
+    },
+  );
+  it('should refuse a pending answer whose evidence echoes another reference', async () => {
+    const { client } = answering(() =>
+      json(enrichedPending({ id: 'p', invoice_id: 'p', external_id: 'another' })),
+    );
+    expect(await failure(issue(client, byReference))).toMatchObject({
+      code: 'PROTOCOL_ERROR',
+      effect: 'unknown',
+    });
   });
   it('should percent-encode the invoice id once', async () => {
     const { client, calls } = answering(() => json(fullObservation({ id: 'a+b&c=d' })));

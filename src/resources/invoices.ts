@@ -168,12 +168,13 @@ export interface InvoiceResource {
      */
     create(invoice: CreateDraftInput, options?: RequestOptions): Promise<DraftCreateOutcome>;
     /**
-     * Issues a draft, addressed by the provider's id. This is a fiscal creation. After a
-     * failure whose effect is 'unknown', read the status before deciding anything; the
-     * provider answers a second issue of the same draft with an HTTP error.
+     * Issues a draft, addressed by the provider's id or by its external reference. This is a
+     * fiscal creation. After a failure whose effect is 'unknown', read the status before
+     * deciding anything; the provider answers a second issue of the same draft with an HTTP
+     * error.
      */
     issue(
-      invoiceId: string,
+      reference: InvoiceReference,
       input?: IssueDraftInput,
       options?: RequestOptions,
     ): Promise<DraftIssueOutcome>;
@@ -565,8 +566,12 @@ export function invoiceResource(runtime: Runtime): InvoiceResource {
           encodeJson({ ...data, draft: true }),
         );
       },
-      issue: async (invoiceId: string, fields?: IssueDraftInput, opts?: RequestOptions) => {
-        const valid = input(identifier, invoiceId, 'issueDraft');
+      issue: async (
+        reference: InvoiceReference,
+        fields?: IssueDraftInput,
+        opts?: RequestOptions,
+      ) => {
+        const valid = input(referenceSchema, reference, 'issueDraft');
         const data = input(issueDraftSchema.optional(), fields, 'issueDraft');
         // The provider was observed to issue on a request without a body, so none is sent
         // when there is nothing to say.
@@ -576,10 +581,9 @@ export function invoiceResource(runtime: Runtime): InvoiceResource {
             : undefined;
         return runtime.run(
           'issueDraft',
-          '/invoices/' + encodeURIComponent(valid) + '/issue_draft',
+          '/invoices/' + encodeURIComponent(valid.value) + '/issue_draft',
           (value, report): DraftIssueOutcome =>
-            refused(value, report) ??
-            invoiceOutcome(value, { kind: 'invoiceId', value: valid }, 'issueDraft'),
+            refused(value, report) ?? invoiceOutcome(value, valid, 'issueDraft'),
           opts,
           body,
         );

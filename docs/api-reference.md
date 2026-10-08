@@ -171,8 +171,9 @@ Delivery notes:
   non_obligated_recipient, without_digital_transport_tracking, from_branch and to_branch.
 - from_branch and to_branch are branch codes, the `code` of a branch and not its id:
   nonnegative integers, each optional on its own and sent as a JSON integer as given. The SDK
-  checks no code against the tenant's branches and looks none up. An omitted code is not
-  sent, and the provider then records none.
+  checks no code against the tenant's branches and looks none up, and neither does the
+  provider: a code that no branch has was observed to be issued and returned as sent. An
+  omitted code is not sent, and the provider then records none.
 - purpose_of_movement is a string from '1' to '20' without '6', '15', '16', '17' and '18';
   '19' needs purpose_of_movement_custom_title. reverse_delivery_note: true needs
   reverse_delivery_note_purpose, 1 to 5. non_obligated_recipient and
@@ -359,13 +360,15 @@ provider, and each operation accepts only the answers named here. On `client.inv
   rejected. The provider's answer has the shape of a pending answer and is told apart by its
   exact status text alone, so any other 2xx answer (a pending status, an issued invoice,
   another wording) is a protocol error with effect unknown, never a saved draft.
-- issue(invoiceId, input?) issues a draft, addressed by the provider's id. input is optional:
-  pos_device_id, customer_emails (at most 100), email_locale (`el` or `en`), email_subject,
-  email_body and generate_pdf, each optional and sent as given, with placeholders and line
-  breaks untouched. It takes no payment method. Without any field no body is sent, which is
-  the request that was observed; a body with these fields follows the provider's reference and
-  was not observed. The result is observed with the issued invoice (its id must equal the
-  requested one; read my_data_mark and transmission_failure before concluding anything),
+- issue(reference, input?) issues a draft, addressed like a status lookup: by the provider's
+  id or by the draft's external reference. input is optional: pos_device_id, customer_emails
+  (at most 100), email_locale (`el` or `en`), email_subject, email_body and generate_pdf,
+  each optional and sent as given, with placeholders and line breaks untouched. It takes no
+  payment method. Without any field no body is sent. Observed on the provider: the request
+  without a body, a body with email_locale and generate_pdf, and both ways of addressing;
+  the other four fields and a pending answer follow its reference. The result is observed
+  with the issued invoice and its identity evidence (the returned id or reference must match
+  the request; read my_data_mark and transmission_failure before concluding anything),
   pending as on create, or rejected. An answer that is neither, such as a bare status, is a
   protocol error: nothing is assumed to be issued.
 - list({ page? }) returns one page of drafts and iterate({ page? }, { maxPages }) walks them
@@ -381,8 +384,8 @@ provider, and each operation accepts only the answers named here. On `client.inv
 
 create and issue are dispatched at most once and never retried, and nothing follows either:
 saving does not issue, and issuing reads nothing back. After a failure whose effect is
-unknown, read invoices.getStatus by the external reference before repeating a save, and by
-the provider id before repeating an issue. The provider was observed to answer the issue of an
+unknown, read invoices.getStatus by the same reference before repeating a save or an issue.
+invoices.get also returns a draft's record, with an empty code. The provider was observed to answer the issue of an
 invoice that is no longer a draft with HTTP 404, which arrives as an HTTP_ERROR with effect
 unknown like any other failure after dispatch.
 
@@ -408,17 +411,18 @@ Tables, on `client.cateringTables`:
   for an available table.
 - transfer({ current_table, target_table, marks? }) moves order notes from one table to
   another. marks holds the registration marks of the notes to move, 1 to 100 (the count is an
-  SDK bound). Without marks the provider's reference says every open order note of the
-  current table moves; that case was not observed. An empty list is refused, because a query
-  cannot tell it from an omitted one. The provider serves this as a GET with the input as
-  query parameters (`marks[]` once per mark); the SDK treats it as the write it is.
+  SDK bound). Without marks every open order note of the current table moves. An empty list
+  is refused, because a query cannot tell it from an omitted one. Both tables are addressed
+  by id; the provider does not resolve a table name here. The provider serves this as a GET
+  with the input as query parameters (`marks[]` once per mark); the SDK treats it as the
+  write it is.
 
 The six writes are dispatched at most once, never retried, and report effect unknown after a
 dispatched failure. create, update, open, close and transfer return observed with the table,
 or rejected; delete returns acknowledged or rejected. An answer for another table than the one
-addressed by id is a protocol error. transfer addresses two tables and the provider's answer
-does not say which one it returns, so its table is returned as it came: read both tables to
-see where the notes are. get refuses the id `transfer`, which names the transfer route.
+addressed by id is a protocol error. transfer returns the target table, and an answer for
+any other table is a protocol error. get refuses the id `transfer`, which names the transfer
+route.
 
 A table's status is data, returned verbatim. The provider documents available, open, closed
 and alert; another value is returned as received. The SDK never treats a status as a failure
@@ -687,8 +691,8 @@ SDK sends, never what it tolerates on a read.
   unknown acknowledgement semantics; unsigned prose is not queued/ready evidence.
 - requestPdf(invoiceId, { locale }) asks for the document in `el` or `en` through a `locale`
   query parameter, beside the common request options. Without a locale no query is sent and
-  the provider uses its default; another value is refused before any request. Whether the
-  two locales are separate artifacts is not established.
+  the provider uses its default, observed to be `el`; another value is refused before any
+  request. Each locale has its own artifact: the two links differ.
 - requestThermalPdf follows the same rules as requestPdf on its own route and operation name:
   one effectful GET, the same available, acknowledged and rejected outcomes, no download, no
   polling. It takes no locale.
