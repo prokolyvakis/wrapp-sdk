@@ -30,6 +30,11 @@ export const operations = Object.freeze({
   billingBookUpdateNumber: { method: 'PUT', effectful: true },
   clienteleCorrelateByMark: { method: 'POST', effectful: true },
   clienteleCorrelateByFim: { method: 'POST', effectful: true },
+  clientele: { method: 'GET', effectful: false },
+  clienteleCreate: { method: 'POST', effectful: true },
+  // The provider updates an entry with a POST on the entry's own route.
+  clienteleUpdate: { method: 'POST', effectful: true },
+  clienteleCancel: { method: 'POST', effectful: true },
   posDevices: { method: 'GET', effectful: false },
   posDeviceCreate: { method: 'POST', effectful: true },
   posDeviceDelete: { method: 'DELETE', effectful: true },

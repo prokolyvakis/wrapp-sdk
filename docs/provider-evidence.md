@@ -118,6 +118,15 @@ observation profile follows the wire:
   id and echoes the reference. Not observed: the other four body fields and a pending answer.
 - A draft saved with `mark_as_paid` or `generate_pdf` is answered like any saved draft; what
   either does when the draft is issued was not observed.
+- Digital clientele entries: a request with JSON booleans and numbers is accepted. An entry
+  is returned with JSON null for every unset field, real booleans, `amount` as a string and
+  two keys the reference does not list (`updated_iddcl`, `cancellation_id`); its status was
+  `pending`, `complete` after an update with `entry_completion: true`, and `cancelled` after
+  a cancellation. Date-only period dates are accepted and returned as sent; a creation time
+  sent with Z is returned in the provider's offset. Cancelling a complete entry is answered
+  with a notice and a `cancellation_id`; cancelling another, and a refused update, with a
+  non-2xx status. Not observed: the reference's text forms of these values, and the value of
+  `off_site_provided_service`.
 - The SDK's own requests for the nine added invoice types, the draft operations, the
   billing-book number update, the PDF locale and the catering transfer were each sent to the
   provider and answered as the SDK expects.
@@ -150,7 +159,8 @@ Implement incrementally, never advertise entire-API support from a small endpoin
 | Catering invoice (8.6) creation                                                                                                                                               | Blocked on provider questions                                                                     |
 | Digital clientele correlation by mark and by FIM                                                                                                                              | Core; shapes from documentation, unobserved                                                       |
 | Digital transport list/get/create/refresh/reject/confirm delivery/confirm return/transfer                                                                                     | Core; shapes from documentation, unobserved; my_data_response returned as opaque evidence         |
-| Digital clientele read/create/update/cancel, digital transport imports                                                                                                        | Blocked on provider questions                                                                     |
+| Digital clientele read/create/update/cancel                                                                                                                                   | Core; answers observed. The presence rules of create follow the documentation                     |
+| Digital transport imports                                                                                                                                                     | Blocked on provider questions                                                                     |
 
 Endpoint paths and parameter schemas must be transcribed and tested per implemented operation
 against the linked source. Do not copy the complete vendor document or sample payloads into

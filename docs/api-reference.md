@@ -34,6 +34,10 @@ grounded in documentation, what is observed behavior, and what remains an open q
 | billingBooks.updateNumber           | PUT /billing_books/:id                         | effectful      |
 | digitalClienteles.correlateByMark   | POST /digital_clienteles/:id/correlate_by_mark | effectful      |
 | digitalClienteles.correlateByFim    | POST /digital_clienteles/:id/correlate_by_fim  | effectful      |
+| digitalClienteles.get               | GET /digital_clienteles/:id                    | read           |
+| digitalClienteles.create            | POST /digital_clienteles                       | effectful      |
+| digitalClienteles.update            | POST /digital_clienteles/:id                   | effectful      |
+| digitalClienteles.cancel            | POST /digital_clienteles/:id/cancel            | effectful      |
 | posDevices.list                     | GET /pos_devices                               | read           |
 | posDevices.create                   | POST /pos_devices                              | effectful      |
 | posDevices.delete                   | DELETE /pos_devices/:id                        | effectful      |
@@ -293,7 +297,6 @@ removes the default from every other branch. A billing book's number is the coun
 are numbered from: the SDK sends the value given and neither allocates nor reconciles
 counters. And the provider stores some types under their family, so a book requested as 1.2
 can come back as 1.1; the returned type is kept as given and is not compared with the request.
-Updating a billing book's number is not available.
 
 ## Digital clientele correlations
 
@@ -313,7 +316,49 @@ these two operations as a single string, which counts as one issue. Neither the 
 the refusal is interpreted: a refusal saying a correlation already exists is still a
 rejection, not a finding that the correlation is in place.
 
-Reading, creating, updating and cancelling a digital clientele entry are not available.
+## Digital clientele entries
+
+The provider's reference shows an entry with every value as text (`"true"`, `"false"`, empty
+strings). The provider was observed to do otherwise, and the SDK follows the observation:
+requests carry JSON booleans, and an entry comes back with JSON null where nothing is set and
+real booleans. On `client.digitalClienteles`:
+
+- get(clienteleId) returns the entry: id, client_service_type and status, and 42 further
+  fields that are absent when the provider omits them and null when it has no value. Flags are
+  booleans; a flag that arrives as text fails the read and is never read as true or false.
+  amount is exact numeric text. status is returned verbatim (pending, complete and cancelled
+  were observed), as are codes, dates and timestamps. The entry's id must equal the one read.
+- create(input) creates an entry. client_service_type (`rental`, `parkingcarwash` or
+  `garage`), branch (text) and at least one of vehicle_registration_number and
+  foreign_vehicle_registration_number are required; both may be given. The reference's
+  presence rules are applied before any request: a foreign registration needs
+  vehicle_category and vehicle_factory; a rental needs vehicle_movement_purpose
+  (`vmp_rental`, `vmp_self_use` or `vmp_free_service`); continuous_service: true needs
+  from_agreed_period_date and to_agreed_period_date, ISO calendar dates; recurring_service:
+  true needs customer_vat_number and customer_country. A field the reference limits to one
+  context is refused outside it: mixed_service on anything but a parking entry; the pickup
+  flag and location on anything but a rental, and the location without the flag set;
+  creation_date_time (a timestamp with Z or an offset) without transmission_failure: true;
+  periodicity and periodicity_other without continuous_lease_service: true. Nothing is filled
+  in for the caller.
+- update(clienteleId, patch) sends only the fields given, at least one: entry_completion,
+  non_issue_invoice, amount (an exact decimal with at most 2 fraction digits),
+  is_diff_veh_return_location, vehicle_return_location (only with that flag set),
+  provided_service_category, provided_service_category_other (only with the category
+  `other`), invoice_kind, cooperating_vat_number, other_branch, reason_non_issue_type,
+  comments, invoice_counterparty and invoice_counterparty_country. Completing an entry is an
+  update with entry_completion: true. Rules that depend on the entry's service type are the
+  provider's to apply: the SDK never reads the entry to learn its type. The provider updates
+  with a POST on the entry's route. off_site_provided_service is not offered: the reference
+  gives it two incompatible value forms and neither was confirmed.
+- cancel(clienteleId) cancels an entry, with no body. The provider cancels a complete entry
+  only, and was observed to answer the cancellation of another with HTTP 404.
+
+create and update return observed with the entry, or rejected; cancel returns acknowledged
+with cancellationId, the id the provider returned beside its notice, or rejected. A refusal
+arrives as a list or as a single string, and neither is interpreted. The three writes are
+dispatched at most once and never retried, and report effect unknown after a dispatched
+failure, which includes the provider's HTTP 422 for a refused entry.
 
 ## POS devices and sessions
 

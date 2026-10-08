@@ -220,6 +220,16 @@ export interface CateringTableSummary {
 }
 
 // @public
+export type ClienteleCancellationOutcome = Readonly<{
+    kind: 'acknowledged';
+    cancellationId: string;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
 export type ClienteleCorrelationOutcome = Readonly<{
     kind: 'acknowledged';
 }> | Readonly<{
@@ -310,6 +320,50 @@ export interface CreateBranchInput {
     readonly postal_code: string;
     // (undocumented)
     readonly street_number: string;
+}
+
+// @public
+export interface CreateDigitalClienteleInput {
+    readonly branch: string;
+    // (undocumented)
+    readonly client_service_type: 'rental' | 'parkingcarwash' | 'garage';
+    // (undocumented)
+    readonly comments?: string;
+    // (undocumented)
+    readonly continuous_lease_service?: boolean;
+    // (undocumented)
+    readonly continuous_service?: boolean;
+    // (undocumented)
+    readonly correlated_dc_id?: string;
+    readonly creation_date_time?: string;
+    // (undocumented)
+    readonly customer_country?: string;
+    // (undocumented)
+    readonly customer_vat_number?: string;
+    // (undocumented)
+    readonly entity_vat_number?: string;
+    // (undocumented)
+    readonly foreign_vehicle_registration_number?: string;
+    // (undocumented)
+    readonly from_agreed_period_date?: CalendarDate;
+    readonly is_diff_veh_pickup_location?: boolean;
+    readonly mixed_service?: boolean;
+    readonly periodicity?: string;
+    readonly periodicity_other?: string;
+    // (undocumented)
+    readonly recurring_service?: boolean;
+    // (undocumented)
+    readonly to_agreed_period_date?: CalendarDate;
+    // (undocumented)
+    readonly transmission_failure?: boolean;
+    // (undocumented)
+    readonly vehicle_category?: string;
+    // (undocumented)
+    readonly vehicle_factory?: string;
+    readonly vehicle_movement_purpose?: 'vmp_rental' | 'vmp_self_use' | 'vmp_free_service';
+    readonly vehicle_pickup_location?: string;
+    // (undocumented)
+    readonly vehicle_registration_number?: string;
 }
 
 // @public (undocumented)
@@ -491,7 +545,110 @@ export interface DeliveryDetail {
 }
 
 // @public
+export interface DigitalClientele {
+    readonly amount?: string | null;
+    // (undocumented)
+    readonly branch?: string | null;
+    // (undocumented)
+    readonly cancellation_id?: string | null;
+    // (undocumented)
+    readonly client_service_type: string;
+    // (undocumented)
+    readonly comments?: string | null;
+    // (undocumented)
+    readonly completion_date_time?: string | null;
+    // (undocumented)
+    readonly continuous_lease_service?: boolean | null;
+    // (undocumented)
+    readonly continuous_service?: boolean | null;
+    // (undocumented)
+    readonly cooperating_vat_number?: string | null;
+    // (undocumented)
+    readonly correlated_dc_id?: string | null;
+    // (undocumented)
+    readonly creation_date_time?: string | null;
+    // (undocumented)
+    readonly customer_country?: string | null;
+    // (undocumented)
+    readonly customer_vat_number?: string | null;
+    // (undocumented)
+    readonly entity_vat_number?: string | null;
+    // (undocumented)
+    readonly entry_completion?: boolean | null;
+    // (undocumented)
+    readonly exit_date_time?: string | null;
+    // (undocumented)
+    readonly foreign_vehicle_registration_number?: string | null;
+    // (undocumented)
+    readonly from_agreed_period_date?: string | null;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly iddcl?: string | null;
+    // (undocumented)
+    readonly invoice_counterparty?: string | null;
+    // (undocumented)
+    readonly invoice_counterparty_country?: string | null;
+    // (undocumented)
+    readonly invoice_kind?: string | null;
+    // (undocumented)
+    readonly is_diff_veh_pickup_location?: boolean | null;
+    // (undocumented)
+    readonly is_diff_veh_return_location?: boolean | null;
+    // (undocumented)
+    readonly mixed_service?: boolean | null;
+    // (undocumented)
+    readonly non_issue_invoice?: boolean | null;
+    // (undocumented)
+    readonly off_site_provided_service?: string | null;
+    // (undocumented)
+    readonly other_branch?: string | null;
+    // (undocumented)
+    readonly periodicity?: string | null;
+    // (undocumented)
+    readonly periodicity_other?: string | null;
+    // (undocumented)
+    readonly provided_service_category?: string | null;
+    // (undocumented)
+    readonly provided_service_category_other?: string | null;
+    // (undocumented)
+    readonly reason_non_issue_type?: string | null;
+    // (undocumented)
+    readonly recurring_service?: boolean | null;
+    readonly status: string;
+    // (undocumented)
+    readonly to_agreed_period_date?: string | null;
+    // (undocumented)
+    readonly transmission_failure?: boolean | null;
+    // (undocumented)
+    readonly updated_iddcl?: string | null;
+    // (undocumented)
+    readonly vehicle_category?: string | null;
+    // (undocumented)
+    readonly vehicle_factory?: string | null;
+    // (undocumented)
+    readonly vehicle_movement_purpose?: string | null;
+    // (undocumented)
+    readonly vehicle_pickup_location?: string | null;
+    // (undocumented)
+    readonly vehicle_registration_number?: string | null;
+    // (undocumented)
+    readonly vehicle_return_location?: string | null;
+}
+
+// @public
+export type DigitalClienteleOutcome = Readonly<{
+    kind: 'observed';
+    clientele: DigitalClientele;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
 export interface DigitalClienteleResource {
+    cancel(clienteleId: string, options?: RequestOptions): Promise<ClienteleCancellationOutcome>;
     correlateByFim(clienteleId: string, input: Readonly<{
         correlate_fim_number: string;
         correlate_fim_aa: string;
@@ -499,6 +656,9 @@ export interface DigitalClienteleResource {
     correlateByMark(clienteleId: string, input: Readonly<{
         correlate_mark: string;
     }>, options?: RequestOptions): Promise<ClienteleCorrelationOutcome>;
+    create(input: CreateDigitalClienteleInput, options?: RequestOptions): Promise<DigitalClienteleOutcome>;
+    get(clienteleId: string, options?: RequestOptions): Promise<DigitalClientele>;
+    update(clienteleId: string, patch: UpdateDigitalClienteleInput, options?: RequestOptions): Promise<DigitalClienteleOutcome>;
 }
 
 // @public
@@ -1175,6 +1335,35 @@ export interface TransportLegInput {
 
 // @public
 export type UpdateBranchInput = Partial<CreateBranchInput>;
+
+// @public
+export interface UpdateDigitalClienteleInput {
+    readonly amount?: Decimal;
+    // (undocumented)
+    readonly comments?: string;
+    // (undocumented)
+    readonly cooperating_vat_number?: string;
+    // (undocumented)
+    readonly entry_completion?: boolean;
+    // (undocumented)
+    readonly invoice_counterparty?: string;
+    // (undocumented)
+    readonly invoice_counterparty_country?: string;
+    // (undocumented)
+    readonly invoice_kind?: 'retail_sales_receipt' | 'receipt' | 'invoice' | 'sales_invoice';
+    // (undocumented)
+    readonly is_diff_veh_return_location?: boolean;
+    // (undocumented)
+    readonly non_issue_invoice?: boolean;
+    // (undocumented)
+    readonly other_branch?: string;
+    // (undocumented)
+    readonly provided_service_category?: 'with_parts' | 'with_client_parts' | 'without_parts' | 'free_service' | 'other' | 'warranty_compensation' | 'by_price_list' | 'by_agreement' | 'self_use';
+    readonly provided_service_category_other?: string;
+    // (undocumented)
+    readonly reason_non_issue_type?: 'no_invoice_free_service' | 'no_invoice_self_use' | 'no_invoice_compensation';
+    readonly vehicle_return_location?: string;
+}
 
 // @public
 export interface VatDetails {

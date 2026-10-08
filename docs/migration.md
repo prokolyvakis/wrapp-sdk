@@ -180,8 +180,8 @@ already call.
   saved through `drafts.create`; `invoices.create` still refuses a `draft` key.
 - `branches.create(input)` and `branches.update(branchId, patch)`.
 - `billingBooks.create(input)` and `billingBooks.updateNumber(billingBookId, { number })`.
-- `digitalClienteles.correlateByMark` and `digitalClienteles.correlateByFim`, on a new
-  `client.digitalClienteles` resource.
+- `digitalClienteles.get`, `create`, `update`, `cancel`, `correlateByMark` and
+  `correlateByFim`, on a new `client.digitalClienteles` resource.
 - `posDevices.list()`, `posDevices.create(device)` and `posDevices.delete(deviceId)`, on a
   new `client.posDevices` resource.
 - `posSessions.abort(invoiceId)`, on a new `client.posSessions` resource.

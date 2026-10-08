@@ -21,6 +21,10 @@ const written: Record<string, unknown> = {
   'GET /api/v1/catering_tables/transfer': { id: 'other', status: 'open', name: 'table2', total: 4.5, invoices: ['note'], error_message: null },
   'POST /api/v1/digital_clienteles/entry/correlate_by_mark': { notice: 'Correlated' },
   'POST /api/v1/digital_clienteles/entry/correlate_by_fim': { errors: 'Refused' },
+  'POST /api/v1/digital_clienteles': { id: 'entry', iddcl: '100000000000001', client_service_type: 'parkingcarwash', status: 'pending', branch: '0', mixed_service: false, amount: null, entry_completion: null },
+  'GET /api/v1/digital_clienteles/entry': { id: 'entry', client_service_type: 'parkingcarwash', status: 'complete', amount: '1.0', entry_completion: true },
+  'POST /api/v1/digital_clienteles/entry': { id: 'entry', client_service_type: 'parkingcarwash', status: 'complete', amount: '12.50', entry_completion: true },
+  'POST /api/v1/digital_clienteles/entry/cancel': { notice: 'Cancelled successfully.', cancellation_id: '100000000000002' },
   'GET /api/v1/catering_tables': [{ id: 'table', status: 'open', name: 'table1', total: '140.0' }],
   'POST /api/v1/catering_tables': { id: 'table', status: 'available', name: 7, total: '0.0', invoices: [], error_message: null },
   'GET /api/v1/catering_tables/table': { id: 'table', status: 'alert', name: 'table1', total: '0.0', invoices: ['invoice'], error_message: 'Check' },
@@ -96,6 +100,15 @@ const englishPdf = await client.invoices.requestPdf('invoice', { locale: 'en', t
 assert.equal(englishPdf.kind === 'available' ? englishPdf.downloadUrl : englishPdf.kind, 'https://example.invalid/pdf');
 assert.equal((await client.digitalClienteles.correlateByMark('entry', { correlate_mark: '400000000000001' })).kind, 'acknowledged');
 const byFim = await client.digitalClienteles.correlateByFim('entry', { correlate_fim_number: 'ABC1', correlate_fim_aa: '1' });
+const parked = await client.digitalClienteles.create({ client_service_type: 'parkingcarwash', branch: '0', vehicle_registration_number: 'ABC1234', mixed_service: false });
+assert.equal(parked.kind === 'observed' ? parked.clientele.status + String(parked.clientele.mixed_service) + String(parked.clientele.amount) : parked.kind, 'pendingfalsenull');
+const completed = await client.digitalClienteles.update('entry', { entry_completion: true, amount: sdk.decimal('12.50'), provided_service_category: 'by_price_list', invoice_kind: 'retail_sales_receipt' });
+assert.equal(completed.kind === 'observed' ? completed.clientele.amount : completed.kind, '12.50');
+const shownEntry = await client.digitalClienteles.get('entry');
+const completion: boolean | null | undefined = shownEntry.entry_completion;
+assert.equal(shownEntry.status + String(completion) + String(shownEntry.comments), 'completetrueundefined');
+const cancelledEntry = await client.digitalClienteles.cancel('entry');
+assert.equal(cancelledEntry.kind === 'acknowledged' ? cancelledEntry.cancellationId : cancelledEntry.kind, '100000000000002');
 assert.equal(byFim.kind === 'rejected' ? byFim.errorCount : 0, 1);
 const merchantId: string | null | undefined = (await client.posDevices.list())[0]?.merchant_id;
 assert.equal(merchantId, null);
@@ -268,6 +281,10 @@ if (false) {
   // @ts-expect-error Type 8.6 is not issued through create.
   const unaccepted: CreateInvoiceInput['invoice_type_code'] = '8.6';
   void unaccepted;
+  // @ts-expect-error A clientele flag is a boolean, never text.
+  void client.digitalClienteles.create({ client_service_type: 'garage', branch: '0', recurring_service: 'true' });
+  // @ts-expect-error The off-site value of an update is not offered.
+  void client.digitalClienteles.update('entry', { off_site_provided_service: 'to_internal_location' });
   // @ts-expect-error A draft takes no generate_pdf: a PDF is asked for when it is issued.
   const draftWithPdf: CreateDraftInput = { ...draftInput, generate_pdf: true };
   void draftWithPdf;

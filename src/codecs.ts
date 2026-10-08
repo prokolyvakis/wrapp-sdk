@@ -73,7 +73,7 @@ const inputDecimal = z
   .transform((v) => new LosslessNumber(v));
 // Monetary totals stay at 2 fraction digits. Quantities and unit prices keep the full
 // precision: the provider was observed to accept and return more than 2 digits for both.
-const inputAmount = inputDecimal.refine((v) => /^\d+(\.\d{1,2})?$/.test(v.value));
+export const inputAmount = inputDecimal.refine((v) => /^\d+(\.\d{1,2})?$/.test(v.value));
 // The reference bounds the exchange rate at 2 fraction digits. Excess precision is refused,
 // never rounded.
 const inputExchangeRate = inputDecimal.refine((v) => /^\d+(\.\d{1,2})?$/.test(v.value));
@@ -93,7 +93,7 @@ const codeText = (count: number) =>
 // Caller-chosen integers the reference gives no table for. The bound is the exact-integer
 // range, not a claim about which values the provider accepts.
 const positiveInteger = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
-const isoDate = z.string().refine(isCalendarDate).transform(calendarDate);
+export const isoDate = z.string().refine(isCalendarDate).transform(calendarDate);
 const providerDate = z
   .string()
   .regex(/^\d{2}-\d{2}-\d{4}$/)

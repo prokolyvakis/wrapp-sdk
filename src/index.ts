@@ -21,8 +21,13 @@ export type {
   TransferCateringOrderNotesInput,
 } from './catering-types.js';
 export type {
+  ClienteleCancellationOutcome,
   ClienteleCorrelationOutcome,
+  CreateDigitalClienteleInput,
+  DigitalClientele,
+  DigitalClienteleOutcome,
   DigitalClienteleResource,
+  UpdateDigitalClienteleInput,
 } from './digital-clientele-types.js';
 export type {
   ConfirmDeliveryInput,
