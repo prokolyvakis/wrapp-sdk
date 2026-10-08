@@ -14,6 +14,52 @@ export const operations = Object.freeze({
   list: { method: 'GET', effectful: false },
   create: { method: 'POST', effectful: true },
   pdf: { method: 'GET', effectful: true },
+  thermalPdf: { method: 'GET', effectful: true },
+  issuedCount: { method: 'GET', effectful: false },
+  cancelDeliveryNote: { method: 'DELETE', effectful: true },
+  setExternalId: { method: 'PUT', effectful: true },
+  // A GET that changes provider state: classified by effect, never by verb.
+  markAsPaid: { method: 'GET', effectful: true },
+  deleteDraft: { method: 'DELETE', effectful: true },
+  createDraft: { method: 'POST', effectful: true },
+  issueDraft: { method: 'POST', effectful: true },
+  listDrafts: { method: 'GET', effectful: false },
+  branchCreate: { method: 'POST', effectful: true },
+  branchUpdate: { method: 'PUT', effectful: true },
+  billingBookCreate: { method: 'POST', effectful: true },
+  billingBookUpdateNumber: { method: 'PUT', effectful: true },
+  clienteleCorrelateByMark: { method: 'POST', effectful: true },
+  clienteleCorrelateByFim: { method: 'POST', effectful: true },
+  clientele: { method: 'GET', effectful: false },
+  clienteleCreate: { method: 'POST', effectful: true },
+  // The provider updates an entry with a POST on the entry's own route.
+  clienteleUpdate: { method: 'POST', effectful: true },
+  clienteleCancel: { method: 'POST', effectful: true },
+  posDevices: { method: 'GET', effectful: false },
+  posDeviceCreate: { method: 'POST', effectful: true },
+  posDeviceDelete: { method: 'DELETE', effectful: true },
+  posSessionAbort: { method: 'POST', effectful: true },
+  cateringTables: { method: 'GET', effectful: false },
+  cateringTable: { method: 'GET', effectful: false },
+  cateringTableCreate: { method: 'POST', effectful: true },
+  cateringTableUpdate: { method: 'PATCH', effectful: true },
+  cateringTableOpen: { method: 'POST', effectful: true },
+  cateringTableClose: { method: 'POST', effectful: true },
+  cateringTableDelete: { method: 'DELETE', effectful: true },
+  // A GET that moves order notes between tables.
+  cateringTableTransfer: { method: 'GET', effectful: true },
+  openCateringOrderNotes: { method: 'GET', effectful: false },
+  // Issues a cancelling 8.6 invoice: a fiscal creation, not a state update.
+  cancelCateringOrderNotes: { method: 'POST', effectful: true },
+  digitalTransports: { method: 'GET', effectful: false },
+  digitalTransport: { method: 'GET', effectful: false },
+  digitalTransportCreate: { method: 'POST', effectful: true },
+  // Re-fetches the status and updates the provider's record: not a read.
+  digitalTransportRefresh: { method: 'POST', effectful: true },
+  digitalTransportReject: { method: 'POST', effectful: true },
+  digitalTransportConfirmDelivery: { method: 'POST', effectful: true },
+  digitalTransportConfirmReturn: { method: 'POST', effectful: true },
+  digitalTransportTransfer: { method: 'POST', effectful: true },
 } as const);
 export type Operation = keyof typeof operations;
 export function scope(
@@ -70,12 +116,18 @@ export class Transport {
     private readonly fetcher: typeof globalThis.fetch,
     private readonly maxBytes: number,
   ) {}
+  /**
+   * `diagnose`, when given, receives the decoded JSON body of a non-2xx response together
+   * with the failure about to be thrown. It is optional detail: the HTTP failure, its status
+   * and its effect stay primary whatever reading that body does.
+   */
   async send(
     operation: Operation,
     path: string,
     signal: AbortSignal,
     token?: string,
     body?: string,
+    diagnose?: (failure: WrappError, value: unknown) => void,
   ): Promise<unknown> {
     assertActive(signal, operation, 'not-sent');
     const effect = operations[operation].effectful ? 'unknown' : 'not-sent';
@@ -93,41 +145,23 @@ export class Transport {
         ...(body === undefined ? {} : { body }),
       });
       response = await waitFor(pending, signal, operation, effect);
-      if (!response.ok)
-        throw new WrappError(
+      if (!response.ok) {
+        const failure = new WrappError(
           response.status === 401 ? 'AUTH_ERROR' : 'HTTP_ERROR',
           operation,
           effect,
           response.status,
         );
-      const contentType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
-      if (
-        contentType !== 'application/json' &&
-        !(contentType?.startsWith('application/') && contentType.endsWith('+json'))
-      ) {
-        throw new WrappError('PROTOCOL_ERROR', operation, effect);
-      }
-      const length = response.headers.get('content-length');
-      if (length !== null && (!/^\d+$/.test(length) || Number(length) > this.maxBytes)) {
-        throw new WrappError('RESPONSE_TOO_LARGE', operation, effect);
-      }
-      if (!response.body) throw new WrappError('PROTOCOL_ERROR', operation, effect);
-      const reader = response.body.getReader();
-      const chunks: Uint8Array[] = [];
-      let bytes = 0;
-      try {
-        for (;;) {
-          const chunk = await waitFor(reader.read(), signal, operation, effect);
-          if (chunk.done) break;
-          bytes += chunk.value.byteLength;
-          if (bytes > this.maxBytes) throw new WrappError('RESPONSE_TOO_LARGE', operation, effect);
-          chunks.push(chunk.value);
+        if (diagnose !== undefined) {
+          try {
+            diagnose(failure, await this.read(response, signal, operation, effect));
+          } catch {
+            // An unreadable, oversized, malformed or interrupted error body yields no detail.
+          }
         }
-      } finally {
-        void reader.cancel().catch(() => undefined);
-        reader.releaseLock();
+        throw failure;
       }
-      return parseJson(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
+      return await this.read(response, signal, operation, effect);
     } catch (error) {
       if (response?.body && !response.body.locked)
         void response.body.cancel().catch(() => undefined);
@@ -139,5 +173,41 @@ export class Transport {
         effect,
       );
     }
+  }
+  // Reads a JSON body under the caller's deadline and the byte cap, never unbounded.
+  private async read(
+    response: Response,
+    signal: AbortSignal,
+    operation: Operation,
+    effect: EffectCertainty,
+  ): Promise<unknown> {
+    const contentType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
+    if (
+      contentType !== 'application/json' &&
+      !(contentType?.startsWith('application/') && contentType.endsWith('+json'))
+    ) {
+      throw new WrappError('PROTOCOL_ERROR', operation, effect);
+    }
+    const length = response.headers.get('content-length');
+    if (length !== null && (!/^\d+$/.test(length) || Number(length) > this.maxBytes)) {
+      throw new WrappError('RESPONSE_TOO_LARGE', operation, effect);
+    }
+    if (!response.body) throw new WrappError('PROTOCOL_ERROR', operation, effect);
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    try {
+      for (;;) {
+        const chunk = await waitFor(reader.read(), signal, operation, effect);
+        if (chunk.done) break;
+        bytes += chunk.value.byteLength;
+        if (bytes > this.maxBytes) throw new WrappError('RESPONSE_TOO_LARGE', operation, effect);
+        chunks.push(chunk.value);
+      }
+    } finally {
+      void reader.cancel().catch(() => undefined);
+      reader.releaseLock();
+    }
+    return parseJson(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
   }
 }

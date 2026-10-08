@@ -53,6 +53,81 @@ export function details(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+/** The whole documented observation field set (reference v1.18.0), with synthetic values. */
+export function fullObservation(overrides: Record<string, unknown> = {}) {
+  return observation({
+    catering_table_id: null,
+    authentication_code: 'SYNTHETIC-AUTHENTICATION-CODE',
+    card_type: 'SYNTHETIC',
+    card_number: 'XXXX-XXXX-XXXX-0000',
+    transaction_id: 'transaction-one',
+    ...overrides,
+  });
+}
+/**
+ * The whole documented full-detail field set (reference v1.18.0), with synthetic values. It
+ * includes the fields whose populated shape is undocumented, in their documented empty form.
+ */
+export function fullDetails(overrides: Record<string, unknown> = {}) {
+  return details({
+    payment_method: 3,
+    branch: 0,
+    is_delivery_note: false,
+    fuel_invoice: false,
+    third_party_collection: false,
+    exchange_rate: 1,
+    other_taxes_amount: 0,
+    notes: '',
+    withholding_total_amount: 0,
+    total_stamp_duty_amount: 0,
+    invoice_lines: [
+      {
+        line_number: 1,
+        name: 'Synthetic service',
+        code: 'SKU-SYNTHETIC',
+        description: '',
+        quantity: 1,
+        quantity_type: 1,
+        unit_price: 10,
+        net_total_price: 10,
+        vat_rate: 24,
+        vat_total: 2.4,
+        subtotal: 12.4,
+        withhold_tax_rate: '',
+        withhold_tax_code: '',
+        withholding_total: 0,
+        classification_category: 'category1_3',
+        classification_type: 'E3_561_001',
+        stamp_duty_tax_code: '',
+        stamp_duty_amount: 0,
+        deductions_amount: 0,
+        deductions: [],
+      },
+    ],
+    ...overrides,
+  });
+}
+/** The documented minimal pending envelope: a status and the provider invoice id, nothing else. */
+export function pending(overrides: Record<string, unknown> = {}) {
+  return { status: 'pending', invoice_id: 'invoice-one', ...overrides };
+}
+/**
+ * The documented enriched pending envelope for transmission failure 2: the whole observation
+ * field set, with no MARK yet, plus the pending status and invoice id.
+ */
+export function enrichedPending(overrides: Record<string, unknown> = {}) {
+  return fullObservation({
+    my_data_mark: null,
+    authentication_code: null,
+    card_type: null,
+    card_number: null,
+    transaction_id: null,
+    transmission_failure: 2,
+    status: 'pending',
+    invoice_id: 'invoice-one',
+    ...overrides,
+  });
+}
 export function tenant(overrides: Record<string, unknown> = {}) {
   return {
     wrapp_user_id: 'tenant-test',
@@ -99,6 +174,111 @@ export function invoice(): CreateInvoiceInput {
         classification_type: 'E3_561_001',
       },
     ],
+  };
+}
+/**
+ * A minimal valid create input for each supported type, in the shape the provider was observed
+ * to accept for it (values are synthetic): the ordinary invoice for goods, service and credit
+ * types, with a correlated mark on 5.1; zero totals and a zero-value category3 line for 9.2,
+ * 9.3, 10.1 and 10.2, with a delivery detail on the first two and a receipt purpose and a
+ * received mark on the last two.
+ */
+export function invoiceOfType(code: CreateInvoiceInput['invoice_type_code']): CreateInvoiceInput {
+  const base = { ...invoice(), invoice_type_code: code };
+  const [first] = base.invoice_lines;
+  if (first === undefined) throw new Error('The invoice fixture has no line');
+  if (['5.1', '1.6', '2.4'].includes(code))
+    return { ...base, correlated_invoices: ['400000000000001'] };
+  // Types that carry no VAT: 3.1 and 3.2 with an exemption code and expense lines, 8.1 with
+  // a rate of 0 and no exemption code.
+  if (['3.1', '3.2', '8.1'].includes(code))
+    return {
+      ...base,
+      vat_total_amount: decimal('0'),
+      total_amount: decimal('10.00'),
+      payable_total_amount: decimal('10.00'),
+      invoice_lines: [
+        {
+          ...first,
+          vat_rate: 0,
+          vat_total: decimal('0'),
+          subtotal: decimal('10'),
+          ...(code === '8.1' ? {} : { vat_exemption_code: 1, expense: true }),
+        },
+      ],
+    };
+  // The accommodation-tax receipt: no net and no VAT, the tax on the line and in the total.
+  if (code === '8.2')
+    return {
+      ...base,
+      net_total_amount: decimal('0'),
+      vat_total_amount: decimal('0'),
+      total_amount: decimal('1.50'),
+      payable_total_amount: decimal('1.50'),
+      other_taxes_amount: decimal('1.50'),
+      invoice_lines: [
+        {
+          ...first,
+          unit_price: decimal('0'),
+          net_total_price: decimal('0'),
+          vat_total: decimal('0'),
+          subtotal: decimal('0'),
+          accommodation_tax: decimal('1.50'),
+          other_taxes_percent_category: '7',
+          other_taxes_amount: decimal('1.50'),
+        },
+      ],
+    };
+  if (['6.1', '6.2', '8.6'].includes(code)) {
+    const bare: CreateInvoiceInput = { ...base };
+    delete (bare as { counterpart?: unknown }).counterpart;
+    return bare;
+  }
+  if (!['9.2', '9.3', '10.1', '10.2'].includes(code)) return base;
+  const zero = {
+    net_total_amount: decimal('0'),
+    vat_total_amount: decimal('0'),
+    total_amount: decimal('0'),
+    payable_total_amount: decimal('0'),
+    invoice_lines: [
+      {
+        ...first,
+        unit_price: decimal('0'),
+        net_total_price: decimal('0'),
+        vat_rate: 24,
+        vat_total: decimal('0'),
+        subtotal: decimal('0'),
+        classification_category: 'category3',
+        classification_type: '_',
+      },
+    ],
+  };
+  if (code === '10.1' || code === '10.2')
+    return {
+      ...base,
+      ...zero,
+      receiving_note_purpose: 1,
+      correlated_invoices: ['400000000000001'],
+    };
+  return {
+    ...base,
+    ...zero,
+    is_delivery_note: true,
+    delivery_detail: {
+      dispatch_date: '21-03-2026',
+      dispatch_time: '02:30',
+      vehicle_number: 'ABC1234',
+      purpose_of_movement: '1',
+      issuer_of_movement: 'Synthetic Carrier',
+      from_address: 'Origin Street',
+      from_number: '10',
+      from_city: 'Origin City',
+      from_zipcode: '12345',
+      to_address: 'Destination Street',
+      to_number: '20',
+      to_city: 'Destination City',
+      to_zipcode: '54321',
+    },
   };
 }
 export function json(body: unknown, status = 200): Response {

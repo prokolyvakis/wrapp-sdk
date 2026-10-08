@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { gzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
-import { WrappClient } from '../../src/index.js';
+import { getProviderDiagnostics, WrappClient } from '../../src/index.js';
 import { credentials, invoice, json, login, observation, provider } from '../fixtures/provider.js';
 
 const closers: (() => Promise<void>)[] = [];
@@ -258,6 +258,86 @@ describe('HTTP transport', () => {
       code: 'TIMEOUT',
       effect: 'unknown',
     });
+  });
+  it('should read an error body only on request, and keep the HTTP status when that body stalls', async () => {
+    const server = await serve((req, res) => {
+      if (auth(req, res)) return;
+      res.writeHead(422, { 'content-type': 'application/json' });
+      res.write('{"errors":[{"title":"never finished');
+    });
+    // A long deadline: only reading the stalled body could make a call take this long.
+    const client = new WrappClient({
+      environment: 'staging',
+      credentials,
+      timeoutMs: 20_000,
+      advanced: { testBaseUrl: server.origin + '/api/v1' },
+    });
+    const refused = { code: 'HTTP_ERROR', operation: 'create', effect: 'unknown', httpStatus: 422 };
+    const creates = () => server.calls.filter((call) => call.url === '/api/v1/invoices').length;
+    // By default the body is not read, so a stalled one cannot hold the call open.
+    await expect(client.invoices.create(invoice())).rejects.toMatchObject(refused);
+    // With the opt-in the read is attempted: the call stays open while the body stalls.
+    const abort = new AbortController();
+    let settled = false;
+    const run = client.invoices
+      .create(invoice(), { diagnostics: 'provider-issues', signal: abort.signal })
+      .catch((reason: unknown) => reason)
+      .finally(() => {
+        settled = true;
+      });
+    while (creates() < 2) await new Promise((resolve) => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(settled).toBe(false);
+    // Ending the read changes nothing else: the HTTP failure stays the reported error.
+    abort.abort();
+    const error = await run;
+    expect(error).toMatchObject(refused);
+    expect(getProviderDiagnostics(error)).toBeUndefined();
+    expect(creates()).toBe(2);
+  });
+  it('should bound a stalled opt-in error body by the deadline without changing the failure', async () => {
+    const server = await serve((req, res) => {
+      if (auth(req, res)) return;
+      res.writeHead(500, { 'content-type': 'application/json' });
+      res.write('{"errors":[');
+    });
+    const client = new WrappClient({
+      environment: 'staging',
+      credentials,
+      timeoutMs: 200,
+      advanced: { testBaseUrl: server.origin + '/api/v1' },
+    });
+    const error: unknown = await client.invoices
+      .create(invoice(), { diagnostics: 'provider-issues' })
+      .catch((reason: unknown) => reason);
+    expect(error).toMatchObject({ code: 'HTTP_ERROR', effect: 'unknown', httpStatus: 500 });
+    expect(getProviderDiagnostics(error)).toBeUndefined();
+    expect(server.calls).toHaveLength(2);
+  });
+  it('should return opt-in diagnostics from a real HTTP error body', async () => {
+    const server = await serve((req, res) => {
+      if (auth(req, res)) return;
+      res.writeHead(422, { 'content-type': 'application/json; charset=utf-8' });
+      res.end(
+        JSON.stringify({ status: 'Invoice Errors', errors: [{ title: 'Synthetic refusal' }] }),
+      );
+    });
+    const client = new WrappClient({
+      environment: 'staging',
+      credentials,
+      advanced: { testBaseUrl: server.origin + '/api/v1' },
+    });
+    const error: unknown = await client.invoices
+      .create(invoice(), { diagnostics: 'provider-issues' })
+      .catch((reason: unknown) => reason);
+    expect(error).toMatchObject({ code: 'HTTP_ERROR', effect: 'unknown', httpStatus: 422 });
+    expect(getProviderDiagnostics(error)).toEqual({
+      providerStatus: 'Invoice Errors',
+      issues: [{ title: 'Synthetic refusal' }],
+      truncated: false,
+      sensitive: true,
+    });
+    expect(server.calls).toHaveLength(2);
   });
   it('should preserve a JSON error under HTTP success as a rejection', async () => {
     const { client } = provider(({ url }) =>

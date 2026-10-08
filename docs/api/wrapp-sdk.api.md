@@ -5,6 +5,15 @@
 ```ts
 
 // @public
+export type AcknowledgementOutcome = Readonly<{
+    kind: 'acknowledged';
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
 export interface BillingBook {
     // (undocumented)
     readonly id: string;
@@ -15,6 +24,51 @@ export interface BillingBook {
     readonly number: string;
     // (undocumented)
     readonly series: string;
+}
+
+// @public (undocumented)
+export type BillingBookCreateOutcome = Readonly<{
+    kind: 'observed';
+    billingBook: BillingBookReceipt;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
+export type BillingBookNumberOutcome = Readonly<{
+    kind: 'observed';
+    billingBook: BillingBook;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
+export interface BillingBookReceipt {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly invoice_type_code: string;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly number?: string;
+    // (undocumented)
+    readonly series: string;
+}
+
+// @public
+export interface BillingBookResource {
+    // (undocumented)
+    create(input: CreateBillingBookInput, options?: RequestOptions): Promise<BillingBookCreateOutcome>;
+    // (undocumented)
+    list(options?: RequestOptions): Promise<readonly BillingBook[]>;
+    updateNumber(billingBookId: string, input: Readonly<{
+        number: number;
+    }>, options?: RequestOptions): Promise<BillingBookNumberOutcome>;
 }
 
 // @public
@@ -28,12 +82,161 @@ export interface Branch {
 }
 
 // @public
+export interface BranchResource {
+    // (undocumented)
+    create(input: CreateBranchInput, options?: RequestOptions): Promise<BranchWriteOutcome>;
+    // (undocumented)
+    list(options?: RequestOptions): Promise<readonly Branch[]>;
+    // (undocumented)
+    update(branchId: string, patch: UpdateBranchInput, options?: RequestOptions): Promise<BranchWriteOutcome>;
+}
+
+// @public
+export type BranchWriteOutcome = Readonly<{
+    kind: 'observed';
+    branch: Branch;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
 export type CalendarDate = string & {
     readonly [dateBrand]: true;
 };
 
 // @public
 export function calendarDate(value: string): CalendarDate;
+
+// @public (undocumented)
+export interface CancelCateringOrderNotesInput {
+    readonly billing_book_id: string;
+    readonly catering_table_id?: string;
+    readonly correlated_invoices: readonly string[];
+}
+
+// @public
+export interface CancellationObservation {
+    readonly cancelled_by_mark: string | null;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly my_data_mark: string | null;
+    // (undocumented)
+    readonly my_data_qr_url: string | null;
+    // (undocumented)
+    readonly my_data_uid: string | null;
+    // (undocumented)
+    readonly num: string;
+    // (undocumented)
+    readonly series: string;
+    // (undocumented)
+    readonly wrapp_invoice_url: string;
+    // (undocumented)
+    readonly wrapp_invoice_url_en: string;
+}
+
+// @public
+export type CancellationOutcome = Readonly<{
+    kind: 'observed';
+    cancellation: CancellationObservation;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
+export interface CateringOrderNoteCancellation {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly my_data_mark: string | null;
+    // (undocumented)
+    readonly my_data_qr_url: string | null;
+    // (undocumented)
+    readonly my_data_uid: string | null;
+    // (undocumented)
+    readonly num: string;
+    // (undocumented)
+    readonly series: string;
+    // (undocumented)
+    readonly wrapp_invoice_url: string;
+    // (undocumented)
+    readonly wrapp_invoice_url_en: string;
+}
+
+// @public (undocumented)
+export type CateringOrderNoteCancellationOutcome = Readonly<{
+    kind: 'observed';
+    receipt: CateringOrderNoteCancellation;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
+export interface CateringTable extends CateringTableSummary {
+    readonly error_message?: string | null;
+    readonly invoices?: readonly string[];
+}
+
+// @public
+export type CateringTableOutcome = Readonly<{
+    kind: 'observed';
+    table: CateringTable;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public (undocumented)
+export interface CateringTableResource {
+    close(tableId: string, options?: RequestOptions): Promise<CateringTableOutcome>;
+    create(table: Readonly<{
+        name: string;
+    }>, options?: RequestOptions): Promise<CateringTableOutcome>;
+    delete(tableId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
+    // (undocumented)
+    get(tableId: string, options?: RequestOptions): Promise<CateringTable>;
+    list(options?: RequestOptions): Promise<readonly CateringTableSummary[]>;
+    open(table: OpenCateringTableInput, options?: RequestOptions): Promise<CateringTableOutcome>;
+    transfer(input: TransferCateringOrderNotesInput, options?: RequestOptions): Promise<CateringTableOutcome>;
+    update(tableId: string, patch: Readonly<{
+        name: string;
+    }>, options?: RequestOptions): Promise<CateringTableOutcome>;
+}
+
+// @public
+export interface CateringTableSummary {
+    // (undocumented)
+    readonly id: string;
+    readonly name: string;
+    readonly status: string;
+    readonly total: string;
+}
+
+// @public
+export type ClienteleCancellationOutcome = Readonly<{
+    kind: 'acknowledged';
+    cancellationId: string;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
+export type ClienteleCorrelationOutcome = Readonly<{
+    kind: 'acknowledged';
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
 
 // @public
 export interface ClientOptions {
@@ -53,6 +256,14 @@ export interface ClientOptions {
     readonly timeoutMs?: number;
 }
 
+// @public (undocumented)
+export interface ConfirmDeliveryInput {
+    // (undocumented)
+    readonly delivered_packaging?: readonly DeliveredPackaging[];
+    // (undocumented)
+    readonly outcome: 'FULL' | 'PARTIAL' | 'NONE';
+}
+
 // @public
 export interface Counterpart {
     // (undocumented)
@@ -69,49 +280,188 @@ export interface Counterpart {
     readonly postal_code?: string;
     // (undocumented)
     readonly street?: string;
+    readonly supply_account_no?: string;
     // (undocumented)
     readonly vat?: string;
 }
 
 // @public
+export interface CreateBillingBookInput {
+    // (undocumented)
+    readonly invoice_type_code: string;
+    // (undocumented)
+    readonly name: string;
+    readonly number: number;
+    // (undocumented)
+    readonly series: string;
+}
+
+// @public
+export interface CreateBranchInput {
+    // (undocumented)
+    readonly address: string;
+    // (undocumented)
+    readonly address_en?: string;
+    // (undocumented)
+    readonly city: string;
+    // (undocumented)
+    readonly city_en?: string;
+    readonly code: number;
+    // (undocumented)
+    readonly company_activity?: string;
+    // (undocumented)
+    readonly company_activity_en?: string;
+    readonly default_option?: boolean;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly phone?: string;
+    // (undocumented)
+    readonly postal_code: string;
+    // (undocumented)
+    readonly street_number: string;
+}
+
+// @public
+export interface CreateDigitalClienteleInput {
+    readonly branch: string;
+    // (undocumented)
+    readonly client_service_type: 'rental' | 'parkingcarwash' | 'garage';
+    // (undocumented)
+    readonly comments?: string;
+    // (undocumented)
+    readonly continuous_lease_service?: boolean;
+    // (undocumented)
+    readonly continuous_service?: boolean;
+    // (undocumented)
+    readonly correlated_dc_id?: string;
+    readonly creation_date_time?: string;
+    // (undocumented)
+    readonly customer_country?: string;
+    // (undocumented)
+    readonly customer_vat_number?: string;
+    // (undocumented)
+    readonly entity_vat_number?: string;
+    // (undocumented)
+    readonly foreign_vehicle_registration_number?: string;
+    // (undocumented)
+    readonly from_agreed_period_date?: CalendarDate;
+    readonly is_diff_veh_pickup_location?: boolean;
+    readonly mixed_service?: boolean;
+    readonly periodicity?: string;
+    readonly periodicity_other?: string;
+    // (undocumented)
+    readonly recurring_service?: boolean;
+    // (undocumented)
+    readonly to_agreed_period_date?: CalendarDate;
+    // (undocumented)
+    readonly transmission_failure?: boolean;
+    // (undocumented)
+    readonly vehicle_category?: string;
+    // (undocumented)
+    readonly vehicle_factory?: string;
+    readonly vehicle_movement_purpose?: 'vmp_rental' | 'vmp_self_use' | 'vmp_free_service';
+    readonly vehicle_pickup_location?: string;
+    // (undocumented)
+    readonly vehicle_registration_number?: string;
+}
+
+// @public (undocumented)
+export interface CreateDigitalTransportInput extends TransportLegInput {
+    readonly invoice_id: string;
+}
+
+// @public
+export type CreateDraftInput = Omit<CreateInvoiceInput, 'generate_pdf' | 'mark_as_paid'>;
+
+// @public
 export interface CreateInvoiceInput {
+    readonly b2g?: boolean;
+    // (undocumented)
+    readonly b2g_bt_70?: string;
+    // (undocumented)
+    readonly b2g_budget_identifier?: string;
+    readonly b2g_budget_type?: number;
+    // (undocumented)
+    readonly b2g_buyer_reference?: string;
+    // (undocumented)
+    readonly b2g_contract_identifier?: string;
+    // (undocumented)
+    readonly b2g_contracting_authority_id?: string;
+    readonly b2g_due_date?: CalendarDate;
+    // (undocumented)
+    readonly b2g_payment_details?: string;
     // (undocumented)
     readonly billing_book_id: string;
     // (undocumented)
     readonly branch?: string;
+    readonly catering_table_id?: string;
+    readonly catering_table_name?: string;
     // (undocumented)
     readonly correlated_invoices?: readonly string[];
-    // (undocumented)
-    readonly counterpart: Counterpart;
+    readonly counterpart?: Counterpart;
     readonly currency?: string;
     // (undocumented)
     readonly customer_emails?: readonly string[];
+    readonly deductions_total_amount?: Decimal;
+    readonly delivery_address_city?: string;
+    // (undocumented)
+    readonly delivery_address_party_name?: string;
+    // (undocumented)
+    readonly delivery_address_postal_code?: string;
+    // (undocumented)
+    readonly delivery_address_street?: string;
+    // (undocumented)
+    readonly delivery_address_street_number?: string;
+    // (undocumented)
+    readonly delivery_detail?: DeliveryDetail;
+    // (undocumented)
+    readonly email_body?: string;
     // (undocumented)
     readonly email_locale?: 'el' | 'en';
-    // (undocumented)
+    readonly email_subject?: string;
     readonly exchange_rate?: Decimal;
     readonly external_id: string;
+    readonly fees_amount?: Decimal;
+    readonly fuel_invoice?: boolean;
     // (undocumented)
     readonly generate_pdf?: boolean;
+    readonly installments?: boolean;
     // (undocumented)
     readonly invoice_lines: readonly InvoiceLine[];
-    readonly invoice_type_code: '2.1' | '2.2' | '2.3' | '11.2';
+    readonly invoice_type_code: '1.1' | '1.2' | '1.3' | '1.4' | '1.6' | '2.1' | '2.2' | '2.3' | '2.4' | '3.1' | '3.2' | '5.1' | '5.2' | '6.1' | '6.2' | '7.1' | '8.1' | '8.2' | '8.6' | '9.2' | '9.3' | '10.1' | '10.2' | '11.1' | '11.2' | '11.3' | '11.4' | '11.5';
+    readonly is_delivery_note?: boolean;
     // (undocumented)
     readonly mark_as_paid?: boolean;
     // (undocumented)
     readonly net_total_amount: Decimal;
     // (undocumented)
     readonly notes?: string;
+    readonly num?: number;
+    // (undocumented)
+    readonly other_correlated_entities?: readonly OtherCorrelatedEntity[];
+    readonly other_receiving_note_purpose_title?: string;
+    readonly other_taxes_amount?: Decimal;
     // (undocumented)
     readonly payable_total_amount: Decimal;
     // (undocumented)
     readonly payment_details?: string;
     // (undocumented)
     readonly payment_method_type: number;
+    readonly pos_device_id?: string;
+    readonly receiving_note_purpose?: number;
+    readonly self_pricing?: boolean;
+    readonly special_invoice_category?: number;
+    // (undocumented)
+    readonly stamp_duty_amount?: Decimal;
+    readonly tip_amount?: Decimal;
     // (undocumented)
     readonly total_amount: Decimal;
+    readonly total_stamp_duty_amount?: Decimal;
     // (undocumented)
     readonly vat_total_amount: Decimal;
+    // (undocumented)
+    readonly withholding_total_amount?: Decimal;
 }
 
 // @public
@@ -119,15 +469,29 @@ export type CreateOutcome = Readonly<{
     kind: 'observed';
     invoice: InvoiceObservation;
     identity: IdentityEvidence;
-}> | Readonly<{
-    kind: 'pending';
-    invoiceId: string;
-    referenceState: 'unknown';
-}> | Readonly<{
+}> | PendingInvoiceOutcome | Readonly<{
     kind: 'rejected';
     errorCount: number;
     rejectionSource: RejectionSource;
     referenceState: 'unknown';
+}>;
+
+// @public
+export type CreatePosDeviceInput = Readonly<{
+    pos_type: 'viva';
+    name: string;
+    terminal_id: string;
+    merchant_id: string;
+}> | Readonly<{
+    pos_type: 'worldline_softpos';
+    name?: string;
+    terminal_id: string;
+    merchant_id: string;
+}> | Readonly<{
+    pos_type: PosAuthorizationCodeType;
+    name: string;
+    terminal_id: string;
+    authorization_code: string;
 }>;
 
 // @public
@@ -138,6 +502,256 @@ export type Decimal = string & {
 // @public
 export function decimal(value: string): Decimal;
 
+// @public (undocumented)
+export interface DeliveredPackaging {
+    readonly other_packaging_title?: string;
+    readonly packaging_type: number;
+    readonly quantity: number;
+}
+
+// @public
+export interface DeliveryDetail {
+    readonly dispatch_date: string;
+    readonly dispatch_time: string;
+    // (undocumented)
+    readonly from_address: string;
+    readonly from_branch?: number;
+    // (undocumented)
+    readonly from_city: string;
+    // (undocumented)
+    readonly from_number: string;
+    // (undocumented)
+    readonly from_zipcode: string;
+    // (undocumented)
+    readonly issuer_of_movement: string;
+    readonly non_obligated_recipient?: boolean;
+    readonly purpose_of_movement: string;
+    readonly purpose_of_movement_custom_title?: string;
+    // (undocumented)
+    readonly reverse_delivery_note?: boolean;
+    readonly reverse_delivery_note_purpose?: number;
+    // (undocumented)
+    readonly to_address: string;
+    readonly to_branch?: number;
+    // (undocumented)
+    readonly to_city: string;
+    // (undocumented)
+    readonly to_number: string;
+    // (undocumented)
+    readonly to_zipcode: string;
+    // (undocumented)
+    readonly vehicle_number: string;
+    // (undocumented)
+    readonly without_digital_transport_tracking?: boolean;
+}
+
+// @public
+export interface DigitalClientele {
+    readonly amount?: string | null;
+    // (undocumented)
+    readonly branch?: string | null;
+    // (undocumented)
+    readonly cancellation_id?: string | null;
+    // (undocumented)
+    readonly client_service_type: string;
+    // (undocumented)
+    readonly comments?: string | null;
+    // (undocumented)
+    readonly completion_date_time?: string | null;
+    // (undocumented)
+    readonly continuous_lease_service?: boolean | null;
+    // (undocumented)
+    readonly continuous_service?: boolean | null;
+    // (undocumented)
+    readonly cooperating_vat_number?: string | null;
+    // (undocumented)
+    readonly correlated_dc_id?: string | null;
+    // (undocumented)
+    readonly creation_date_time?: string | null;
+    // (undocumented)
+    readonly customer_country?: string | null;
+    // (undocumented)
+    readonly customer_vat_number?: string | null;
+    // (undocumented)
+    readonly entity_vat_number?: string | null;
+    // (undocumented)
+    readonly entry_completion?: boolean | null;
+    // (undocumented)
+    readonly exit_date_time?: string | null;
+    // (undocumented)
+    readonly foreign_vehicle_registration_number?: string | null;
+    // (undocumented)
+    readonly from_agreed_period_date?: string | null;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly iddcl?: string | null;
+    // (undocumented)
+    readonly invoice_counterparty?: string | null;
+    // (undocumented)
+    readonly invoice_counterparty_country?: string | null;
+    // (undocumented)
+    readonly invoice_kind?: string | null;
+    // (undocumented)
+    readonly is_diff_veh_pickup_location?: boolean | null;
+    // (undocumented)
+    readonly is_diff_veh_return_location?: boolean | null;
+    // (undocumented)
+    readonly mixed_service?: boolean | null;
+    // (undocumented)
+    readonly non_issue_invoice?: boolean | null;
+    // (undocumented)
+    readonly off_site_provided_service?: string | null;
+    // (undocumented)
+    readonly other_branch?: string | null;
+    // (undocumented)
+    readonly periodicity?: string | null;
+    // (undocumented)
+    readonly periodicity_other?: string | null;
+    // (undocumented)
+    readonly provided_service_category?: string | null;
+    // (undocumented)
+    readonly provided_service_category_other?: string | null;
+    // (undocumented)
+    readonly reason_non_issue_type?: string | null;
+    // (undocumented)
+    readonly recurring_service?: boolean | null;
+    readonly status: string;
+    // (undocumented)
+    readonly to_agreed_period_date?: string | null;
+    // (undocumented)
+    readonly transmission_failure?: boolean | null;
+    // (undocumented)
+    readonly updated_iddcl?: string | null;
+    // (undocumented)
+    readonly vehicle_category?: string | null;
+    // (undocumented)
+    readonly vehicle_factory?: string | null;
+    // (undocumented)
+    readonly vehicle_movement_purpose?: string | null;
+    // (undocumented)
+    readonly vehicle_pickup_location?: string | null;
+    // (undocumented)
+    readonly vehicle_registration_number?: string | null;
+    // (undocumented)
+    readonly vehicle_return_location?: string | null;
+}
+
+// @public
+export type DigitalClienteleOutcome = Readonly<{
+    kind: 'observed';
+    clientele: DigitalClientele;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
+export interface DigitalClienteleResource {
+    cancel(clienteleId: string, options?: RequestOptions): Promise<ClienteleCancellationOutcome>;
+    correlateByFim(clienteleId: string, input: Readonly<{
+        correlate_fim_number: string;
+        correlate_fim_aa: string;
+    }>, options?: RequestOptions): Promise<ClienteleCorrelationOutcome>;
+    correlateByMark(clienteleId: string, input: Readonly<{
+        correlate_mark: string;
+    }>, options?: RequestOptions): Promise<ClienteleCorrelationOutcome>;
+    create(input: CreateDigitalClienteleInput, options?: RequestOptions): Promise<DigitalClienteleOutcome>;
+    get(clienteleId: string, options?: RequestOptions): Promise<DigitalClientele>;
+    update(clienteleId: string, patch: UpdateDigitalClienteleInput, options?: RequestOptions): Promise<DigitalClienteleOutcome>;
+}
+
+// @public
+export interface DigitalTransport {
+    readonly category: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly invoice_code?: string | null;
+    readonly invoice_id?: string | null;
+    // (undocumented)
+    readonly invoice_issued_at?: string | null;
+    // (undocumented)
+    readonly last_status_update_at?: string | null;
+    readonly my_data_response?: ProviderJson;
+    readonly status: string;
+}
+
+// @public
+export type DigitalTransportOutcome = Readonly<{
+    kind: 'observed';
+    transport: DigitalTransport;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
+export interface DigitalTransportPage {
+    // (undocumented)
+    readonly current_page: number;
+    // (undocumented)
+    readonly digital_transports: readonly DigitalTransport[];
+    // (undocumented)
+    readonly total_pages: number;
+}
+
+// @public (undocumented)
+export interface DigitalTransportResource {
+    confirmDelivery(transportId: string, input: ConfirmDeliveryInput, options?: RequestOptions): Promise<DigitalTransportOutcome>;
+    confirmReturn(transportId: string, options?: RequestOptions): Promise<DigitalTransportOutcome>;
+    create(transport: CreateDigitalTransportInput, options?: RequestOptions): Promise<DigitalTransportOutcome>;
+    // (undocumented)
+    get(transportId: string, options?: RequestOptions): Promise<DigitalTransport>;
+    list(input?: Readonly<{
+        category?: 'shipping' | 'receiving';
+        page?: number;
+    }>, options?: RequestOptions): Promise<DigitalTransportPage>;
+    refresh(transportId: string, options?: RequestOptions): Promise<DigitalTransportOutcome>;
+    reject(transportId: string, input?: Readonly<{
+        reject_reason?: string;
+    }>, options?: RequestOptions): Promise<DigitalTransportOutcome>;
+    transfer(transportId: string, leg: TransportLegInput, options?: RequestOptions): Promise<DigitalTransportOutcome>;
+}
+
+// @public
+export type DraftCreateOutcome = Readonly<{
+    kind: 'saved';
+    invoiceId: string;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public
+export type DraftInvoiceDetails = Omit<InvoiceDetails, 'code'>;
+
+// @public
+export interface DraftInvoicePage {
+    // (undocumented)
+    readonly current_page: number;
+    // (undocumented)
+    readonly invoices: readonly DraftInvoiceDetails[];
+    // (undocumented)
+    readonly total_count: number;
+    // (undocumented)
+    readonly total_pages: number;
+}
+
+// @public
+export type DraftIssueOutcome = Readonly<{
+    kind: 'observed';
+    invoice: InvoiceObservation;
+    identity: IdentityEvidence;
+}> | PendingInvoiceOutcome | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
 // @public
 export type EffectCertainty = 'not-sent' | 'unknown';
 
@@ -145,17 +759,110 @@ export type EffectCertainty = 'not-sent' | 'unknown';
 export type ErrorCode = 'INVALID_INPUT' | 'PROTOCOL_ERROR' | 'HTTP_ERROR' | 'AUTH_ERROR' | 'PROVIDER_REJECTED' | 'NETWORK_ERROR' | 'TIMEOUT' | 'ABORTED' | 'RESPONSE_TOO_LARGE' | 'PAGINATION_LIMIT' | 'WEBHOOK_INVALID';
 
 // @public
+export type ExternalIdAssignmentOutcome = Readonly<{
+    kind: 'acknowledged';
+    invoiceId: string;
+    externalId: string;
+    identity: IdentityEvidence;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+    referenceState: 'unknown';
+}>;
+
+// @public
+export function getProviderDiagnostics(target: unknown): ProviderDiagnostics | undefined;
+
+// @public
 export type IdentityEvidence = 'exact' | 'ascii-case-variant';
 
 // @public
+export interface InvoiceB2gDetails {
+    // (undocumented)
+    readonly b2g_budget_identifier?: string | null;
+    // (undocumented)
+    readonly b2g_budget_type?: string | null;
+    // (undocumented)
+    readonly b2g_contract_identifier?: string | null;
+    // (undocumented)
+    readonly b2g_contracting_authority_id?: string | null;
+    // (undocumented)
+    readonly b2g_due_date?: string | null;
+    // (undocumented)
+    readonly b2g_payment_details?: string | null;
+    // (undocumented)
+    readonly bt_70?: string | null;
+    // (undocumented)
+    readonly buyer_reference?: string | null;
+    // (undocumented)
+    readonly delivery_address_city?: string | null;
+    // (undocumented)
+    readonly delivery_address_party_name?: string | null;
+    // (undocumented)
+    readonly delivery_address_postal_code?: string | null;
+    // (undocumented)
+    readonly delivery_address_street?: string | null;
+    // (undocumented)
+    readonly delivery_address_street_number?: string | null;
+}
+
+// @public
+export interface InvoiceDeliveryDetails {
+    // (undocumented)
+    readonly dispatch_date?: string | null;
+    // (undocumented)
+    readonly dispatch_time?: string | null;
+    // (undocumented)
+    readonly from_address?: string | null;
+    // (undocumented)
+    readonly from_branch?: string | null;
+    // (undocumented)
+    readonly from_city?: string | null;
+    // (undocumented)
+    readonly from_number?: string | null;
+    // (undocumented)
+    readonly from_zipcode?: string | null;
+    // (undocumented)
+    readonly issuer_of_movement?: string | null;
+    // (undocumented)
+    readonly non_obligated_recipient?: boolean | null;
+    // (undocumented)
+    readonly purpose_of_movement?: string | null;
+    // (undocumented)
+    readonly purpose_of_movement_custom_title?: string | null;
+    // (undocumented)
+    readonly reverse_delivery_note?: boolean | null;
+    // (undocumented)
+    readonly reverse_delivery_note_purpose?: string | null;
+    // (undocumented)
+    readonly to_address?: string | null;
+    // (undocumented)
+    readonly to_branch?: string | null;
+    // (undocumented)
+    readonly to_city?: string | null;
+    // (undocumented)
+    readonly to_number?: string | null;
+    // (undocumented)
+    readonly to_zipcode?: string | null;
+    // (undocumented)
+    readonly vehicle_number?: string | null;
+    // (undocumented)
+    readonly without_digital_transport_tracking?: boolean | null;
+}
+
+// @public
 export interface InvoiceDetails {
+    readonly b2g_details?: InvoiceB2gDetails | null;
     // (undocumented)
     readonly billing_book_id: string;
+    readonly branch?: string | null;
     // (undocumented)
     readonly code: string;
     // (undocumented)
     readonly counterpart: Readonly<{
         name: string;
+        supply_account_no?: string | null;
         country_code?: string | undefined;
         vat?: string | undefined;
         city?: string | undefined;
@@ -166,46 +873,88 @@ export interface InvoiceDetails {
     }>;
     // (undocumented)
     readonly currency: string;
+    readonly delivery_details?: InvoiceDeliveryDetails | null;
     // (undocumented)
+    readonly exchange_rate?: string | null;
     readonly external_id: string | null;
     // (undocumented)
-    readonly id: string;
+    readonly fuel_invoice?: boolean | null;
     // (undocumented)
+    readonly id: string;
     readonly invoice_lines: readonly Readonly<{
         line_number: number;
         name: string;
+        code?: string | null;
+        description?: string | null;
         quantity: string;
+        quantity_type?: string | null;
         unit_price: string;
         net_total_price: string;
-        vat_rate: number;
+        vat_rate: number | null;
         vat_total: string;
         subtotal: string;
-        classification_category: string;
-        classification_type: string;
+        withhold_tax_rate?: string | null;
+        withhold_tax_code?: string | null;
+        withholding_total?: string | null;
+        classification_category: string | null;
+        classification_type: string | null;
+        stamp_duty_tax_code?: string | null;
+        stamp_duty_amount?: string | null;
+        deductions_amount?: string | null;
+        deductions?: readonly Readonly<{
+            title?: string | null;
+            amount: string;
+            informational?: boolean | null;
+        }>[] | null;
+        fuel_code?: string | null;
     }>[];
     // (undocumented)
     readonly invoice_type_code: string;
+    // (undocumented)
+    readonly is_delivery_note?: boolean | null;
     readonly issued_at: string;
     // (undocumented)
     readonly net_total_amount: string;
     // (undocumented)
+    readonly notes?: string | null;
+    // (undocumented)
+    readonly other_taxes_amount?: string | null;
+    // (undocumented)
     readonly payable_total_amount: string;
+    readonly payment_method?: string | null;
+    readonly special_invoice_category?: string | null;
+    // (undocumented)
+    readonly third_party_collection?: boolean | null;
     // (undocumented)
     readonly total_amount: string;
     // (undocumented)
+    readonly total_stamp_duty_amount?: string | null;
+    // (undocumented)
     readonly vat_total_amount: string;
+    // (undocumented)
+    readonly withholding_total_amount?: string | null;
 }
 
 // @public
 export interface InvoiceLine {
+    readonly accommodation_tax?: Decimal;
+    readonly classification_category?: string;
     // (undocumented)
-    readonly classification_category: string;
-    // (undocumented)
-    readonly classification_type: string;
+    readonly classification_type?: string;
+    readonly classifications?: readonly LineClassification[];
     // (undocumented)
     readonly code?: string;
+    readonly cpv_code?: string;
+    // (undocumented)
+    readonly deductions?: readonly LineDeduction[];
+    readonly deductions_amount?: Decimal;
     // (undocumented)
     readonly description?: string;
+    // (undocumented)
+    readonly expense?: boolean;
+    readonly expenses_vat_classification?: string;
+    readonly fees_category?: number;
+    readonly fuel_code?: number;
     // (undocumented)
     readonly line_number: number;
     // (undocumented)
@@ -213,26 +962,39 @@ export interface InvoiceLine {
     // (undocumented)
     readonly net_total_price: Decimal;
     // (undocumented)
-    readonly quantity: Decimal;
+    readonly other_taxes_amount?: Decimal;
+    readonly other_taxes_percent_category?: '6' | '7' | '8' | '9' | '10' | '17' | '20' | '21' | '22' | '23' | '24' | '25' | '26' | '27' | '28' | '29' | '30';
     // (undocumented)
+    readonly quantity: Decimal;
     readonly quantity_type?: number;
+    readonly rec_type?: 2;
+    // (undocumented)
+    readonly stamp_duty_amount?: Decimal;
+    readonly stamp_duty_tax_code?: string;
     // (undocumented)
     readonly subtotal: Decimal;
     // (undocumented)
     readonly unit_price: Decimal;
-    // (undocumented)
     readonly vat_exemption_code?: number;
-    // (undocumented)
     readonly vat_rate: number;
     // (undocumented)
     readonly vat_total: Decimal;
+    readonly withhold_tax_code?: string;
+    readonly withhold_tax_rate?: number;
+    // (undocumented)
+    readonly withholding_total?: Decimal;
 }
 
 // @public
 export interface InvoiceObservation {
+    readonly authentication_code?: string | null;
     // (undocumented)
     readonly cancelled_by_mark: string | null;
+    readonly card_number?: string | null;
     // (undocumented)
+    readonly card_type?: string | null;
+    // (undocumented)
+    readonly catering_table_id?: string | null;
     readonly external_id: string | null;
     // (undocumented)
     readonly id: string;
@@ -247,6 +1009,8 @@ export interface InvoiceObservation {
     readonly num: string;
     // (undocumented)
     readonly series: string;
+    // (undocumented)
+    readonly transaction_id?: string | null;
     readonly transmission_failure: string | null;
     readonly wrapp_invoice_url: string;
     // (undocumented)
@@ -273,21 +1037,88 @@ export type InvoiceReference = Readonly<{
 
 // @public
 export interface InvoiceResource {
+    cancelCateringOrderNotes(input: CancelCateringOrderNotesInput, options?: RequestOptions): Promise<CateringOrderNoteCancellationOutcome>;
+    cancelDeliveryNote(invoiceId: string, options?: RequestOptions): Promise<CancellationOutcome>;
     create(invoice: CreateInvoiceInput, options?: RequestOptions): Promise<CreateOutcome>;
+    readonly drafts: Readonly<{
+        create(invoice: CreateDraftInput, options?: RequestOptions): Promise<DraftCreateOutcome>;
+        issue(reference: InvoiceReference, input?: IssueDraftInput, options?: RequestOptions): Promise<DraftIssueOutcome>;
+        list(filters?: Readonly<{
+            page?: number;
+        }>, options?: RequestOptions): Promise<DraftInvoicePage>;
+        iterate(filters: Readonly<{
+            page?: number;
+        }>, options: RequestOptions & {
+            readonly maxPages: number;
+        }): AsyncIterable<DraftInvoiceDetails>;
+        delete(invoiceId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
+    }>;
     get(reference: InvoiceReference, options?: RequestOptions): Promise<Readonly<{
         invoice: InvoiceDetails;
         identity: IdentityEvidence;
     }>>;
-    getStatus(reference: InvoiceReference, options?: RequestOptions): Promise<Readonly<{
-        invoice: InvoiceObservation;
-        identity: IdentityEvidence;
+    getStatus(reference: InvoiceReference, options?: RequestOptions): Promise<InvoiceStatusOutcome>;
+    issuedCount(options?: RequestOptions): Promise<Readonly<{
+        issuedCount: string;
     }>>;
     iterate(filters: ListInvoicesInput, options: RequestOptions & {
         readonly maxPages: number;
     }): AsyncIterable<InvoiceDetails>;
     // (undocumented)
     list(filters?: ListInvoicesInput, options?: RequestOptions): Promise<InvoicePage>;
-    requestPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
+    listOpenCateringOrderNotes(input?: Readonly<{
+        page?: number;
+    }>, options?: RequestOptions): Promise<OpenCateringOrderNotesPage>;
+    markAsPaid(invoiceId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
+    requestPdf(invoiceId: string, options?: RequestOptions & {
+        readonly locale?: 'el' | 'en';
+    }): Promise<PdfOutcome>;
+    requestThermalPdf(invoiceId: string, options?: RequestOptions): Promise<PdfOutcome>;
+    setExternalId(invoiceId: string, input: Readonly<{
+        external_id: string;
+    }>, options?: RequestOptions): Promise<ExternalIdAssignmentOutcome>;
+}
+
+// @public
+export type InvoiceStatusOutcome = Readonly<{
+    kind: 'observed';
+    invoice: InvoiceObservation;
+    identity: IdentityEvidence;
+}> | PendingInvoiceOutcome | Readonly<{
+    kind: 'draft';
+    identity: 'unavailable';
+}>;
+
+// @public
+export interface IssueDraftInput {
+    // (undocumented)
+    readonly customer_emails?: readonly string[];
+    // (undocumented)
+    readonly email_body?: string;
+    // (undocumented)
+    readonly email_locale?: 'el' | 'en';
+    readonly email_subject?: string;
+    // (undocumented)
+    readonly generate_pdf?: boolean;
+    readonly pos_device_id?: string;
+}
+
+// @public
+export interface LineClassification {
+    readonly amount: Decimal;
+    // (undocumented)
+    readonly category: string;
+    // (undocumented)
+    readonly type: string;
+}
+
+// @public
+export interface LineDeduction {
+    readonly amount: Decimal;
+    // (undocumented)
+    readonly informational?: boolean;
+    // (undocumented)
+    readonly title?: string;
 }
 
 // @public
@@ -298,6 +1129,54 @@ export interface ListInvoicesInput {
     readonly page?: number;
     // (undocumented)
     readonly start_date?: CalendarDate;
+}
+
+// @public
+export interface OpenCateringOrderNote {
+    // (undocumented)
+    readonly catering_table_id: string | null;
+    // (undocumented)
+    readonly id: string;
+    readonly issued_at: string;
+    // (undocumented)
+    readonly my_data_mark: string | null;
+}
+
+// @public
+export interface OpenCateringOrderNotesPage {
+    // (undocumented)
+    readonly current_page: number;
+    // (undocumented)
+    readonly invoices: readonly OpenCateringOrderNote[];
+    // (undocumented)
+    readonly total_pages: number;
+}
+
+// @public
+export type OpenCateringTableInput = Readonly<{
+    id: string;
+    name?: string;
+}> | Readonly<{
+    id?: string;
+    name: string;
+}>;
+
+// @public
+export interface OtherCorrelatedEntity {
+    readonly branch_code: number;
+    // (undocumented)
+    readonly city: string;
+    readonly country_code: string;
+    readonly entity_type: number;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly number: string;
+    // (undocumented)
+    readonly postal_code: string;
+    // (undocumented)
+    readonly street: string;
+    readonly vat_number: string;
 }
 
 // @public
@@ -314,10 +1193,104 @@ export type PdfOutcome = Readonly<{
 }>;
 
 // @public
+export type PendingIdentityEvidence = IdentityEvidence | 'unavailable';
+
+// @public
+export interface PendingInvoiceOutcome {
+    // (undocumented)
+    readonly identity: PendingIdentityEvidence;
+    readonly invoice?: InvoiceObservation;
+    // (undocumented)
+    readonly invoiceId: string;
+    // (undocumented)
+    readonly kind: 'pending';
+    // (undocumented)
+    readonly referenceState: 'unknown';
+}
+
+// @public
+export type PosAuthorizationCodeType = 'epay' | 'worldline' | 'nbg' | 'cosmote' | 'jcc' | 'attica' | 'pancreta' | 'tora' | 'pbt' | 'mypos' | 'nexi-mellon' | 'nexi' | 'nbg_edps';
+
+// @public
+export interface PosDevice {
+    // (undocumented)
+    readonly id: string;
+    readonly merchant_id?: string | null;
+    // (undocumented)
+    readonly name: string;
+    readonly terminal_id?: string | null;
+}
+
+// @public
+export type PosDeviceCreateOutcome = Readonly<{
+    kind: 'observed';
+    device: PosDevice;
+}> | Readonly<{
+    kind: 'rejected';
+    errorCount: number;
+    rejectionSource: RejectionSource;
+}>;
+
+// @public (undocumented)
+export interface PosDeviceResource {
+    create(device: CreatePosDeviceInput, options?: RequestOptions): Promise<PosDeviceCreateOutcome>;
+    delete(deviceId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
+    // (undocumented)
+    list(options?: RequestOptions): Promise<readonly PosDevice[]>;
+}
+
+// @public (undocumented)
+export interface PosSessionResource {
+    abort(invoiceId: string, options?: RequestOptions): Promise<AcknowledgementOutcome>;
+}
+
+// @public
+export interface ProviderDiagnostics {
+    readonly issues: readonly ProviderIssue[];
+    readonly providerStatus?: string;
+    readonly sensitive: true;
+    readonly truncated: boolean;
+}
+
+// @public
+export interface ProviderIssue {
+    // (undocumented)
+    readonly code?: string;
+    // (undocumented)
+    readonly message?: string;
+    // (undocumented)
+    readonly title?: string;
+}
+
+// @public
+export type ProviderJson = Readonly<{
+    kind: 'null';
+}> | Readonly<{
+    kind: 'boolean';
+    value: boolean;
+}> | Readonly<{
+    kind: 'string';
+    value: string;
+}> | Readonly<{
+    kind: 'number';
+    text: string;
+}> | Readonly<{
+    kind: 'array';
+    items: readonly ProviderJson[];
+}> | Readonly<{
+    kind: 'object';
+    entries: readonly Readonly<{
+        key: string;
+        value: ProviderJson;
+    }>[];
+}>;
+
+// @public
 export type RejectionSource = 'invoice-errors' | 'mydata-errors' | 'unknown';
 
 // @public
 export interface RequestOptions {
+    readonly diagnostics?: 'provider-issues';
     // (undocumented)
     readonly signal?: AbortSignal;
     readonly timeoutMs?: number;
@@ -350,6 +1323,54 @@ export type TenantIdentity = Readonly<{
 }>;
 
 // @public
+export interface TransferCateringOrderNotesInput {
+    readonly current_table: string;
+    readonly marks?: readonly string[];
+    readonly target_table: string;
+}
+
+// @public
+export interface TransportLegInput {
+    // (undocumented)
+    readonly carrier_vat_number: string;
+    readonly transport_type: number;
+    // (undocumented)
+    readonly vehicle_number: string;
+}
+
+// @public
+export type UpdateBranchInput = Partial<CreateBranchInput>;
+
+// @public
+export interface UpdateDigitalClienteleInput {
+    readonly amount?: Decimal;
+    // (undocumented)
+    readonly comments?: string;
+    // (undocumented)
+    readonly cooperating_vat_number?: string;
+    // (undocumented)
+    readonly entry_completion?: boolean;
+    // (undocumented)
+    readonly invoice_counterparty?: string;
+    // (undocumented)
+    readonly invoice_counterparty_country?: string;
+    // (undocumented)
+    readonly invoice_kind?: 'retail_sales_receipt' | 'receipt' | 'invoice' | 'sales_invoice';
+    // (undocumented)
+    readonly is_diff_veh_return_location?: boolean;
+    // (undocumented)
+    readonly non_issue_invoice?: boolean;
+    // (undocumented)
+    readonly other_branch?: string;
+    // (undocumented)
+    readonly provided_service_category?: 'with_parts' | 'with_client_parts' | 'without_parts' | 'free_service' | 'other' | 'warranty_compensation' | 'by_price_list' | 'by_agreement' | 'self_use';
+    readonly provided_service_category_other?: string;
+    // (undocumented)
+    readonly reason_non_issue_type?: 'no_invoice_free_service' | 'no_invoice_self_use' | 'no_invoice_compensation';
+    readonly vehicle_return_location?: string;
+}
+
+// @public
 export interface VatDetails {
     // (undocumented)
     readonly address: string;
@@ -367,13 +1388,21 @@ export interface VatDetails {
 
 // @public
 export type VerifiedWebhook = Readonly<{
-    kind: 'issued-invoice';
+    kind: 'invoice-observation';
     invoice: InvoiceObservation;
+    eventTypeHint: 'issued-invoice';
     eventTypeAuthenticated: false;
 }> | Readonly<{
-    kind: 'invoice-pdf';
+    kind: 'pdf';
     invoiceId: string;
     downloadUrl: string;
+    eventTypeHint: 'invoice-pdf' | 'thermal-print-pdf';
+    eventTypeAuthenticated: false;
+}> | Readonly<{
+    kind: 'pos-payment-error';
+    invoiceId: string;
+    providerMessage: string;
+    eventTypeHint: 'pos-payment';
     eventTypeAuthenticated: false;
 }>;
 
@@ -393,15 +1422,21 @@ export interface WebhookInput {
 export class WrappClient {
     constructor(options: ClientOptions);
     // (undocumented)
-    readonly billingBooks: Readonly<{
-        list(options?: RequestOptions): Promise<readonly BillingBook[]>;
-    }>;
+    readonly billingBooks: Readonly<BillingBookResource>;
     // (undocumented)
-    readonly branches: Readonly<{
-        list(options?: RequestOptions): Promise<readonly Branch[]>;
-    }>;
+    readonly branches: Readonly<BranchResource>;
+    // (undocumented)
+    readonly cateringTables: Readonly<CateringTableResource>;
+    // (undocumented)
+    readonly digitalClienteles: Readonly<DigitalClienteleResource>;
+    // (undocumented)
+    readonly digitalTransports: Readonly<DigitalTransportResource>;
     // (undocumented)
     readonly invoices: Readonly<InvoiceResource>;
+    // (undocumented)
+    readonly posDevices: Readonly<PosDeviceResource>;
+    // (undocumented)
+    readonly posSessions: Readonly<PosSessionResource>;
     // (undocumented)
     readonly tenant: Readonly<{
         get(options?: RequestOptions): Promise<TenantDetails>;

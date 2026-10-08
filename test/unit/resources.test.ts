@@ -64,6 +64,7 @@ describe('resources', () => {
         : json(observation({ external_id: 'REFERENCE-ONE', future: 42 })),
     );
     const result = await client.invoices.getStatus(ref);
+    if (result.kind !== 'observed') throw new Error('fixture');
     expect(result.identity).toBe('ascii-case-variant');
     expect(result.invoice.my_data_mark).toBe('90071992547409931234');
     expect(result.invoice.issued_at).toBe('2026-09-21');
@@ -186,6 +187,7 @@ describe('resources', () => {
       kind: 'pending',
       invoiceId: 'pending-one',
       referenceState: 'unknown',
+      identity: 'unavailable',
     });
   });
   it.each([
@@ -491,7 +493,7 @@ describe('resources', () => {
     expect(bodies).toHaveLength(2);
     expect(bodies.join()).toContain('reference-two');
   });
-  it('should accept high-precision rates and quantities while keeping totals at two decimals', async () => {
+  it('should accept high-precision unit prices and quantities while keeping totals and exchange rates at two decimals', async () => {
     const { client, calls } = provider(({ url }) =>
       url.pathname.endsWith('/login') ? login() : json(observation()),
     );
@@ -500,13 +502,18 @@ describe('resources', () => {
     const outcome = await client.invoices.create({
       ...invoice(),
       currency: 'USD',
-      exchange_rate: decimal('1.0834'),
+      exchange_rate: decimal('1.08'),
       invoice_lines: [{ ...line, quantity: decimal('2.505'), unit_price: decimal('3.9920') }],
     });
     expect(outcome.kind).toBe('observed');
-    expect(calls[1]?.init.body).toContain('"exchange_rate":1.0834');
+    expect(calls[1]?.init.body).toContain('"exchange_rate":1.08');
+    expect(calls[1]?.init.body).toContain('"quantity":2.505');
+    expect(calls[1]?.init.body).toContain('"unit_price":3.9920');
     await expect(
       client.invoices.create({ ...invoice(), total_amount: decimal('1.234') }),
+    ).rejects.toThrow(WrappError);
+    await expect(
+      client.invoices.create({ ...invoice(), currency: 'USD', exchange_rate: decimal('1.0834') }),
     ).rejects.toThrow(WrappError);
     expect(calls).toHaveLength(2);
   });
@@ -557,12 +564,10 @@ describe('resources', () => {
     const { client } = provider(({ url }) => {
       if (url.pathname.endsWith('/login')) return login();
       if (url.pathname.endsWith('/branches'))
-        return json([{ id: '4ddce104-7b53-4aed-a08c-5bf15229cfee', name: 'Έδρα', code: 0 }]);
+        return json([{ id: 'branch-one', name: 'Έδρα', code: 0 }]);
       return new Response(listBody, { headers: { 'content-type': 'application/json' } });
     });
-    expect(await client.branches.list()).toEqual([
-      { id: '4ddce104-7b53-4aed-a08c-5bf15229cfee', name: 'Έδρα', code: '0' },
-    ]);
+    expect(await client.branches.list()).toEqual([{ id: 'branch-one', name: 'Έδρα', code: '0' }]);
     const page = await client.invoices.list();
     expect(page.invoices[0]?.issued_at).toBe('2026-09-18T14:28:41+03:00');
     expect(page.invoices[0]?.invoice_lines[0]?.quantity).toBe('1.0');

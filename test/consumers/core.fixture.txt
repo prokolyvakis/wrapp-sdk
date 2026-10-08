@@ -1,26 +1,185 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import * as sdk from '@prokolyvakis/wrapp-sdk';
-import type { CreateInvoiceInput, CreateOutcome } from '@prokolyvakis/wrapp-sdk';
+import type { CreateDraftInput, CreateInvoiceInput, CreateOutcome, CreatePosDeviceInput, DeliveryDetail, InvoiceDetails, InvoiceLine, InvoiceStatusOutcome, LineClassification, LineDeduction, OtherCorrelatedEntity, ProviderJson, VerifiedWebhook } from '@prokolyvakis/wrapp-sdk';
 
-assert.deepEqual(Object.keys(sdk).sort(), ['WrappClient', 'WrappError', 'calendarDate', 'decimal', 'verifyWebhook'].sort());
+assert.deepEqual(Object.keys(sdk).sort(), ['WrappClient', 'WrappError', 'calendarDate', 'decimal', 'getProviderDiagnostics', 'verifyWebhook'].sort());
 assert.equal(sdk.decimal('9007199254740993.12'), '9007199254740993.12');
+const written: Record<string, unknown> = {
+  'POST /api/v1/branches': { id: 'new-branch', name: 'Branch', code: 2 },
+  'PUT /api/v1/branches/new-branch': { id: 'new-branch', name: 'Renamed', code: 2 },
+  'POST /api/v1/billing_books': { id: 'new-book', name: 'Book', series: 'S', invoice_type_code: '2.1' },
+  'PUT /api/v1/billing_books/new-book': { id: 'new-book', name: 'Book', series: 'S', invoice_type_code: '2.1', number: 7, branches: [] },
+  'GET /api/v1/invoices/invoice/generate_pdf': { download_url: 'https://example.invalid/pdf' },
+  'POST /api/v1/invoices': { status: 'successfully saved as draft', invoice_id: 'draft' },
+  'GET /api/v1/invoices/draft-reference': { status: 'draft' },
+  'GET /api/v1/invoices/find_all_invoices': { invoices: [{ id: 'draft', external_id: 'draft-reference', invoice_type_code: '2.1', billing_book_id: 'book', issued_at: '2026-09-21 10:00:00 +0300', code: '', my_data_mark: '', my_data_uid: '', currency: 'EUR',
+    net_total_amount: 10, vat_total_amount: 2.4, total_amount: 12.4, payable_total_amount: 12.4, counterpart: { name: 'Company' },
+    invoice_lines: [{ line_number: 1, name: 'Service', quantity: 1, unit_price: 10, net_total_price: 10, vat_rate: 24, vat_total: 2.4, subtotal: 12.4, classification_category: 'category1_3', classification_type: 'E3_561_001' }] }], total_count: 1, total_pages: 1, current_page: 1 },
+  'POST /api/v1/invoices/draft/issue_draft': { id: 'draft', external_id: 'draft-reference', my_data_mark: '400000000000001', my_data_uid: 'uid', my_data_qr_url: 'https://example.invalid/qr', series: 'S', num: 5, issued_at: '21-09-2026',
+    cancelled_by_mark: null, transmission_failure: null, wrapp_invoice_url: 'https://example.invalid/el', wrapp_invoice_url_en: 'https://example.invalid/en', issued_at_datetime: '2026-09-21T10:00:00.000+03:00' },
+  'GET /api/v1/catering_tables/transfer': { id: 'other', status: 'open', name: 'table2', total: 4.5, invoices: ['note'], error_message: null },
+  'POST /api/v1/digital_clienteles/entry/correlate_by_mark': { notice: 'Correlated' },
+  'POST /api/v1/digital_clienteles/entry/correlate_by_fim': { errors: 'Refused' },
+  'POST /api/v1/digital_clienteles': { id: 'entry', iddcl: '100000000000001', client_service_type: 'parkingcarwash', status: 'pending', branch: '0', mixed_service: false, amount: null, entry_completion: null },
+  'GET /api/v1/digital_clienteles/entry': { id: 'entry', client_service_type: 'parkingcarwash', status: 'complete', amount: '1.0', entry_completion: true },
+  'POST /api/v1/digital_clienteles/entry': { id: 'entry', client_service_type: 'parkingcarwash', status: 'complete', amount: '12.50', entry_completion: true },
+  'POST /api/v1/digital_clienteles/entry/cancel': { notice: 'Cancelled successfully.', cancellation_id: '100000000000002' },
+  'GET /api/v1/catering_tables': [{ id: 'table', status: 'open', name: 'table1', total: '140.0' }],
+  'POST /api/v1/catering_tables': { id: 'table', status: 'available', name: 7, total: '0.0', invoices: [], error_message: null },
+  'GET /api/v1/catering_tables/table': { id: 'table', status: 'alert', name: 'table1', total: '0.0', invoices: ['invoice'], error_message: 'Check' },
+  'PATCH /api/v1/catering_tables/table': { id: 'table', status: 'available', name: 'renamed', total: '0.0' },
+  'POST /api/v1/catering_tables/open_table': { id: 'table', status: 'open', name: 'table1', total: '0.0' },
+  'POST /api/v1/catering_tables/table/close': { errors: [{ title: 'Refused' }] },
+  'DELETE /api/v1/catering_tables/table': { status: 'Catering table deleted' },
+  'GET /api/v1/invoices/list_open_catering_order_notes': { invoices: [{ id: 'note', my_data_mark: '400000000000001', issued_at: '2026-05-13T10:00:00.000Z', catering_table_id: 'table' }], total_pages: 1, current_page: 1 },
+  'POST /api/v1/invoices/cancel_catering_order_note': { id: 'cancelling', my_data_mark: 'mark', my_data_uid: 'uid', my_data_qr_url: 'https://example.invalid/qr', series: 'a', num: 1, wrapp_invoice_url: 'https://example.invalid/el', wrapp_invoice_url_en: 'https://example.invalid/en' },
+  'GET /api/v1/digital_transports': { digital_transports: [{ id: 'transport', category: 'shipping', status: 'pending', invoice_id: 'invoice', my_data_response: { code: 7, text: '7' } }], total_pages: 1, current_page: 1 },
+  'GET /api/v1/digital_transports/transport': { digital_transport: { id: 'transport', category: 'shipping', status: 'delivered', my_data_response: null } },
+  'POST /api/v1/digital_transports': { digital_transport: { id: 'transport', category: 'shipping', status: 'pending', invoice_id: 'invoice' } },
+  'POST /api/v1/digital_transports/transport/refresh': { digital_transport: { id: 'transport', category: 'shipping', status: 'delivered' } },
+  'POST /api/v1/digital_transports/transport/reject': { errors: [{ message: 'Reject failed' }] },
+  'POST /api/v1/digital_transports/transport/confirm_delivery': { digital_transport: { id: 'transport', category: 'shipping', status: 'delivered' } },
+  'POST /api/v1/digital_transports/transport/confirm_return': { digital_transport: { id: 'transport', category: 'shipping', status: 'COMPLETED' } },
+  'POST /api/v1/digital_transports/transport/transfer': { digital_transport: { id: 'transport', category: 'shipping', status: 'IN_TRANSIT' } },
+  'GET /api/v1/pos_devices': [{ id: 'device', name: 'Front desk', terminal_id: '16000001', merchant_id: null }],
+  'POST /api/v1/pos_devices': { errors: { 'pos_devices.name': ['Taken'], authorization_code: ['Wrong', 'Used'] } },
+  'DELETE /api/v1/pos_devices/device': { status: 'POS device deleted' },
+  'POST /api/v1/pos_sessions/invoice/abort_session': { message: 'Session aborted successfully' },
+};
+const routes: Record<string, unknown> = {
+  '/api/v1/login': { data: { type: 'jwt', attributes: { jwt: 'fake.jwt' } } },
+  '/api/v1/tenant_details': { wrapp_user_id: 'tenant', partner_user_id: null, issue_invoice_status: true,
+    email: 'test@example.invalid', has_plan: true, plan_name: 'test',
+    next_payment_date: null, next_payment_amount: null },
+  '/api/v1/vat_search': { vat_no: 'synthetic', name: 'Company', city: 'City', address: 'Street', postal_code: '00000', street_number: '1' },
+  '/api/v1/vat_exemptions': [{ '1': 'Synthetic exemption' }],
+  '/api/v1/branches': [{ id: 'branch', name: 'Main', code: 0 }],
+  '/api/v1/billing_books': [{ id: 'book', name: 'Service', series: 'S', invoice_type_code: '2.1', number: 4 }],
+  '/api/v1/invoices/issued_count': { issued_count: 800 },
+  '/api/v1/invoices/invoice/generate_thermal_pdf': { download_url: 'https://example.invalid/thermal.pdf' },
+  '/api/v1/invoices/invoice/cancel': { id: 'invoice', my_data_mark: 'mark', my_data_uid: 'uid', my_data_qr_url: 'https://example.invalid/qr', series: 'S', num: 1, cancelled_by_mark: 'cancel-mark', wrapp_invoice_url: 'https://example.invalid/el', wrapp_invoice_url_en: 'https://example.invalid/en' },
+  '/api/v1/invoices/invoice/set_external_id': { status: 'updated', external_id: 'reference' },
+  '/api/v1/invoices/invoice/mark_as_paid': { status: 'paid' },
+  '/api/v1/invoices/invoice/delete_draft': { errors: [{ title: 'Not a draft' }] },
+};
 const client = new sdk.WrappClient({
   environment: 'staging',
   credentials: { apiKey: 'synthetic-consumer-key', tenant: { kind: 'userId', value: 'tenant' } },
-  advanced: { fetch: async (resource) => {
-    const url = resource instanceof Request ? resource.url : String(resource);
-    return new Response(JSON.stringify(url.endsWith('/login')
-      ? { data: { type: 'jwt', attributes: { jwt: 'fake.jwt' } } }
-      : { wrapp_user_id: 'tenant', partner_user_id: null, issue_invoice_status: true,
-          email: 'test@example.invalid', has_plan: true, plan_name: 'test',
-          next_payment_date: null, next_payment_amount: null }),
-      { headers: { 'content-type': 'application/json' } });
+  advanced: { fetch: async (resource, init) => {
+    const url = new URL(resource instanceof Request ? resource.url : String(resource));
+    const answer = written[(init?.method ?? 'GET') + ' ' + url.pathname] ?? routes[url.pathname];
+    return new Response(JSON.stringify(answer), { headers: { 'content-type': 'application/json' } });
   } },
 });
 assert.equal((await client.tenant.get()).wrapp_user_id, 'tenant');
+const branchCode: string = (await client.branches.list())[0]?.code ?? '';
+assert.equal(branchCode, '0');
+const bookNumber: string = (await client.billingBooks.list())[0]?.number ?? '';
+assert.equal(bookNumber, '4');
+assert.equal((await client.vat.search({ vat: 'synthetic', country_code: 'GR' })).vat_no, 'synthetic');
+assert.equal((await client.vat.exemptions())[0]?.['1'], 'Synthetic exemption');
+const issued: string = (await client.invoices.issuedCount()).issuedCount;
+assert.equal(issued, '800');
+const thermal = await client.invoices.requestThermalPdf('invoice');
+assert.equal(thermal.kind === 'available' ? thermal.downloadUrl : thermal.kind, 'https://example.invalid/thermal.pdf');
+const cancelled = await client.invoices.cancelDeliveryNote('invoice');
+assert.equal(cancelled.kind === 'observed' ? cancelled.cancellation.cancelled_by_mark : cancelled.kind, 'cancel-mark');
+const assigned = await client.invoices.setExternalId('invoice', { external_id: 'reference' });
+assert.equal(assigned.kind === 'acknowledged' ? assigned.externalId + '/' + assigned.identity : assigned.referenceState, 'reference/exact');
+assert.equal((await client.invoices.markAsPaid('invoice')).kind, 'acknowledged');
+const branch = await client.branches.create({ name: 'Branch', code: 2, address: 'Street', street_number: '1', city: 'City', postal_code: '00000', default_option: false });
+assert.equal(branch.kind === 'observed' ? branch.branch.id : branch.kind, 'new-branch');
+const renamed = await client.branches.update('new-branch', { name: 'Renamed' });
+assert.equal(renamed.kind === 'observed' ? renamed.branch.name : renamed.kind, 'Renamed');
+const book = await client.billingBooks.create({ name: 'Book', series: 'S', number: 1, invoice_type_code: '2.1' });
+assert.equal(book.kind === 'observed' ? book.billingBook.number : book.kind, undefined);
+const renumbered = await client.billingBooks.updateNumber('new-book', { number: 7 });
+assert.equal(renumbered.kind === 'observed' ? renumbered.billingBook.number : renumbered.kind, '7');
+const englishPdf = await client.invoices.requestPdf('invoice', { locale: 'en', timeoutMs: 5000 });
+assert.equal(englishPdf.kind === 'available' ? englishPdf.downloadUrl : englishPdf.kind, 'https://example.invalid/pdf');
+assert.equal((await client.digitalClienteles.correlateByMark('entry', { correlate_mark: '400000000000001' })).kind, 'acknowledged');
+const byFim = await client.digitalClienteles.correlateByFim('entry', { correlate_fim_number: 'ABC1', correlate_fim_aa: '1' });
+const parked = await client.digitalClienteles.create({ client_service_type: 'parkingcarwash', branch: '0', vehicle_registration_number: 'ABC1234', mixed_service: false });
+assert.equal(parked.kind === 'observed' ? parked.clientele.status + String(parked.clientele.mixed_service) + String(parked.clientele.amount) : parked.kind, 'pendingfalsenull');
+const completed = await client.digitalClienteles.update('entry', { entry_completion: true, amount: sdk.decimal('12.50'), provided_service_category: 'by_price_list', invoice_kind: 'retail_sales_receipt' });
+assert.equal(completed.kind === 'observed' ? completed.clientele.amount : completed.kind, '12.50');
+const shownEntry = await client.digitalClienteles.get('entry');
+const completion: boolean | null | undefined = shownEntry.entry_completion;
+assert.equal(shownEntry.status + String(completion) + String(shownEntry.comments), 'completetrueundefined');
+const cancelledEntry = await client.digitalClienteles.cancel('entry');
+assert.equal(cancelledEntry.kind === 'acknowledged' ? cancelledEntry.cancellationId : cancelledEntry.kind, '100000000000002');
+assert.equal(byFim.kind === 'rejected' ? byFim.errorCount : 0, 1);
+const merchantId: string | null | undefined = (await client.posDevices.list())[0]?.merchant_id;
+assert.equal(merchantId, null);
+const device = await client.posDevices.create({ pos_type: 'epay', name: 'Front desk', terminal_id: '16000001', authorization_code: 'synthetic-code' });
+assert.equal(device.kind === 'observed' ? device.device.id : device.errorCount, 3);
+assert.equal((await client.posDevices.delete('device')).kind, 'acknowledged');
+assert.equal((await client.posSessions.abort('invoice')).kind, 'acknowledged');
+const tableStatus: string = (await client.cateringTables.list())[0]?.status ?? '';
+assert.equal(tableStatus, 'open');
+const createdTable = await client.cateringTables.create({ name: '7' });
+assert.equal(createdTable.kind === 'observed' ? createdTable.table.name : createdTable.kind, '7');
+const shown = await client.cateringTables.get('table');
+assert.equal(shown.status + String(shown.error_message) + String(shown.invoices?.length), 'alertCheck1');
+const renamedTable = await client.cateringTables.update('table', { name: 'renamed' });
+assert.equal(renamedTable.kind === 'observed' ? renamedTable.table.invoices : null, undefined);
+assert.equal((await client.cateringTables.open({ name: 'table1' })).kind, 'observed');
+assert.equal((await client.cateringTables.close('table')).kind, 'rejected');
+const movedNotes = await client.cateringTables.transfer({ current_table: 'table', target_table: 'other', marks: ['400000000000001'] });
+assert.equal(movedNotes.kind === 'observed' ? movedNotes.table.id + movedNotes.table.total : movedNotes.kind, 'other4.5');
+assert.equal((await client.cateringTables.delete('table')).kind, 'acknowledged');
+const notes = await client.invoices.listOpenCateringOrderNotes({ page: 1 });
+assert.equal(notes.invoices[0]?.issued_at, '2026-05-13T10:00:00.000Z');
+const cancelling = await client.invoices.cancelCateringOrderNotes({ billing_book_id: 'book', correlated_invoices: ['400000000000001'] });
+assert.equal(cancelling.kind === 'observed' ? cancelling.receipt.num : cancelling.kind, '1');
+const transports = await client.digitalTransports.list({ category: 'shipping', page: 1 });
+const evidenceNode: ProviderJson | undefined = transports.digital_transports[0]?.my_data_response;
+assert.equal(describeEvidence(evidenceNode), 'object(code=number:7,text=string:7)');
+assert.equal(describeEvidence((await client.digitalTransports.get('transport')).my_data_response), 'null');
+const leg = { vehicle_number: 'ABC1234', transport_type: 2, carrier_vat_number: '123456789' };
+const registered = await client.digitalTransports.create({ invoice_id: 'invoice', ...leg });
+assert.equal(registered.kind === 'observed' ? registered.transport.status : registered.kind, 'pending');
+assert.equal((await client.digitalTransports.refresh('transport')).kind, 'observed');
+assert.equal((await client.digitalTransports.reject('transport', { reject_reason: 'Not received' })).kind, 'rejected');
+const delivered = await client.digitalTransports.confirmDelivery('transport', { outcome: 'PARTIAL', delivered_packaging: [{ packaging_type: 6, quantity: 2, other_packaging_title: 'Big bag' }] });
+assert.equal(delivered.kind, 'observed');
+assert.equal((await client.digitalTransports.confirmReturn('transport')).kind, 'observed');
+const moved = await client.digitalTransports.transfer('transport', leg);
+assert.equal(moved.kind === 'observed' ? moved.transport.status : moved.kind, 'IN_TRANSIT');
+const deleted = await client.invoices.drafts.delete('invoice');
+assert.equal(deleted.kind === 'rejected' ? deleted.errorCount : 0, 1);
+const draftInput: CreateDraftInput = { external_id: 'draft-reference', billing_book_id: 'book', invoice_type_code: '2.1', payment_method_type: 1,
+  counterpart: { name: 'Company', country_code: 'GR', vat: 'synthetic-vat', city: 'City', street: 'Street', number: '1', postal_code: '00000' },
+  net_total_amount: sdk.decimal('10.00'), vat_total_amount: sdk.decimal('2.40'), total_amount: sdk.decimal('12.40'), payable_total_amount: sdk.decimal('12.40'),
+  invoice_lines: [{ line_number: 1, name: 'Service', quantity: sdk.decimal('1'), unit_price: sdk.decimal('10'), net_total_price: sdk.decimal('10'), vat_rate: 24, vat_total: sdk.decimal('2.40'), subtotal: sdk.decimal('12.40'),
+    classification_category: 'category1_3', classification_type: 'E3_561_001' }] };
+const savedDraft = await client.invoices.drafts.create(draftInput);
+assert.equal(savedDraft.kind === 'saved' ? savedDraft.invoiceId : savedDraft.kind, 'draft');
+const draftStatus = await client.invoices.getStatus({ kind: 'externalId', value: 'draft-reference' });
+assert.equal(draftStatus.kind + draftStatus.identity, 'draftunavailable');
+const draftPage = await client.invoices.drafts.list({ page: 1 });
+const draftDate: string | null | undefined = draftPage.invoices[0]?.issued_at;
+assert.equal(String(draftDate) + String(draftPage.invoices[0] !== undefined && 'code' in draftPage.invoices[0]), '2026-09-21 10:00:00 +0300false');
+const draftIds: string[] = [];
+for await (const draft of client.invoices.drafts.iterate({}, { maxPages: 1 })) draftIds.push(draft.id);
+assert.deepEqual(draftIds, ['draft']);
+const issuedDraft = await client.invoices.drafts.issue({ kind: 'invoiceId', value: 'draft' }, { customer_emails: ['customer@example.invalid'], email_locale: 'en', generate_pdf: true });
+assert.equal(issuedDraft.kind === 'observed' ? issuedDraft.invoice.num + issuedDraft.identity : issuedDraft.kind, '5exact');
 const forbiddenPath = '@prokolyvakis/wrapp-sdk/dist/client.js';
 await assert.rejects(import(forbiddenPath), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
 
+function describeEvidence(node: ProviderJson | undefined): string {
+  if (node === undefined) return 'absent';
+  switch (node.kind) {
+    case 'null': return 'null';
+    case 'boolean': return 'boolean:' + String(node.value);
+    case 'string': return 'string:' + node.value;
+    case 'number': return 'number:' + node.text;
+    case 'array': return 'array(' + node.items.map(describeEvidence).join(',') + ')';
+    case 'object': return 'object(' + node.entries.map((entry) => entry.key + '=' + describeEvidence(entry.value)).join(',') + ')';
+  }
+}
 function consume(outcome: CreateOutcome): string {
   switch (outcome.kind) {
     case 'observed': return outcome.invoice.id;
@@ -30,7 +189,147 @@ function consume(outcome: CreateOutcome): string {
   }
 }
 assert.equal(consume({ kind: 'rejected', errorCount: 1, rejectionSource: 'unknown', referenceState: 'unknown' }), 'unknown');
+assert.equal(consume({ kind: 'pending', invoiceId: 'i', referenceState: 'unknown', identity: 'unavailable' }), 'i');
+
+function status(outcome: InvoiceStatusOutcome): string {
+  switch (outcome.kind) {
+    case 'observed': return outcome.invoice.id + '/' + outcome.identity;
+    case 'pending': return outcome.invoiceId + '/' + outcome.identity + '/' + (outcome.invoice?.my_data_uid ?? 'no-evidence');
+    case 'draft': return 'draft/' + outcome.identity;
+    default: { const unreachable: never = outcome; return unreachable; }
+  }
+}
+assert.equal(status({ kind: 'pending', invoiceId: 'i', referenceState: 'unknown', identity: 'unavailable' }), 'i/unavailable/no-evidence');
+assert.equal(status({ kind: 'draft', identity: 'unavailable' }), 'draft/unavailable');
+const refusing = new sdk.WrappClient({
+  environment: 'staging',
+  credentials: { apiKey: 'synthetic-consumer-key', tenant: { kind: 'userId', value: 'tenant' } },
+  advanced: { fetch: async (resource) => {
+    const url = resource instanceof Request ? resource.url : String(resource);
+    return new Response(JSON.stringify(url.endsWith('/login')
+      ? { data: { type: 'jwt', attributes: { jwt: 'fake.jwt' } } }
+      : { errors: [{ title: 'Record not found' }] }),
+      { headers: { 'content-type': 'application/json' } });
+  } },
+});
+const lookup = { kind: 'invoiceId', value: 'invoice' } as const;
+const silent: unknown = await refusing.invoices.getStatus(lookup).catch((error: unknown) => error);
+assert.ok(silent instanceof sdk.WrappError);
+assert.equal(silent.code, 'PROVIDER_REJECTED');
+assert.equal(sdk.getProviderDiagnostics(silent), undefined);
+const detailed: unknown = await refusing.invoices.getStatus(lookup, { diagnostics: 'provider-issues' }).catch((error: unknown) => error);
+assert.deepEqual(sdk.getProviderDiagnostics(detailed), { issues: [{ title: 'Record not found' }], truncated: false, sensitive: true });
+assert.ok(!JSON.stringify(detailed).includes('Record not found'));
+
+function route(event: VerifiedWebhook): string {
+  switch (event.kind) {
+    case 'invoice-observation': return event.invoice.id;
+    case 'pdf': return event.eventTypeHint + ' ' + event.downloadUrl;
+    case 'pos-payment-error': return event.providerMessage;
+    default: { const unreachable: never = event; return unreachable; }
+  }
+}
+const webhookBody = new TextEncoder().encode(JSON.stringify({ invoice_id: 'invoice', download_url: 'https://example.invalid/pdf' }));
+const webhook = sdk.verifyWebhook({
+  body: webhookBody,
+  signature: createHmac('sha256', 'synthetic-consumer-key').update(webhookBody).digest('hex'),
+  keys: ['synthetic-consumer-key'],
+  eventType: 'thermal-print-pdf',
+});
+assert.equal(route(webhook), 'thermal-print-pdf https://example.invalid/pdf');
+assert.equal(webhook.eventTypeAuthenticated, false);
+const split: readonly LineClassification[] = [{ category: 'category1_3', type: 'E3_561_001', amount: sdk.decimal('10.00') }];
+const deducted: readonly LineDeduction[] = [{ amount: sdk.decimal('1.00') }];
+const arrayClassified: InvoiceLine = { line_number: 1, name: 'Service', quantity: sdk.decimal('1'), unit_price: sdk.decimal('10'),
+  net_total_price: sdk.decimal('10'), vat_rate: 24, vat_total: sdk.decimal('2.40'), subtotal: sdk.decimal('12.40'),
+  classifications: split, deductions: deducted, deductions_amount: sdk.decimal('1.00'), withhold_tax_code: '3', rec_type: 2, fees_category: 5 };
+const general: Pick<CreateInvoiceInput, 'email_subject' | 'num' | 'self_pricing' | 'fees_amount' | 'deductions_total_amount'> =
+  { email_subject: 'Invoice $INVOICE_CODE', num: 11, self_pricing: false, fees_amount: sdk.decimal('3.00'), deductions_total_amount: sdk.decimal('1.00') };
+assert.equal(arrayClassified.classifications?.length, 1);
+assert.equal(general.num, 11);
+const fuelLine: Pick<InvoiceLine, 'fuel_code'> = { fuel_code: 20 };
+const fuelRoot: Pick<CreateInvoiceInput, 'fuel_invoice'> & { counterpart: Pick<NonNullable<CreateInvoiceInput['counterpart']>, 'supply_account_no'> } =
+  { fuel_invoice: true, counterpart: { supply_account_no: '12345678' } };
+assert.equal(String(fuelLine.fuel_code) + String(fuelRoot.fuel_invoice), '20true');
+const publicSector: Pick<CreateInvoiceInput, 'b2g' | 'b2g_budget_type' | 'b2g_due_date' | 'delivery_address_city'> =
+  { b2g: true, b2g_budget_type: 1, b2g_due_date: sdk.calendarDate('2026-01-31'), delivery_address_city: 'City' };
+const cpvLine: Pick<InvoiceLine, 'cpv_code'> = { cpv_code: '72000000-5' };
+assert.equal(String(publicSector.b2g_due_date) + String(cpvLine.cpv_code), '2026-01-3172000000-5');
+const movement: DeliveryDetail = { dispatch_date: '21-03-2026', dispatch_time: '02:30', vehicle_number: 'ABC1234', purpose_of_movement: '1',
+  issuer_of_movement: 'Carrier', from_address: 'Origin', from_number: '1', from_city: 'City', from_zipcode: '11111',
+  to_address: 'Destination', to_number: '2', to_city: 'City', to_zipcode: '22222', without_digital_transport_tracking: false };
+const sender: OtherCorrelatedEntity = { entity_type: 1, vat_number: '000000000', country_code: 'GR', branch_code: 0, name: 'Sender', street: 'Street', number: '1', postal_code: '11111', city: 'City' };
+const deliveryNote: Pick<CreateInvoiceInput, 'invoice_type_code' | 'is_delivery_note' | 'delivery_detail' | 'other_correlated_entities'> =
+  { invoice_type_code: '2.1', is_delivery_note: true, delivery_detail: movement, other_correlated_entities: [sender] };
+assert.equal(deliveryNote.invoice_type_code + String(deliveryNote.delivery_detail?.dispatch_time), '2.102:30');
+const branched: DeliveryDetail = { ...movement, from_branch: 0, to_branch: 1 };
+assert.equal(String(branched.from_branch) + String(branched.to_branch), '01');
+const readBack = undefined as unknown as InvoiceDetails | undefined;
+const dispatchDate: string | null | undefined = readBack?.delivery_details?.dispatch_date;
+const budgetType: string | null | undefined = readBack?.b2g_details?.b2g_budget_type;
+const withheld: string | null | undefined = readBack?.invoice_lines[0]?.withhold_tax_rate;
+const deductedAmount: string | undefined = readBack?.invoice_lines[0]?.deductions?.[0]?.amount;
+assert.equal([dispatchDate, budgetType, withheld, deductedAmount].every((value) => value === undefined), true);
+const receiptNote: Pick<CreateInvoiceInput, 'invoice_type_code' | 'receiving_note_purpose' | 'correlated_invoices'> =
+  { invoice_type_code: '10.1', receiving_note_purpose: 5, correlated_invoices: ['400000000000001'] };
+const types: readonly CreateInvoiceInput['invoice_type_code'][] = ['1.1', '5.1', '9.3', '11.4', '1.2', '3.1', '6.1', '8.1', '8.6', '11.5'];
+assert.equal(receiptNote.invoice_type_code + String(types.length), '10.110');
+const lodging: Pick<InvoiceLine, 'accommodation_tax' | 'other_taxes_percent_category' | 'other_taxes_amount'> = { accommodation_tax: sdk.decimal('1.50'), other_taxes_percent_category: '7', other_taxes_amount: sdk.decimal('1.50') };
+assert.equal(String(lodging.accommodation_tax) + String(lodging.other_taxes_percent_category), '1.507');
+const orderNote: Pick<CreateInvoiceInput, 'invoice_type_code' | 'counterpart' | 'catering_table_name' | 'catering_table_id'> = { invoice_type_code: '8.6', catering_table_name: 'Table 7' };
+assert.equal(String(orderNote.counterpart?.name) + String(orderNote.catering_table_name), 'undefinedTable 7');
+const softpos: CreatePosDeviceInput = { pos_type: 'worldline_softpos', terminal_id: '16000002', merchant_id: 'merchant@example.invalid' };
+const pos: Pick<CreateInvoiceInput, 'pos_device_id' | 'installments' | 'tip_amount'> = { pos_device_id: 'device', installments: false, tip_amount: sdk.decimal('2.00') };
+assert.equal(softpos.pos_type + String(pos.installments), 'worldline_softposfalse');
 if (false) {
+  // @ts-expect-error Type 8.4 is not issued through create.
+  const unaccepted: CreateInvoiceInput['invoice_type_code'] = '8.4';
+  void unaccepted;
+  // @ts-expect-error A clientele flag is a boolean, never text.
+  void client.digitalClienteles.create({ client_service_type: 'garage', branch: '0', recurring_service: 'true' });
+  // @ts-expect-error The off-site value of an update is not offered.
+  void client.digitalClienteles.update('entry', { off_site_provided_service: 'to_internal_location' });
+  // @ts-expect-error A draft takes no generate_pdf: a PDF is asked for when it is issued.
+  const draftWithPdf: CreateDraftInput = { ...draftInput, generate_pdf: true };
+  void draftWithPdf;
+  // @ts-expect-error A draft row has no document code.
+  void draftPage.invoices[0]?.code;
+  // @ts-expect-error Issuing a draft takes no payment method.
+  void client.invoices.drafts.issue({ kind: 'invoiceId', value: 'draft' }, { payment_method_type: 1 });
+  // @ts-expect-error A draft status carries no invoice record.
+  void draftStatus.invoice;
+  // @ts-expect-error A delivery branch is a branch code, a number, not a branch id.
+  const byBranchId: DeliveryDetail = { ...movement, from_branch: 'branch' };
+  void byBranchId;
+  // @ts-expect-error The PDF locale is 'el' or 'en'.
+  void client.invoices.requestPdf('invoice', { locale: 'fr' });
+  // @ts-expect-error A catering table is created with a name.
+  void client.cateringTables.create({});
+  // @ts-expect-error Only the number of a billing book can be updated.
+  void client.billingBooks.updateNumber('new-book', { name: 'Renamed' });
+  // @ts-expect-error The detail type of invoice type 1.5 is not part of the line type.
+  const detail: InvoiceLine['invoice_detail_type'] = undefined;
+  void detail;
+  // @ts-expect-error A due date is a validated calendar date, not any string.
+  const dueDate: CreateInvoiceInput['b2g_due_date'] = '2026-01-31';
+  void dueDate;
+  // @ts-expect-error A delivery outcome is FULL, PARTIAL or NONE, exactly as written.
+  void client.digitalTransports.confirmDelivery('transport', { outcome: 'full' });
+  // @ts-expect-error A number node carries exact text, not a JavaScript number.
+  void (evidenceNode?.kind === 'number' ? evidenceNode.value : undefined);
+  // @ts-expect-error A table is opened by id, by name or by both, never by neither.
+  void client.cateringTables.open({});
+  // @ts-expect-error The order-note page reports no total count.
+  void notes.total_count;
+  // @ts-expect-error A Viva device takes a merchant id, not an authorization code.
+  const wrongCredential: CreatePosDeviceInput = { pos_type: 'viva', name: 'Desk', terminal_id: '1', authorization_code: 'x' };
+  void wrongCredential;
+  // @ts-expect-error No crediting profile is supported, so there is no refund reference.
+  const refund: CreateInvoiceInput['refund_invoice_id'] = 'invoice';
+  void refund;
+  // @ts-expect-error 2 is the only documented fee record type.
+  const feeType: InvoiceLine['rec_type'] = 1;
+  void feeType;
   // @ts-expect-error Explicit environment is required.
   new sdk.WrappClient({ credentials: { apiKey: 'fake', tenant: { kind: 'userId', value: 'test' } } });
   // @ts-expect-error An amount is not an unchecked number.
@@ -38,4 +337,15 @@ if (false) {
   void amount;
   // @ts-expect-error No conflict classifier exists in this release.
   consume({ kind: 'conflict' });
+  // @ts-expect-error Webhook kinds name the validated body; the 0.1 header-named kinds are gone.
+  const retired: VerifiedWebhook['kind'] = 'issued-invoice';
+  void retired;
+  // @ts-expect-error Only the documented diagnostics level exists.
+  void client.tenant.get({ diagnostics: 'everything' });
+  const unnarrowed = undefined as unknown as InvoiceStatusOutcome;
+  // @ts-expect-error A pending status may carry no invoice: switch on kind first.
+  void unnarrowed.invoice.id;
+  // @ts-expect-error Pending identity can be unavailable, which is not identity evidence.
+  const proven: 'exact' | 'ascii-case-variant' = unnarrowed.identity;
+  void proven;
 }

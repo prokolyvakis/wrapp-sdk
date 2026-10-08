@@ -100,6 +100,29 @@ describe('safety properties', () => {
       { seed: 214031, numRuns: 150 },
     );
   });
+  it('should preserve any returned reference while still refusing it as an outbound path', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.string({ unit: 'grapheme', maxLength: 40 }),
+        fc.constantFrom(' ', '/', '%', '?', '#', '\\', '\n'),
+        fc.string({ unit: 'grapheme', maxLength: 40 }),
+        async (prefix, unsafe, suffix) => {
+          const reference = prefix + unsafe + suffix;
+          const { client, calls } = provider(({ url }) =>
+            url.pathname.endsWith('/login') ? login() : json(details({ external_id: reference })),
+          );
+          const read = await client.invoices.get({ kind: 'invoiceId', value: 'invoice-one' });
+          expect(read.invoice.external_id).toBe(reference);
+          expect(calls).toHaveLength(2);
+          await expect(
+            client.invoices.get({ kind: 'externalId', value: reference }),
+          ).rejects.toMatchObject({ code: 'INVALID_INPUT', effect: 'not-sent' });
+          expect(calls).toHaveLength(2);
+        },
+      ),
+      { seed: 58213, numRuns: 100 },
+    );
+  });
   it('should reject every single-byte body mutation with the original signature', () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 63 }), (index) => {

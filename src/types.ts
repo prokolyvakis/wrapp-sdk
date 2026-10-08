@@ -22,6 +22,13 @@ export interface RequestOptions {
   readonly signal?: AbortSignal;
   /** Overrides the client default (30 seconds) for this call only; 1 to 120 000 ms. */
   readonly timeoutMs?: number;
+  /**
+   * Opt in to keeping the provider's rejection detail for this call. It is read back with
+   * getProviderDiagnostics and stays out of the result, the error, its message and its JSON.
+   * On a non-2xx response it also reads the error body, bounded by the same deadline and
+   * byte cap. Without this option nothing is retained and no error body is read.
+   */
+  readonly diagnostics?: 'provider-issues';
 }
 /** Construction options. Credentials stay memory-only; rotation requires a new client. */
 export interface ClientOptions {
@@ -54,10 +61,17 @@ export interface Counterpart {
   readonly number?: string;
   readonly postal_code?: string;
   readonly email?: string;
+  /**
+   * The client's supply account number, for a fuel invoice. Optional. The provider documents
+   * that it ignores and does not store it on any other invoice; the SDK sends it as given.
+   */
+  readonly supply_account_no?: string;
 }
 /**
  * One invoice line. The caller supplies every amount and tax classification; the SDK
  * computes no totals, VAT rates or tax decisions. A zero VAT rate requires an exemption code.
+ * The numeric codes are checked against the provider's documented request sets before any
+ * network access. Those sets say what the SDK will send, not which code is fiscally correct.
  */
 export interface InvoiceLine {
   readonly line_number: number;
@@ -65,15 +79,100 @@ export interface InvoiceLine {
   readonly code?: string;
   readonly description?: string;
   readonly quantity: Decimal;
+  /** One of 1 to 6. */
   readonly quantity_type?: number;
   readonly unit_price: Decimal;
   readonly net_total_price: Decimal;
+  /**
+   * One of 0, 3, 4, 6, 9, 13, 17, 24. The provider documents that it does not refuse other
+   * values but issues the invoice as if without VAT, so they are rejected here instead.
+   */
   readonly vat_rate: number;
   readonly vat_total: Decimal;
   readonly subtotal: Decimal;
+  /** One of 1 to 31; required when vat_rate is 0. */
   readonly vat_exemption_code?: number;
-  readonly classification_category: string;
-  readonly classification_type: string;
+  /**
+   * Both scalar fields are required unless `classifications` is supplied. All three may be
+   * sent together: the provider documents that the array then overrides the pair, and the SDK
+   * sends them as given without merging.
+   */
+  readonly classification_category?: string;
+  readonly classification_type?: string;
+  /** At least one entry when supplied. Amounts are not checked against the line total. */
+  readonly classifications?: readonly LineClassification[];
+  /** Whole percent, 0 to 100: 20 means 20%. */
+  readonly withhold_tax_rate?: number;
+  /** One of '1' to '18', as a string. Not derived from or checked against the rate. */
+  readonly withhold_tax_code?: string;
+  readonly withholding_total?: Decimal;
+  /** One of '1' to '4', as a string. */
+  readonly stamp_duty_tax_code?: string;
+  readonly stamp_duty_amount?: Decimal;
+  /** Required when `deductions` holds at least one entry. Never computed from them. */
+  readonly deductions_amount?: Decimal;
+  readonly deductions?: readonly LineDeduction[];
+  /** Required on every line when the invoice sets `self_pricing: true`. */
+  readonly expenses_vat_classification?: string;
+  readonly expense?: boolean;
+  /** Marks a fee line; 2 is the only value the reference documents. */
+  readonly rec_type?: 2;
+  /**
+   * Positive integer sent as given. The reference publishes no table for it, so membership
+   * is not validated.
+   */
+  readonly fees_category?: number;
+  /**
+   * A fuel code from the provider's table, accepted only when the invoice sets
+   * `fuel_invoice: true`. Code 999 may appear on one line only, and that line's
+   * `net_total_price` may not exceed the sum of the other lines' `net_total_price`.
+   */
+  readonly fuel_code?: number;
+  /**
+   * The three fields below belong to the accommodation-tax receipt (type 8.2), which needs
+   * all three on every line beside zero net, VAT and subtotal values at `vat_rate` 24, and
+   * are refused on every other type.
+   */
+  readonly accommodation_tax?: Decimal;
+  /** The provider's codes for this field. */
+  readonly other_taxes_percent_category?:
+    | '6'
+    | '7'
+    | '8'
+    | '9'
+    | '10'
+    | '17'
+    | '20'
+    | '21'
+    | '22'
+    | '23'
+    | '24'
+    | '25'
+    | '26'
+    | '27'
+    | '28'
+    | '29'
+    | '30';
+  readonly other_taxes_amount?: Decimal;
+  /** Required on every line when the invoice sets `b2g: true`. */
+  readonly cpv_code?: string;
+}
+/** One entry of a line's `classifications`. */
+export interface LineClassification {
+  readonly category: string;
+  readonly type: string;
+  /** At most 2 fraction digits. */
+  readonly amount: Decimal;
+}
+/**
+ * One deduction on a line. Omitted fields are not sent; the provider documents that a missing
+ * `informational` means false.
+ */
+export interface LineDeduction {
+  readonly title?: string;
+  /** At most 2 fraction digits. */
+  readonly amount: Decimal;
+  readonly informational?: boolean;
 }
 /**
  * Invoice creation payload, using the provider's snake_case field vocabulary.
@@ -88,10 +187,57 @@ export interface CreateInvoiceInput {
    */
   readonly external_id: string;
   readonly billing_book_id: string;
-  /** Supported service-invoice subset; other document types are rejected pre-I/O. */
-  readonly invoice_type_code: '2.1' | '2.2' | '2.3' | '11.2';
+  /**
+   * The supported types; any other code is rejected pre-I/O. Several have rules of their own
+   * (a correlated mark on 1.6, 2.4 and 5.1; fixed shapes for 9.2, 9.3, 10.1 and 10.2; no VAT
+   * on 3.1, 3.2 and 8.1); see "Invoice types with rules of their own" in the API reference.
+   */
+  readonly invoice_type_code:
+    | '1.1'
+    | '1.2'
+    | '1.3'
+    | '1.4'
+    | '1.6'
+    | '2.1'
+    | '2.2'
+    | '2.3'
+    | '2.4'
+    | '3.1'
+    | '3.2'
+    | '5.1'
+    | '5.2'
+    | '6.1'
+    | '6.2'
+    | '7.1'
+    | '8.1'
+    | '8.2'
+    | '8.6'
+    | '9.2'
+    | '9.3'
+    | '10.1'
+    | '10.2'
+    | '11.1'
+    | '11.2'
+    | '11.3'
+    | '11.4'
+    | '11.5';
   readonly payment_method_type: number;
-  readonly counterpart: Counterpart;
+  /**
+   * Required for every type except 6.1, 6.2 and 8.6, where it may be omitted. Which of its
+   * fields are required depends on the type.
+   */
+  readonly counterpart?: Counterpart;
+  /**
+   * The open catering table of an order note (type 8.6), or of the retail receipt 11.1 that
+   * closes order notes, which then names their marks in `correlated_invoices`. Refused on
+   * every other type.
+   */
+  readonly catering_table_id?: string;
+  /**
+   * The name of a new catering table that an order note (type 8.6) creates and opens. Not
+   * sent together with `catering_table_id`. Refused on every other type.
+   */
+  readonly catering_table_name?: string;
   readonly net_total_amount: Decimal;
   readonly vat_total_amount: Decimal;
   readonly total_amount: Decimal;
@@ -102,16 +248,158 @@ export interface CreateInvoiceInput {
   readonly notes?: string;
   /** Three uppercase letters (ISO 4217 shape; membership is not validated). Must be provided together with exchange_rate or not at all. */
   readonly currency?: string;
+  /** At most 2 fraction digits; more precision is rejected, never rounded. */
   readonly exchange_rate?: Decimal;
   readonly correlated_invoices?: readonly string[];
   readonly customer_emails?: readonly string[];
   readonly email_locale?: 'el' | 'en';
   readonly generate_pdf?: boolean;
   readonly mark_as_paid?: boolean;
+  /**
+   * Override the customer email's subject and body. Sent exactly as given: placeholders such
+   * as $INVOICE_CODE are substituted by the provider, and line breaks are kept.
+   */
+  readonly email_subject?: string;
+  readonly email_body?: string;
+  /**
+   * A specific invoice number, chosen by the caller: a positive integer. The SDK keeps no
+   * numbering state and does not check the number against the billing book.
+   */
+  readonly num?: number;
+  /** When true, every line needs `expenses_vat_classification`. */
+  readonly self_pricing?: boolean;
+  /** One of 1 to 13. */
+  readonly special_invoice_category?: number;
+  /**
+   * Invoice-level totals, each at most 2 fraction digits and sent exactly as given. The SDK
+   * never derives one from the lines or compares it with them.
+   */
+  readonly other_taxes_amount?: Decimal;
+  readonly withholding_total_amount?: Decimal;
+  /**
+   * The reference documents two stamp-duty totals with separate wire fields. Neither is
+   * treated as an alias of the other, and neither is required by the SDK.
+   */
+  readonly total_stamp_duty_amount?: Decimal;
+  readonly stamp_duty_amount?: Decimal;
+  /** Required when any line holds at least one deduction. */
+  readonly deductions_total_amount?: Decimal;
+  /** Required when any line sets `rec_type` or `fees_category`. */
+  readonly fees_amount?: Decimal;
+  /**
+   * The registered POS device for an issuance tied to a POS transaction. Not required for a
+   * card payment as such, and never looked up by the SDK.
+   */
+  readonly pos_device_id?: string;
+  /** `true` needs `pos_device_id`. The provider documents installments for Viva terminals only. */
+  readonly installments?: boolean;
+  /** At most 2 fraction digits. */
+  readonly tip_amount?: Decimal;
+  /** Marks a fuel invoice. Required as `true` for any line to carry a `fuel_code`. */
+  readonly fuel_invoice?: boolean;
+  /**
+   * Marks a B2G (public sector) invoice. When true, the eleven fields from
+   * `delivery_address_city` to `b2g_due_date` are required, and every line needs a
+   * `cpv_code`. The SDK checks that they are present and well-formed; it does not look up or
+   * verify an authority, a contract or a budget. Without the flag the fields are optional and
+   * are sent as given.
+   */
+  readonly b2g?: boolean;
+  /** The B2G invoice's own delivery address; unrelated to a delivery note. */
+  readonly delivery_address_city?: string;
+  readonly delivery_address_street?: string;
+  readonly delivery_address_street_number?: string;
+  readonly delivery_address_postal_code?: string;
+  readonly delivery_address_party_name?: string;
+  readonly b2g_contracting_authority_id?: string;
+  readonly b2g_contract_identifier?: string;
+  /** One of 1, 2, 3. */
+  readonly b2g_budget_type?: number;
+  readonly b2g_budget_identifier?: string;
+  readonly b2g_payment_details?: string;
+  /** A real calendar date, YYYY-MM-DD. */
+  readonly b2g_due_date?: CalendarDate;
+  readonly b2g_buyer_reference?: string;
+  readonly b2g_bt_70?: string;
+  /**
+   * Marks the invoice as a delivery note. `true` needs `delivery_detail`, and
+   * `delivery_detail` needs `true`. The provider then tracks the movement as a digital
+   * transport unless the detail says otherwise.
+   */
+  readonly is_delivery_note?: boolean;
+  readonly delivery_detail?: DeliveryDetail;
+  readonly other_correlated_entities?: readonly OtherCorrelatedEntity[];
+  /**
+   * One of 1 to 7. Required on types 10.1 and 10.2 and refused on every other type. 5 is
+   * accepted on 10.1 only; 7 needs `other_receiving_note_purpose_title`.
+   */
+  readonly receiving_note_purpose?: number;
+  /** At most 150 characters. */
+  readonly other_receiving_note_purpose_title?: string;
+}
+/** The movement of a delivery note. */
+export interface DeliveryDetail {
+  /** A real calendar date written DD-MM-YYYY. */
+  readonly dispatch_date: string;
+  /** HH:MM, from 00:00 to 23:59. */
+  readonly dispatch_time: string;
+  readonly vehicle_number: string;
+  /** One of '1' to '20' without '6', '15', '16', '17' and '18', as a string. */
+  readonly purpose_of_movement: string;
+  /** Required when `purpose_of_movement` is '19'. */
+  readonly purpose_of_movement_custom_title?: string;
+  readonly issuer_of_movement: string;
+  readonly from_address: string;
+  readonly from_number: string;
+  readonly from_city: string;
+  readonly from_zipcode: string;
+  readonly to_address: string;
+  readonly to_number: string;
+  readonly to_city: string;
+  readonly to_zipcode: string;
+  readonly reverse_delivery_note?: boolean;
+  /** One of 1 to 5. Required when `reverse_delivery_note` is true. */
+  readonly reverse_delivery_note_purpose?: number;
+  /**
+   * The two flags below change how the provider tracks the transport and cannot both be
+   * true. With `without_digital_transport_tracking` the provider marks the delivery note
+   * completed on issue.
+   */
+  readonly non_obligated_recipient?: boolean;
+  readonly without_digital_transport_tracking?: boolean;
+  /**
+   * The code of the branch the goods leave from, as `Branch.code` gives it: a nonnegative
+   * integer, not a branch id. Sent as given; the SDK looks no branch up. Omitted, nothing is
+   * sent and the provider records none.
+   */
+  readonly from_branch?: number;
+  /** The code of the branch the goods arrive at; same rules as `from_branch`. */
+  readonly to_branch?: number;
+}
+/** Another party related to the invoice, for example a sender when a carrier issues it. */
+export interface OtherCorrelatedEntity {
+  /** One of 1 to 6. */
+  readonly entity_type: number;
+  /** The tax id, as text. */
+  readonly vat_number: string;
+  /** Two uppercase letters. */
+  readonly country_code: string;
+  /** A nonnegative integer. */
+  readonly branch_code: number;
+  readonly name: string;
+  readonly street: string;
+  readonly number: string;
+  readonly postal_code: string;
+  readonly city: string;
 }
 /** An issued invoice as observed via status lookup, creation or a verified webhook. */
 export interface InvoiceObservation {
   readonly id: string;
+  /**
+   * The reference as the provider stores it: free-form text, never trimmed, case-folded or
+   * decoded. It can hold characters this SDK refuses in an outbound reference, when another
+   * producer wrote it.
+   */
   readonly external_id: string | null;
   /** Greek myDATA registration mark, accepted as the JSON string the provider documents. */
   readonly my_data_mark: string | null;
@@ -126,7 +414,47 @@ export interface InvoiceObservation {
   /** Portal link returned as data; the SDK never fetches it. */
   readonly wrapp_invoice_url: string;
   readonly wrapp_invoice_url_en: string;
+  /**
+   * The five fields below are absent when the provider omits them and null when it reports
+   * that they do not apply. Absent and null are different observations.
+   */
+  readonly authentication_code?: string | null;
+  readonly catering_table_id?: string | null;
+  readonly card_type?: string | null;
+  /** Masked by the provider; kept as received. */
+  readonly card_number?: string | null;
+  readonly transaction_id?: string | null;
 }
+/**
+ * Identity evidence for a pending outcome. 'unavailable' means the provider returned only its
+ * own invoice id, so nothing could be compared with the requested external reference; a
+ * provider id is never treated as proof about a reference.
+ */
+export type PendingIdentityEvidence = IdentityEvidence | 'unavailable';
+/**
+ * The provider reports the invoice as pending. This is never an issued invoice, whatever
+ * evidence accompanies it: on a provider-to-authority connection loss the provider already
+ * returns a number, UID and QR URL while the invoice is still pending. referenceState stays
+ * 'unknown', so pending is never permission to mint a replacement external reference.
+ */
+export interface PendingInvoiceOutcome {
+  readonly kind: 'pending';
+  readonly invoiceId: string;
+  readonly referenceState: 'unknown';
+  readonly identity: PendingIdentityEvidence;
+  /** Present only when the provider returned the full observation with the pending status. */
+  readonly invoice?: InvoiceObservation;
+}
+/**
+ * Result of a status lookup: an observed invoice, a pending one, or a draft. Switch on kind
+ * before reading invoice. The provider answers for a draft with its status alone: 'draft'
+ * carries no record, and its identity is always 'unavailable' because nothing in the answer
+ * names the invoice. A provider rejection, including not-found, is a PROVIDER_REJECTED error.
+ */
+export type InvoiceStatusOutcome =
+  | Readonly<{ kind: 'observed'; invoice: InvoiceObservation; identity: IdentityEvidence }>
+  | PendingInvoiceOutcome
+  | Readonly<{ kind: 'draft'; identity: 'unavailable' }>;
 /**
  * Closed result union for invoice creation. No outcome establishes compliance, reference
  * freedom, or equality to an earlier request: rejections carry referenceState 'unknown'
@@ -135,7 +463,7 @@ export interface InvoiceObservation {
  */
 export type CreateOutcome =
   | Readonly<{ kind: 'observed'; invoice: InvoiceObservation; identity: IdentityEvidence }>
-  | Readonly<{ kind: 'pending'; invoiceId: string; referenceState: 'unknown' }>
+  | PendingInvoiceOutcome
   | Readonly<{
       kind: 'rejected';
       errorCount: number;
@@ -143,24 +471,53 @@ export type CreateOutcome =
       referenceState: 'unknown';
     }>;
 /**
- * Validated core projection of a full invoice lookup, not a complete fiscal archive.
- * Amounts retain the provider's exact numeric text; no rounding or float conversion occurs.
+ * Validated projection of a full invoice lookup, not a complete fiscal archive.
+ * Amounts and returned numeric codes retain the provider's exact text; no rounding or float
+ * conversion occurs. Optional fields are absent when the provider omits them. Fields whose
+ * returned shape the provider has not documented are not projected at all.
  */
 export interface InvoiceDetails {
   readonly id: string;
+  /** Free-form text exactly as stored by the provider; see InvoiceObservation.external_id. */
   readonly external_id: string | null;
   readonly invoice_type_code: string;
   readonly billing_book_id: string;
   /** Documented provider timestamp with numeric offset, validated but not reinterpreted. */
   readonly issued_at: string;
   readonly code: string;
+  /**
+   * The optional fields below, here and on each line, are absent when the provider omits
+   * them and null when it returns null, which it does for a field it has no value for.
+   * Absent and null are different observations.
+   */
+  /** Provider payment-method code as exact text; unknown codes are kept, not interpreted. */
+  readonly payment_method?: string | null;
+  /** Provider branch code as exact text. */
+  readonly branch?: string | null;
+  readonly is_delivery_note?: boolean | null;
+  readonly fuel_invoice?: boolean | null;
+  readonly third_party_collection?: boolean | null;
   readonly currency: string;
+  readonly exchange_rate?: string | null;
+  readonly other_taxes_amount?: string | null;
   readonly net_total_amount: string;
   readonly vat_total_amount: string;
   readonly total_amount: string;
   readonly payable_total_amount: string;
+  readonly notes?: string | null;
+  readonly withholding_total_amount?: string | null;
+  readonly total_stamp_duty_amount?: string | null;
+  /** Provider code as exact text; an unfamiliar code is kept, not interpreted. */
+  readonly special_invoice_category?: string | null;
+  /** Present on a delivery note. */
+  readonly delivery_details?: InvoiceDeliveryDetails | null;
+  /** Present on a B2G invoice. */
+  readonly b2g_details?: InvoiceB2gDetails | null;
   readonly counterpart: Readonly<{
+    /** Empty on a record that has no counterpart. */
     name: string;
+    /** Present on a fuel invoice. */
+    supply_account_no?: string | null;
     country_code?: string | undefined;
     vat?: string | undefined;
     city?: string | undefined;
@@ -169,18 +526,90 @@ export interface InvoiceDetails {
     postal_code?: string | undefined;
     email?: string | undefined;
   }>;
+  /**
+   * A read returns every invoice of the tenant, including types this SDK does not issue.
+   * On some of those a line has an empty name, or null for its VAT rate or for either
+   * classification field.
+   */
   readonly invoice_lines: readonly Readonly<{
     line_number: number;
     name: string;
+    code?: string | null;
+    description?: string | null;
     quantity: string;
+    quantity_type?: string | null;
     unit_price: string;
     net_total_price: string;
-    vat_rate: number;
+    vat_rate: number | null;
     vat_total: string;
     subtotal: string;
-    classification_category: string;
-    classification_type: string;
+    /** Exact text of the rate: '20' when set, '' when the line has none. */
+    withhold_tax_rate?: string | null;
+    withhold_tax_code?: string | null;
+    withholding_total?: string | null;
+    classification_category: string | null;
+    classification_type: string | null;
+    stamp_duty_tax_code?: string | null;
+    stamp_duty_amount?: string | null;
+    deductions_amount?: string | null;
+    /** Empty when the line has none; an omitted item field stays absent. */
+    deductions?:
+      | readonly Readonly<{
+          title?: string | null;
+          amount: string;
+          informational?: boolean | null;
+        }>[]
+      | null;
+    /** Provider fuel code as exact text, on a line of a fuel invoice. */
+    fuel_code?: string | null;
   }>[];
+}
+/**
+ * The movement of a delivery note as the provider returns it. Every member is absent when
+ * omitted and null when the provider reports no value. Codes and branch numbers are exact
+ * text; the dispatch date is the provider's DD-MM-YYYY text, returned as written.
+ */
+export interface InvoiceDeliveryDetails {
+  readonly dispatch_date?: string | null;
+  readonly dispatch_time?: string | null;
+  readonly vehicle_number?: string | null;
+  readonly purpose_of_movement?: string | null;
+  readonly purpose_of_movement_custom_title?: string | null;
+  readonly issuer_of_movement?: string | null;
+  readonly from_address?: string | null;
+  readonly from_number?: string | null;
+  readonly from_city?: string | null;
+  readonly from_zipcode?: string | null;
+  readonly from_branch?: string | null;
+  readonly to_address?: string | null;
+  readonly to_number?: string | null;
+  readonly to_city?: string | null;
+  readonly to_zipcode?: string | null;
+  readonly to_branch?: string | null;
+  readonly reverse_delivery_note?: boolean | null;
+  readonly reverse_delivery_note_purpose?: string | null;
+  readonly non_obligated_recipient?: boolean | null;
+  readonly without_digital_transport_tracking?: boolean | null;
+}
+/**
+ * The B2G fields of an invoice as the provider returns them, under its own key names (for
+ * example `bt_70`, where the request field is `b2g_bt_70`). The budget type is exact text and
+ * the due date is the provider's DD-MM-YYYY text, where the request takes YYYY-MM-DD.
+ */
+export interface InvoiceB2gDetails {
+  readonly buyer_reference?: string | null;
+  readonly delivery_address_city?: string | null;
+  readonly delivery_address_street?: string | null;
+  readonly delivery_address_street_number?: string | null;
+  readonly delivery_address_postal_code?: string | null;
+  readonly delivery_address_party_name?: string | null;
+  readonly b2g_contracting_authority_id?: string | null;
+  readonly b2g_contract_identifier?: string | null;
+  readonly b2g_budget_type?: string | null;
+  readonly b2g_budget_identifier?: string | null;
+  readonly b2g_due_date?: string | null;
+  readonly b2g_payment_details?: string | null;
+  readonly bt_70?: string | null;
 }
 /** One validated result page. No snapshot guarantee exists under concurrent writes. */
 export interface InvoicePage {
@@ -189,6 +618,55 @@ export interface InvoicePage {
   readonly total_pages: number;
   readonly current_page: number;
 }
+/**
+ * A draft as the draft listing returns it: the full-detail projection of an invoice that has
+ * not been issued. It has no document code, registration mark or number. `issued_at` is the
+ * date the provider holds for the draft, as it sent it; it is not an issue time.
+ */
+export type DraftInvoiceDetails = Omit<InvoiceDetails, 'code'>;
+/** One validated page of drafts. No snapshot guarantee exists under concurrent writes. */
+export interface DraftInvoicePage {
+  readonly invoices: readonly DraftInvoiceDetails[];
+  readonly total_count: number;
+  readonly total_pages: number;
+  readonly current_page: number;
+}
+/**
+ * The request of a draft: that of an ordinary create without `generate_pdf` and
+ * `mark_as_paid`, which are not offered for a draft. A PDF is requested when the draft is
+ * issued.
+ */
+export type CreateDraftInput = Omit<CreateInvoiceInput, 'generate_pdf' | 'mark_as_paid'>;
+/**
+ * Result of saving a draft. 'saved' carries the provider's id of the draft and nothing else:
+ * a draft has no number, mark or issue date, and it is not a pending transmission. A
+ * rejection does not show whether the external reference is free.
+ */
+export type DraftCreateOutcome =
+  | Readonly<{ kind: 'saved'; invoiceId: string }>
+  | Readonly<{ kind: 'rejected'; errorCount: number; rejectionSource: RejectionSource }>;
+/** Options the provider takes when a draft is issued; every one optional. */
+export interface IssueDraftInput {
+  /** The POS device to charge, for an invoice paid at a terminal. */
+  readonly pos_device_id?: string;
+  readonly customer_emails?: readonly string[];
+  readonly email_locale?: 'el' | 'en';
+  /** Sent as given; the provider's placeholders and line breaks are not touched. */
+  readonly email_subject?: string;
+  readonly email_body?: string;
+  readonly generate_pdf?: boolean;
+}
+/**
+ * Result of issuing a draft. 'observed' carries the issued invoice the provider returned,
+ * with the identity evidence of a reference-addressed read; read its mark and
+ * transmission_failure before concluding anything.
+ * 'pending' is the provider's pending answer, as on create. A rejection says the provider
+ * refused, and leaves the draft's state to be read back.
+ */
+export type DraftIssueOutcome =
+  | Readonly<{ kind: 'observed'; invoice: InvoiceObservation; identity: IdentityEvidence }>
+  | PendingInvoiceOutcome
+  | Readonly<{ kind: 'rejected'; errorCount: number; rejectionSource: RejectionSource }>;
 /** Listing filters. Dates are ISO calendar dates; start must not exceed end. */
 export interface ListInvoicesInput {
   readonly start_date?: CalendarDate;
@@ -239,15 +717,33 @@ export interface VatDetails {
   readonly street_number: string;
 }
 /**
- * Byte-authenticated webhook payload. eventTypeAuthenticated is always false because the
- * Event-Type header lies outside the signed body; the type was used as a routing hint and
- * the corresponding body shape was validated, nothing more.
+ * Byte-authenticated webhook payload. The kind names the body that was validated, not the
+ * header: the two PDF headers carry the same body and share kind 'pdf'. eventTypeHint repeats
+ * the Event-Type header as received and eventTypeAuthenticated is always false, because that
+ * header lies outside the signed body. A valid signature proves which bytes were signed. It
+ * does not prove the tenant, freshness, that issuance completed, or which PDF format a link
+ * points to.
  */
 export type VerifiedWebhook =
-  | Readonly<{ kind: 'issued-invoice'; invoice: InvoiceObservation; eventTypeAuthenticated: false }>
   | Readonly<{
-      kind: 'invoice-pdf';
+      kind: 'invoice-observation';
+      invoice: InvoiceObservation;
+      eventTypeHint: 'issued-invoice';
+      eventTypeAuthenticated: false;
+    }>
+  | Readonly<{
+      kind: 'pdf';
       invoiceId: string;
+      /** Returned as data; the SDK never fetches it. */
       downloadUrl: string;
+      eventTypeHint: 'invoice-pdf' | 'thermal-print-pdf';
+      eventTypeAuthenticated: false;
+    }>
+  | Readonly<{
+      kind: 'pos-payment-error';
+      invoiceId: string;
+      /** The provider's failure text, kept as data. It may describe a customer transaction. */
+      providerMessage: string;
+      eventTypeHint: 'pos-payment';
       eventTypeAuthenticated: false;
     }>;

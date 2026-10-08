@@ -6,7 +6,67 @@
  * @packageDocumentation
  */
 export { WrappClient } from './client.js';
-export type { InvoiceResource } from './client.js';
+export type { InvoiceResource } from './resources/invoices.js';
+export type {
+  CancelCateringOrderNotesInput,
+  CateringOrderNoteCancellation,
+  CateringOrderNoteCancellationOutcome,
+  CateringTable,
+  CateringTableOutcome,
+  CateringTableResource,
+  CateringTableSummary,
+  OpenCateringOrderNote,
+  OpenCateringOrderNotesPage,
+  OpenCateringTableInput,
+  TransferCateringOrderNotesInput,
+} from './catering-types.js';
+export type {
+  ClienteleCancellationOutcome,
+  ClienteleCorrelationOutcome,
+  CreateDigitalClienteleInput,
+  DigitalClientele,
+  DigitalClienteleOutcome,
+  DigitalClienteleResource,
+  UpdateDigitalClienteleInput,
+} from './digital-clientele-types.js';
+export type {
+  ConfirmDeliveryInput,
+  CreateDigitalTransportInput,
+  DeliveredPackaging,
+  DigitalTransport,
+  DigitalTransportOutcome,
+  DigitalTransportPage,
+  DigitalTransportResource,
+  TransportLegInput,
+} from './digital-transport-types.js';
+export type { ProviderJson } from './provider-json.js';
+export type {
+  BillingBookCreateOutcome,
+  BillingBookNumberOutcome,
+  BillingBookReceipt,
+  BillingBookResource,
+  BranchResource,
+  BranchWriteOutcome,
+  CreateBillingBookInput,
+  CreateBranchInput,
+  UpdateBranchInput,
+} from './management-types.js';
+export type {
+  AcknowledgementOutcome,
+  CancellationObservation,
+  CancellationOutcome,
+  ExternalIdAssignmentOutcome,
+} from './invoice-lifecycle-types.js';
+export type {
+  CreatePosDeviceInput,
+  PosAuthorizationCodeType,
+  PosDevice,
+  PosDeviceCreateOutcome,
+  PosDeviceResource,
+  PosSessionResource,
+} from './pos-types.js';
+export { getProviderDiagnostics } from './diagnostics.js';
+export type { ProviderDiagnostics, ProviderIssue } from './diagnostics.js';
 export { WrappError } from './errors.js';
 export type { ErrorCode, EffectCertainty } from './errors.js';
 export { decimal, calendarDate } from './values.js';
@@ -22,9 +82,24 @@ export type {
   IdentityEvidence,
   CreateInvoiceInput,
   CreateOutcome,
+  CreateDraftInput,
+  DraftCreateOutcome,
+  DraftInvoiceDetails,
+  DraftInvoicePage,
+  DraftIssueOutcome,
+  IssueDraftInput,
+  DeliveryDetail,
+  OtherCorrelatedEntity,
+  InvoiceStatusOutcome,
+  PendingInvoiceOutcome,
+  PendingIdentityEvidence,
   InvoiceObservation,
+  InvoiceB2gDetails,
+  InvoiceDeliveryDetails,
   InvoiceDetails,
   InvoiceLine,
+  LineClassification,
+  LineDeduction,
   Counterpart,
   InvoicePage,
   ListInvoicesInput,
